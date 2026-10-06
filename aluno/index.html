@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Portal do Aluno | FitCPX</title>
+<meta name="theme-color" content="#0b7a43">
+<link rel="manifest" href="manifest.json">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="../css/tokens.css">
+<link rel="stylesheet" href="../css/icons.css">
+<link rel="stylesheet" href="portal.css">
+<script>try{if(window.matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.classList.add('dark')}catch(e){}</script>
+</head>
+<body>
+
+<!-- ══ CARREGANDO ══ -->
+<div id="tela-carregando" class="tela">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <p class="hint">Carregando...</p>
+</div>
+
+<!-- ══ ENTRADA — já é aluno? / sou novo ══ -->
+<div id="tela-entrada" class="tela hidden">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <h1>Bem-vindo</h1>
+  <p class="hint">Você já é aluno cadastrado com seu personal?</p>
+  <button class="btn btn-primary" onclick="irPara('tela-login-email')" style="margin-bottom:10px">Já sou aluno</button>
+  <button class="btn btn-ghost" onclick="mostrarTelaNovo()">Sou aluno novo</button>
+  <div id="entrada-sem-codigo" class="alert alert-amber hidden" style="margin-top:16px">Esse link não tem o convite de nenhum personal. Peça o link de cadastro certo pra quem vai te acompanhar.</div>
+</div>
+
+<!-- ══ LOGIN — e-mail ══ -->
+<div id="tela-login-email" class="tela hidden">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <h1>Entrar</h1>
+  <p class="hint">Digite o e-mail cadastrado com seu personal.</p>
+  <div id="login-email-erro" class="alert alert-red hidden"></div>
+  <div class="field"><label>E-mail</label><input type="email" id="login-email" autocomplete="username"></div>
+  <button class="btn btn-primary" onclick="irParaSenha()">Continuar</button>
+  <button class="btn btn-ghost" onclick="irPara('tela-entrada')" style="margin-top:10px">Voltar</button>
+</div>
+
+<!-- ══ LOGIN — senha ══ -->
+<div id="tela-login-senha" class="tela hidden">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <h1>Sua senha</h1>
+  <p class="hint" id="login-senha-email"></p>
+  <div id="login-senha-erro" class="alert alert-red hidden"></div>
+  <div class="field"><label>Senha</label><input type="password" id="login-senha" autocomplete="current-password"></div>
+  <button class="btn btn-primary" onclick="alunoEntrar()">Entrar</button>
+  <p class="hint" style="text-align:center;margin-top:16px;margin-bottom:0">Esqueceu a senha? Peça uma nova pro seu personal.</p>
+</div>
+
+<!-- ══ CADASTRO — nome + e-mail + senha ══ -->
+<div id="tela-cadastro" class="tela hidden">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <h1>Criar minha conta</h1>
+  <p class="hint" id="cadastro-hint">Você vai virar aluno do personal deste link. Confira com ele se não tiver certeza.</p>
+  <div id="cadastro-erro" class="alert alert-red hidden"></div>
+  <div class="field"><label>Nome completo</label><input type="text" id="cad-nome"></div>
+  <div class="field"><label>E-mail</label><input type="email" id="cad-email" autocomplete="username"></div>
+  <div class="field"><label>Senha</label><input type="password" id="cad-senha" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></div>
+  <button class="btn btn-primary" id="cad-btn" onclick="alunoCadastrar()">Criar conta</button>
+  <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--text2)">
+    Já tem conta? <button class="link-btn" onclick="irPara('tela-login-email')">Entrar</button>
+  </p>
+</div>
+
+<!-- ══ MINHAS INFORMAÇÕES (trocar senha) ══ -->
+<div id="tela-conta" class="tela hidden">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <h1>Minhas informações</h1>
+  <p class="hint" id="conta-email"></p>
+  <div id="conta-erro" class="alert alert-red hidden"></div>
+  <div id="conta-sucesso" class="alert alert-green hidden">Senha alterada!</div>
+  <div class="field"><label>Nova senha</label><input type="password" id="conta-senha" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></div>
+  <button class="btn btn-primary" id="conta-btn" onclick="alunoTrocarSenha()">Salvar nova senha</button>
+  <hr style="border:0;border-top:1px solid var(--border);margin:22px 0">
+  <div id="conta-email-erro" class="alert alert-red hidden"></div>
+  <div id="conta-email-sucesso" class="alert alert-green hidden">E-mail alterado! Use o novo e-mail da próxima vez que entrar.</div>
+  <div class="field"><label>Novo e-mail de login</label><input type="email" id="conta-novo-email" autocomplete="off" placeholder="novo@email.com"></div>
+  <p class="hint" style="margin-top:-6px">Seu nome e CPF continuam os mesmos. O e-mail é o único dado que pode mudar.</p>
+  <button class="btn btn-ghost" id="conta-email-btn" onclick="alunoTrocarEmail()">Alterar e-mail</button>
+  <button class="btn btn-ghost" onclick="fecharTelaConta()" style="margin-top:10px">Voltar</button>
+</div>
+
+<!-- ══ CADASTRO BÁSICO (uma tela só, logo após criar a conta) ══ -->
+<div id="tela-cadastro-basico" class="tela hidden">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <h1 id="cb-titulo">Só mais um passo</h1>
+  <p class="hint" id="cb-hint">Dados básicos pra começar. Saúde, objetivo e medidas você preenche direto no app, quando quiser.</p>
+  <div id="cb-erro" class="alert alert-red hidden"></div>
+  <div class="field"><label>Nome completo</label><input type="text" id="cb-nome" autocomplete="name"></div>
+  <div class="field"><label>CPF</label><input type="text" id="cb-cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" autocomplete="off" oninput="mascararCpf(this)"></div>
+  <p class="hint" style="margin-top:-6px">Nome, CPF e e-mail identificam você no sistema. Só o e-mail pode mudar depois.</p>
+  <div class="grid-2">
+    <div class="field"><label>Nascimento</label><input type="date" id="cb-nascimento"></div>
+    <div class="field"><label>Sexo</label><select id="cb-sexo"><option value="">Selecionar</option><option value="M">Masculino</option><option value="F">Feminino</option></select></div>
+  </div>
+  <div class="field"><label>WhatsApp</label><input type="tel" id="cb-whatsapp" placeholder="(00) 00000-0000"></div>
+  <div class="field"><label>Profissão</label><input type="text" id="cb-profissao"></div>
+  <button class="btn btn-primary" id="cb-btn" onclick="salvarCadastroBasico()">Continuar</button>
+  <button class="btn btn-ghost hidden" id="cb-desistir" onclick="desistirDoCadastro()" style="margin-top:10px">Desistir do cadastro</button>
+</div>
+
+<!-- ══ CONFLITO: perfil já vinculado a outro personal ══ -->
+<div id="tela-conflito" class="tela hidden">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <h1>Perfil já vinculado</h1>
+  <div id="conflito-corpo" class="alert alert-amber"></div>
+  <button class="btn btn-primary" id="conflito-trocar" onclick="solicitarTroca()">Solicitar transferência</button>
+  <button class="btn btn-ghost" onclick="irPara('tela-cadastro-basico')" style="margin-top:10px">Voltar e corrigir meus dados</button>
+  <button class="btn btn-ghost" id="conflito-desistir" onclick="desistirDoCadastro()" style="margin-top:10px">Desistir</button>
+</div>
+
+<!-- ══ AVISO genérico (conflito de transferência, e-mail desconhecido) ══ -->
+<div id="tela-aviso" class="tela hidden">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <div id="aviso-corpo" class="alert alert-amber"></div>
+  <button class="btn btn-ghost" onclick="alunoSair()">Sair</button>
+</div>
+
+<!-- ══ BLOQUEADO ══ -->
+<div id="tela-bloqueado" class="tela hidden">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <div class="alert alert-amber"><i class=ph-lock></i> Seu acesso está bloqueado no momento. Fale com seu personal pra liberar de novo.</div>
+  <button class="btn btn-ghost" onclick="alunoSair()">Sair</button>
+</div>
+
+<!-- ══ APP (shell com abas) ══ -->
+<div id="tela-app" class="app-shell hidden">
+  <div class="app-header">
+    <span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span>
+    <span style="margin-left:auto;display:flex;gap:14px">
+      <button class="link-btn" onclick="abrirTelaConta()"><i class=ph-gear></i> Conta</button>
+      <button class="link-btn" onclick="alunoSair()">Sair</button>
+    </span>
+  </div>
+
+  <div class="app-content">
+
+    <!-- INÍCIO -->
+    <div id="painel-inicio" class="painel-app">
+      <h1 id="inicio-nome">Olá!</h1>
+      <p class="hint">Aqui você acompanha sua anamnese, avaliações e treino.</p>
+      <div id="inicio-transf"></div>
+      <div id="inicio-status"></div>
+    </div>
+
+    <!-- ANAMNESE -->
+    <div id="painel-anamnese" class="painel-app hidden">
+      <h1>Anamnese</h1>
+      <p class="hint">Preenche e atualiza sempre que quiser — seu personal usa isso pra montar o treino.</p>
+      <div id="an-banner" class="alert alert-green hidden">Anamnese salva!</div>
+
+      <div class="divider-label">Histórico de saúde</div>
+      <div class="field"><label>Sente algum destes sintomas durante esforço físico?</label>
+        <div class="chk-grid">
+          <label class="chk-label"><input type="checkbox" class="chk-sintomas" value="Nenhum"> Nenhum</label>
+          <label class="chk-label"><input type="checkbox" class="chk-sintomas" value="Dor no peito"> Dor no peito</label>
+          <label class="chk-label"><input type="checkbox" class="chk-sintomas" value="Tontura ou vertigem"> Tontura/vertigem</label>
+          <label class="chk-label"><input type="checkbox" class="chk-sintomas" value="Falta de ar desproporcional"> Falta de ar</label>
+          <label class="chk-label"><input type="checkbox" class="chk-sintomas" value="Palpitações"> Palpitações</label>
+          <label class="chk-label"><input type="checkbox" class="chk-sintomas" value="Desmaio ou quase-desmaio"> Desmaio</label>
+        </div>
+      </div>
+      <div id="an-gestacao-wrap" class="hidden">
+        <div class="field"><label>Gestação</label>
+          <select id="an-gestacao"><option value="">Selecionar</option><option value="Não">Não</option><option value="Gestante">Gestante</option><option value="Pós-parto">Pós-parto (menos de 6 meses)</option></select>
+        </div>
+      </div>
+      <div class="field"><label>Tem liberação médica pra treinar?</label>
+        <select id="an-liberacao"><option value="">Selecionar</option><option value="sim">Sim — tenho atestado</option><option value="nao">Não — meu médico ainda não liberou</option><option value="nao_aplica">Não se aplica — não tenho restrição conhecida</option></select>
+      </div>
+      <div class="field"><label>Condições clínicas</label>
+        <div class="chk-grid">
+          <label class="chk-label"><input type="checkbox" class="chk-condicoes" value="Nenhuma"> Nenhuma</label>
+          <label class="chk-label"><input type="checkbox" class="chk-condicoes" value="Hipertensão arterial"> Hipertensão</label>
+          <label class="chk-label"><input type="checkbox" class="chk-condicoes" value="Diabetes"> Diabetes</label>
+          <label class="chk-label"><input type="checkbox" class="chk-condicoes" value="Dislipidemia"> Dislipidemia</label>
+          <label class="chk-label"><input type="checkbox" class="chk-condicoes" value="Obesidade"> Obesidade</label>
+          <label class="chk-label"><input type="checkbox" class="chk-condicoes" value="Hipotireoidismo"> Hipotireoidismo</label>
+          <label class="chk-label"><input type="checkbox" class="chk-condicoes" value="Asma / DPOC"> Asma/DPOC</label>
+          <label class="chk-label"><input type="checkbox" class="chk-condicoes" value="Cardiopatia"> Cardiopatia</label>
+          <label class="chk-label"><input type="checkbox" class="chk-condicoes" value="Osteoporose / Osteopenia"> Osteoporose</label>
+          <label class="chk-label"><input type="checkbox" class="chk-condicoes" value="Ansiedade / Depressão"> Ansiedade/Depressão</label>
+          <label class="chk-label"><input type="checkbox" class="chk-condicoes" value="SOP"> SOP</label>
+          <label class="chk-label"><input type="checkbox" class="chk-condicoes" value="Outros"> Outros</label>
+        </div>
+      </div>
+      <div class="field"><label>Usa algum medicamento?</label>
+        <div class="chk-grid">
+          <label class="chk-label"><input type="checkbox" class="chk-medicamentos" value="Nenhum"> Nenhum</label>
+          <label class="chk-label"><input type="checkbox" class="chk-medicamentos" value="Anti-hipertensivos"> Anti-hipertensivos</label>
+          <label class="chk-label"><input type="checkbox" class="chk-medicamentos" value="Hipoglicemiantes orais"> Antidiabéticos</label>
+          <label class="chk-label"><input type="checkbox" class="chk-medicamentos" value="Insulina"> Insulina</label>
+          <label class="chk-label"><input type="checkbox" class="chk-medicamentos" value="Hormônios tireoidianos"> Tireoidianos</label>
+          <label class="chk-label"><input type="checkbox" class="chk-medicamentos" value="Hormônios sexuais / TRH"> Hormônios/TRH</label>
+          <label class="chk-label"><input type="checkbox" class="chk-medicamentos" value="Corticosteróides"> Corticosteróides</label>
+          <label class="chk-label"><input type="checkbox" class="chk-medicamentos" value="Antidepressivos / ansiolíticos"> Antidepressivos</label>
+          <label class="chk-label"><input type="checkbox" class="chk-medicamentos" value="Anticoagulantes"> Anticoagulantes</label>
+          <label class="chk-label"><input type="checkbox" class="chk-medicamentos" value="Analgésicos / anti-inflamatórios"> Analgésicos/AINEs</label>
+          <label class="chk-label"><input type="checkbox" class="chk-medicamentos" value="Outros medicamentos"> Outros</label>
+        </div>
+      </div>
+      <div class="field"><label>Lesões ativas hoje</label>
+        <div class="chk-grid">
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Nenhuma"> Nenhuma</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Joelho D"> Joelho D</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Joelho E"> Joelho E</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Ombro D"> Ombro D</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Ombro E"> Ombro E</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Lombar / coluna baixa"> Lombar</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Cervical / coluna alta"> Cervical</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Cotovelo D"> Cotovelo D</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Cotovelo E"> Cotovelo E</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Quadril D"> Quadril D</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Quadril E"> Quadril E</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Tornozelo / pé D"> Tornozelo D</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Tornozelo / pé E"> Tornozelo E</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Pós-cirurgia"> Pós-cirurgia</label>
+          <label class="chk-label"><input type="checkbox" class="chk-lesoes" value="Outros"> Outros</label>
+        </div>
+      </div>
+
+      <div class="divider-label">Observações clínicas</div>
+      <div class="field"><label>Lesões passadas (já resolvidas)</label><textarea id="an-lesoes-passadas" placeholder="Ex: torci o tornozelo em 2023, hoje sem dor"></textarea></div>
+      <div class="field"><label>Cirurgias (quais e quando)</label><textarea id="an-cirurgias"></textarea></div>
+      <div class="field"><label>Medicamentos — nome, dose e frequência</label><textarea id="an-medicamentos-detalhe"></textarea></div>
+      <div class="field"><label>Outras observações</label><textarea id="an-obs-clinicas"></textarea></div>
+
+      <div class="divider-label">Experiência com treino</div>
+      <div class="field"><label>Há quanto tempo você treina sem parar, até hoje?</label>
+        <select id="an-tempo">
+          <option value="">Selecionar</option>
+          <option value="Menos de 1 mês">Menos de 1 mês</option>
+          <option value="1–3 meses">1–3 meses</option>
+          <option value="3–6 meses">3–6 meses</option>
+          <option value="6–12 meses">6–12 meses</option>
+          <option value="1–2 anos">1–2 anos</option>
+          <option value="2–4 anos">2–4 anos</option>
+          <option value="Mais de 4 anos">Mais de 4 anos</option>
+        </select>
+      </div>
+      <div class="field"><label>Consistência</label>
+        <select id="an-consistencia">
+          <option value="">Selecionar</option>
+          <option value="irregular">Irregular — treina e para com frequência</option>
+          <option value="regular">Regular — treina na maioria das semanas</option>
+          <option value="alta">Alta — raramente perde treinos</option>
+        </select>
+      </div>
+
+      <div class="divider-label">Seu objetivo</div>
+      <div class="field"><label>Objetivo principal</label><select id="an-objetivo-ef"><option value="">Selecionar</option></select></div>
+      <div class="field"><label>Objetivo secundário (opcional)</label><select id="an-objetivo-sec"><option value="">Nenhum</option></select></div>
+      <div class="grid-2">
+        <div class="field"><label>Frequência semanal disponível</label>
+          <select id="an-frequencia"><option value="">Selecionar</option><option value="2x">2x</option><option value="3x">3x</option><option value="4x">4x</option><option value="5x">5x</option><option value="6x">6x</option></select>
+        </div>
+        <div class="field"><label>Duração por sessão</label>
+          <select id="an-duracao"><option value="">Selecionar</option><option value="30">Até 30min</option><option value="45">30–45min</option><option value="60">45–60min</option><option value="75">60–75min</option><option value="90">75–90min</option><option value="90+">Mais de 90min</option></select>
+        </div>
+      </div>
+      <div class="field"><label>Horário preferido</label>
+        <select id="an-horario"><option value="">Selecionar</option><option value="manhã">Manhã</option><option value="tarde">Tarde</option><option value="noite">Noite</option><option value="variável">Variável</option></select>
+      </div>
+      <div class="field"><label>O que você gosta de treinar</label><textarea id="an-gosta-texto"></textarea></div>
+      <div class="field"><label>O que você não gosta ou precisa evitar</label><textarea id="an-evitar-texto" placeholder="Ex: não gosto de corrida; agachamento livre me incomoda o joelho"></textarea></div>
+
+      <div class="divider-label">Onde você treina</div>
+      <div id="an-local-selecionado"></div>
+      <div class="field"><label>Buscar academia por nome, cidade ou estado</label><input type="text" id="an-local-busca" oninput="buscarLocal()" placeholder="Ex: Smart Fit, São Paulo, SP"></div>
+      <div id="an-local-resultados"></div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="novoLocal('academia')">Não encontrei, é outro lugar</button>
+        <button class="btn btn-ghost" onclick="novoLocal('casa')">Treino em casa</button>
+      </div>
+      <div id="an-local-novo-wrap" class="hidden" style="margin-top:14px">
+        <div class="field" id="an-local-nome-wrap"><label>Nome do local</label><input type="text" id="an-local-nome"></div>
+        <div class="grid-2" id="an-local-regiao-wrap">
+          <div class="field"><label>Cidade</label><input type="text" id="an-local-cidade"></div>
+          <div class="field"><label>Estado</label><input type="text" id="an-local-estado"></div>
+        </div>
+        <div class="field" id="an-local-pais-wrap"><label>País</label><input type="text" id="an-local-pais" value="Brasil"></div>
+        <div class="field" id="an-local-tipo-wrap"><label>Tipo</label>
+          <select id="an-local-tipo"><option>Academia completa</option><option>Academia pequena</option><option>Home gym</option><option>Área externa</option><option>Condomínio</option><option>Outro</option></select>
+        </div>
+        <div class="field"><label>Equipamentos disponíveis</label>
+          <div class="chk-grid" id="an-local-equip-wrap" style="grid-template-columns:1fr;max-height:240px;overflow-y:auto"></div>
+        </div>
+        <div class="field"><label>Observações</label><textarea id="an-local-obs"></textarea></div>
+      </div>
+
+      <button class="btn btn-primary" id="an-salvar-btn" onclick="salvarAnamnese()" style="margin-top:8px">Salvar anamnese</button>
+    </div>
+
+    <!-- AVALIAÇÕES -->
+    <div id="painel-avaliacoes" class="painel-app hidden">
+      <h1>Avaliações</h1>
+
+      <div id="aval-lista-view">
+        <p class="hint">Histórico de medidas e fotos. Seu personal revisa cada envio.</p>
+        <button class="btn btn-primary" onclick="avalMostrarForm()" style="margin-bottom:14px">+ Nova avaliação</button>
+        <div id="aval-lista"></div>
+      </div>
+
+      <div id="aval-form-view" class="hidden">
+        <p class="hint">Use fita métrica, sempre no mesmo horário do dia. Meça sem apertar a fita.</p>
+        <div class="grid-2">
+          <div class="field"><label>Data</label><input type="date" id="av-data"></div>
+          <div class="field"><label>Peso (kg)</label><input type="number" step="0.1" id="av-peso"></div>
+        </div>
+        <div class="field"><label>Altura (cm)</label><input type="number" step="0.1" id="av-altura"></div>
+        <div class="grid-2">
+          <div class="field"><label>Cintura (cm)<div class="obs">Na linha do umbigo</div></label><input type="number" step="0.1" id="av-cintura"></div>
+          <div class="field"><label>Quadril (cm)<div class="obs">Parte mais larga</div></label><input type="number" step="0.1" id="av-quadril"></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Abdômen (cm)</label><input type="number" step="0.1" id="av-abdomen"></div>
+          <div class="field"><label>Ombro (cm)</label><input type="number" step="0.1" id="av-ombro"></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Braço direito (cm)<div class="obs">Relaxado</div></label><input type="number" step="0.1" id="av-braco-d"></div>
+          <div class="field"><label>Braço esquerdo (cm)</label><input type="number" step="0.1" id="av-braco-e"></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Coxa direita (cm)</label><input type="number" step="0.1" id="av-coxa-d"></div>
+          <div class="field"><label>Coxa esquerda (cm)</label><input type="number" step="0.1" id="av-coxa-e"></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Panturrilha direita (cm)</label><input type="number" step="0.1" id="av-pant-d"></div>
+          <div class="field"><label>Panturrilha esquerda (cm)</label><input type="number" step="0.1" id="av-pant-e"></div>
+        </div>
+        <div class="field"><label class="chk-label"><input type="checkbox" id="av-tem-bioimpedancia" onchange="toggle('av-bioimpedancia-wrap', document.getElementById('av-tem-bioimpedancia').checked)"> Tenho resultado de bioimpedância ou dobras cutâneas</label></div>
+        <div id="av-bioimpedancia-wrap" class="hidden">
+          <div class="grid-2">
+            <div class="field"><label>Gordura corporal (%)</label><input type="number" step="0.1" id="av-gordura"></div>
+            <div class="field"><label>Massa muscular (kg)</label><input type="number" step="0.1" id="av-mmuscular"></div>
+          </div>
+          <div class="field"><label>Massa óssea (kg)</label><input type="number" step="0.1" id="av-osso"></div>
+        </div>
+        <div class="field"><label>Observações</label><textarea id="av-obs"></textarea></div>
+
+        <div class="divider-label">Fotos</div>
+        <p class="hint">Roupa justa ou de banho, fundo neutro, mesma distância da câmera. Ficam em local privado.</p>
+        <div class="foto-slot" onclick="document.getElementById('av-foto-input-frente').click()">
+          <div class="foto-label"><i class=ph-camera></i> Frente</div>
+          <div id="av-foto-preview-frente">Tocar pra escolher a foto</div>
+          <input type="file" accept="image/*" capture="environment" id="av-foto-input-frente" class="hidden" onchange="avalFotoSelecionada('frente')">
+        </div>
+        <div class="foto-slot" onclick="document.getElementById('av-foto-input-lado').click()">
+          <div class="foto-label"><i class=ph-camera></i> Lado</div>
+          <div id="av-foto-preview-lado">Tocar pra escolher a foto</div>
+          <input type="file" accept="image/*" capture="environment" id="av-foto-input-lado" class="hidden" onchange="avalFotoSelecionada('lado')">
+        </div>
+        <div class="foto-slot" onclick="document.getElementById('av-foto-input-costas').click()">
+          <div class="foto-label"><i class=ph-camera></i> Costas</div>
+          <div id="av-foto-preview-costas">Tocar pra escolher a foto</div>
+          <input type="file" accept="image/*" capture="environment" id="av-foto-input-costas" class="hidden" onchange="avalFotoSelecionada('costas')">
+        </div>
+
+        <div id="av-erro" class="alert alert-red hidden"></div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="avalMostrarLista()">Cancelar</button>
+          <button class="btn btn-primary" id="aval-salvar-btn" onclick="salvarAvaliacao()">Salvar avaliação</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TREINOS -->
+    <div id="painel-treinos" class="painel-app hidden">
+      <h1>Treinos</h1>
+      <div class="card" style="text-align:center;padding:32px 16px">
+        <div style="font-size:32px;margin-bottom:10px"><i class=ph-barbell></i></div>
+        <div style="font-weight:600;margin-bottom:4px">Nenhum treino ainda</div>
+        <div style="font-size:13px;color:var(--text2)">Seu personal está preparando seu treino de adaptação. Assim que ficar pronto, aparece aqui.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="tabbar">
+    <button class="tabbar-btn active" id="tab-inicio" onclick="mostrarTab('inicio')"><span class="ico"><i class=ph-house></i></span>Início</button>
+    <button class="tabbar-btn" id="tab-anamnese" onclick="mostrarTab('anamnese')"><span class="ico"><i class=ph-clipboard-text></i></span>Anamnese</button>
+    <button class="tabbar-btn" id="tab-avaliacoes" onclick="mostrarTab('avaliacoes')"><span class="ico"><i class=ph-ruler></i></span>Avaliações</button>
+    <button class="tabbar-btn" id="tab-treinos" onclick="mostrarTab('treinos')"><span class="ico"><i class=ph-barbell></i></span>Treinos</button>
+  </div>
+</div>
+
+<script src="js/aluno-supabase.js"></script>
+<script src="js/aluno-app.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "FitCPX | Portal do Aluno",
+  "short_name": "FitCPX Aluno",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#0b7a43",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

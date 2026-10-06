@@ -1,0 +1,82 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Portal do Aluno (mobile) — mesmos tokens do painel (../css/tokens.css).
+   Alvos de toque de 44px, uma coluna, barra de abas embaixo.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+html,body{height:100%}
+body{overflow:hidden;font-size:15px}
+.hidden{display:none!important}
+
+.tela{max-width:480px;margin:0 auto;padding:24px 20px 48px;min-height:100vh;min-height:100dvh;overflow-y:auto}
+.topo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
+.topo-mark{width:30px;height:30px;border-radius:9px;background:var(--accent);color:var(--accent-text);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.topo-mark i{font-size:18px;vertical-align:0}
+.topo-logo{font-weight:650;font-size:16px;letter-spacing:-.015em;color:var(--text)}
+.topo-sub{font-size:13px;color:var(--text3)}
+h1{font-size:24px;font-weight:650;letter-spacing:-.025em;line-height:1.2;margin-bottom:6px}
+h2{font-size:16px;font-weight:600;margin-bottom:10px}
+p.hint{font-size:14px;color:var(--text2);margin-bottom:20px;line-height:1.5}
+
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:16px;margin-bottom:12px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px}
+.field .obs{font-size:12px;color:var(--text3);margin-top:4px;line-height:1.4}
+
+input,select,textarea{
+  width:100%;min-height:44px;padding:0 14px;background:var(--bg2);border:1px solid var(--border2);
+  border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:16px;outline:none;
+  transition:border-color var(--t-fast) var(--ease-out),box-shadow var(--t-fast) var(--ease-out)}
+textarea{min-height:88px;padding:10px 14px;resize:vertical;line-height:1.5}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+input[type=checkbox],input[type=radio]{min-height:0;width:20px;height:20px;padding:0}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+.chk-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:8px}
+.chk-label{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--text);cursor:pointer;min-height:40px;padding:0 6px;border-radius:6px}
+.chk-label input{flex-shrink:0}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 20px;border-radius:var(--radius);
+  font-size:15px;font-weight:600;font-family:var(--sans);cursor:pointer;border:1px solid transparent;width:100%;
+  transition:background-color var(--t-fast) var(--ease-out),transform var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out)}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:var(--accent);color:var(--accent-text)}
+.btn-primary:active{background:var(--accent2)}
+.btn-primary:disabled{opacity:.55}
+.btn-ghost{background:var(--bg2);border-color:var(--border2);color:var(--text)}
+.btn-sm{width:auto;min-height:38px;padding:0 14px;font-size:14px}
+.btn-row{display:flex;gap:10px;margin-top:6px}
+.btn-row .btn{width:auto;flex:1}
+.link-btn{background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;padding:6px 0;display:inline-flex;align-items:center;gap:6px;font-family:var(--sans)}
+:root:not(.dark) .link-btn{color:var(--accent2)}
+
+.alert{padding:12px 14px;border-radius:var(--radius);font-size:14px;margin-bottom:16px;line-height:1.45;border:1px solid var(--border);background:var(--bg2);color:var(--text)}
+.alert-amber{background:var(--amber-dim);border-color:var(--amber-line)}
+.alert-red{background:var(--red-dim);border-color:var(--red-line)}
+.alert-green{background:var(--accent-dim);border-color:var(--accent-dim2)}
+
+.divider-label{font-size:14px;font-weight:600;color:var(--text);margin:28px 0 12px;padding-top:20px;border-top:1px solid var(--border)}
+.divider-label:first-of-type{margin-top:0;padding-top:0;border-top:none}
+
+.foto-slot{border:1.5px dashed var(--border2);border-radius:var(--radius2);padding:20px 16px;text-align:center;margin-bottom:12px;cursor:pointer;background:var(--bg2);
+  transition:border-color var(--t-fast) var(--ease-out),background-color var(--t-fast) var(--ease-out)}
+.foto-slot:active{background:var(--bg4)}
+.foto-slot img{max-width:100%;max-height:180px;border-radius:8px}
+.foto-slot .foto-label{font-size:14px;color:var(--text);font-weight:600;margin-bottom:4px}
+.local-item{padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;cursor:pointer;background:var(--bg2);font-size:14px;line-height:1.45}
+.local-item:active{background:var(--bg4)}
+.local-item.selected{border-color:var(--accent);background:var(--accent-dim);box-shadow:inset 0 0 0 1px var(--accent)}
+
+/* App (pós-cadastro) */
+.app-shell{max-width:480px;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column}
+.app-header{display:flex;align-items:center;gap:10px;padding:16px 20px 12px;flex-shrink:0}
+.app-content{flex:1;overflow-y:auto;padding:4px 20px 20px}
+.painel-app{padding-top:8px}
+.tabbar{display:flex;flex-shrink:0;border-top:1px solid var(--border);background:var(--bg2);padding-bottom:env(safe-area-inset-bottom)}
+.tabbar-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 4px 9px;background:none;border:none;color:var(--text3);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;
+  transition:color var(--t-fast) var(--ease-out)}
+.tabbar-btn .ico{font-size:22px;line-height:1;display:inline-flex}
+.tabbar-btn .ico i{vertical-align:0;font-size:1em}
+.tabbar-btn.active{color:var(--accent);font-weight:600}
+:root:not(.dark) .tabbar-btn.active{color:var(--accent2)}
+.status-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-subtle)}
+.status-row:first-child{border-top:0;padding-top:0;margin-top:0}

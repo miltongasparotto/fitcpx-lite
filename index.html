@@ -1,0 +1,2718 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FitCPX Lite</title>
+<!-- Supabase (banco online + login) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/icons.css">
+<link rel="stylesheet" href="css/app.css">
+<script>try{if(localStorage.getItem('acm-tema')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
+</head>
+<body>
+
+<!-- ══ TELA DE LOGIN (Supabase Auth) ══ -->
+<div id="auth-screen" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="sb-mark"><i class=ph-barbell></i></div>
+      <div>
+        <div class="auth-title">FitCPX Lite</div>
+        <div class="auth-sub">Prescrição inteligente de treino</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="auth-email">E-mail</label>
+      <input type="email" id="auth-email" placeholder="seu@email.com" autocomplete="username">
+    </div>
+    <div class="field">
+      <label for="auth-senha">Senha</label>
+      <input type="password" id="auth-senha" placeholder="Sua senha" autocomplete="current-password">
+    </div>
+
+    <div id="auth-erro" class="auth-erro"></div>
+
+    <button class="btn btn-primary" onclick="authEntrar()">Entrar</button>
+    <button class="btn btn-ghost" onclick="authCadastrar()">Criar conta</button>
+
+    <div id="auth-status" class="auth-status"></div>
+  </div>
+</div>
+
+<div class="app" id="app-root" style="display:none">
+
+  <!-- Barra do celular (a sidebar vira gaveta abaixo de 860px) -->
+  <div class="mobile-bar">
+    <button class="icon-btn" onclick="toggleNavMobile()" aria-label="Abrir menu"><i class=ph-list></i></button>
+    <div class="sb-mark" style="width:26px;height:26px;border-radius:8px"><i class=ph-barbell style="font-size:15px"></i></div>
+    <span class="sb-name">FitCPX Lite</span>
+  </div>
+  <div class="nav-scrim" onclick="toggleNavMobile()"></div>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <div class="sb-mark"><i class=ph-barbell></i></div>
+      <div>
+        <div class="sb-name">FitCPX Lite</div>
+        <div class="sb-role">Personal Trainer</div>
+      </div>
+    </div>
+
+    <nav class="sb-nav">
+      <div class="sb-group">
+        <div class="sidebar-item" id="nav-dashboard" role="button" tabindex="0" onclick="navGo('dashboard')"><i class=ph-squares-four></i><span>Painel</span><span id="nav-count-pend" class="sb-count"></span></div>
+      </div>
+
+      <!-- Alunos: ficha (Auto) + CRM de prazos (extraído do FitCPX Flow — ver ESTRATEGIA-MERGE.md) -->
+      <div class="sb-group">
+        <div class="sb-label">Alunos</div>
+        <div class="sidebar-item" id="nav-alunos" role="button" tabindex="0" onclick="navGo('alunos')"><i class=ph-users></i><span>Alunos</span><span id="nav-count-alunos" class="sb-count">0</span></div>
+        <div class="sidebar-item" id="nav-pipeline" role="button" tabindex="0" onclick="navGo('pipeline')"><i class=ph-kanban></i><span>Pipeline</span></div>
+        <div class="sidebar-item" id="nav-agenda" role="button" tabindex="0" onclick="navGo('agenda')"><i class=ph-calendar-blank></i><span>Agenda</span><span id="nav-agenda-badge" class="sb-count" style="display:none"></span></div>
+        <div class="sidebar-item" id="nav-whatsapp" role="button" tabindex="0" onclick="navGo('whatsapp')"><i class=ph-whatsapp-logo></i><span>WhatsApp</span></div>
+      </div>
+
+      <!-- Treino (expansível) -->
+      <div class="sb-group">
+        <div class="sb-label">Prescrição</div>
+        <div class="sidebar-item" id="nav-treino-hdr" role="button" tabindex="0" onclick="toggleNavTreino()"><i class=ph-folders></i><span>Treino</span><i class="ph-caret-right sb-caret" id="nav-treino-arrow"></i></div>
+        <div class="sb-sub" id="nav-treino-sub">
+          <div class="sidebar-item" id="nav-locais" role="button" tabindex="0" onclick="navGo('locais')"><i class=ph-map-pin></i><span>Locais de Treino</span></div>
+          <div class="sidebar-item" id="nav-biblioteca" role="button" tabindex="0" onclick="navGo('biblioteca')"><i class=ph-books></i><span>Biblioteca de Treinos</span></div>
+          <div class="sidebar-item" id="nav-distribuicao" role="button" tabindex="0" onclick="navGo('distribuicao')"><i class=ph-chart-bar-horizontal></i><span>Distribuição</span></div>
+          <div class="sidebar-item" id="nav-periodizacao" role="button" tabindex="0" onclick="navGo('periodizacao')"><i class=ph-chart-line-up></i><span>Periodização</span></div>
+          <div class="sidebar-item" id="nav-exercicios" role="button" tabindex="0" onclick="navGo('exercicios')"><i class=ph-barbell></i><span>Exercícios</span><span class="sb-count">693</span></div>
+          <div class="sidebar-item" id="nav-arquivadas" role="button" tabindex="0" onclick="navGo('arquivadas')"><i class=ph-archive></i><span>Arquivadas</span><span id="nav-arquivadas-count" class="sb-count" style="display:none"></span></div>
+        </div>
+      </div>
+
+      <!-- Sistema -->
+      <div class="sb-group">
+        <div class="sb-label">Sistema</div>
+        <div class="sidebar-item" id="nav-fluxos" role="button" tabindex="0" onclick="navGo('fluxos')"><i class=ph-flow-arrow></i><span>Fluxo de Trabalho</span></div>
+        <div class="sidebar-item" id="nav-portal-aluno" role="button" tabindex="0" onclick="navGo('portal-aluno')"><i class=ph-device-mobile></i><span>Portal do Aluno</span><span id="nav-portal-aluno-count" class="sb-pill" style="display:none"></span></div>
+        <div class="sidebar-item" id="nav-config" role="button" tabindex="0" onclick="navGo('config')"><i class=ph-gear></i><span>Configurações</span></div>
+      </div>
+
+      <details class="sb-soon">
+        <summary><i class=ph-caret-right></i>Em breve</summary>
+        <div><i class=ph-bowl-food></i>Nutricionista</div>
+        <div><i class=ph-stethoscope></i>Fisioterapeuta</div>
+      </details>
+
+      <!-- student-list mantido oculto para compatibilidade com funções existentes -->
+      <div id="student-list" style="display:none"></div>
+      <span id="student-count" style="display:none">0</span>
+      <span id="no-students" style="display:none"></span>
+    </nav>
+
+    <div class="sb-foot">
+      <!-- Botões de dados (ocultos: o backup local ficou redundante com a nuvem) -->
+      <div id="cloud-actions" style="display:none;gap:6px">
+        <button class="sb-btn" onclick="exportarJSON()" title="Exportar backup local"><i class=ph-download-simple></i>Exportar</button>
+        <label class="sb-btn" title="Importar backup local"><i class=ph-upload-simple></i>Importar
+          <input type="file" accept=".json" onchange="importarJSON(event)" style="display:none">
+        </label>
+      </div>
+
+      <div id="supa-user-info" class="sb-user" style="display:none">
+        <div class="sb-avatar" id="supa-user-avatar"></div>
+        <div class="sb-user-info">
+          <div class="sb-user-email" id="supa-user-email"></div>
+          <div id="sync-status" class="sb-sync" style="display:none"></div>
+        </div>
+        <button class="icon-btn" onclick="authSair()" title="Sair" aria-label="Sair"><i class=ph-sign-out></i></button>
+      </div>
+
+      <div class="sb-actions">
+        <button class="sb-btn" id="btn-tema" onclick="toggleTema()"><i id="tema-icon" class=ph-moon></i><span id="tema-label">Modo escuro</span></button>
+      </div>
+      <div class="sb-version">v1.6.3 · Módulo EF</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main-area" id="main-area">
+
+    <!-- WELCOME (fallback only, navGo('alunos') is default) -->
+    <div class="main-scroll hidden" id="welcome-screen">
+      <div class="welcome">
+        <div class="welcome-icon"><i class=ph-barbell></i></div>
+        <div class="welcome-title">FitCPX Lite - Prescrição EF</div>
+        <div class="welcome-sub">Selecione um aluno na aba Alunos ou cadastre um novo para começar</div>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="navGo('alunos')">Ver Alunos</button>
+      </div>
+    </div>
+
+    <!-- ══ TELA: ALUNOS ══ -->
+    <!-- ═══ PAINEL (tela de abertura) ═══ -->
+    <div id="screen-dashboard" class="main-scroll hidden">
+      <div class="page-head">
+        <div>
+          <h2>Painel</h2>
+          <div class="page-sub"><span id="dash-data"></span></div>
+        </div>
+      </div>
+      <div class="dash">
+        <div class="card" id="dash-portal-links" style="max-width:640px"></div>
+        <div id="dash-conteudo"></div>
+      </div>
+    </div>
+
+    <div id="screen-alunos" class="hidden" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Alunos</div>
+          <div class="page-subtitle"><span id="alunos-count-badge">0 alunos</span></div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary" onclick="abrirNovoAluno()"><i class=ph-plus></i>Novo aluno</button>
+        </div>
+      </div>
+      <div id="alunos-transf-strip" class="hidden"></div>
+
+      <!-- Elementos ocultos para compatibilidade (limparFiltrosAlunos usa esses IDs) -->
+      <select id="alunos-filtro-obj" onchange="renderScreenAlunos()" hidden>
+        <option value="">Todos os objetivos</option>
+        <option value="Hip">Hipertrofia</option><option value="Forca">Força</option>
+        <option value="Emagr">Emagrecimento</option><option value="Comp">Composição</option>
+        <option value="Resist">Resistência</option><option value="CardioR">Cardio</option>
+        <option value="Func">Funcional</option><option value="Saude">Saúde</option>
+        <option value="Esport">Esportivo</option><option value="Reab">Reabilitação</option>
+        <option value="Envelhec">Envelhecimento</option><option value="Gestacao">Gestação</option>
+      </select>
+      <select id="alunos-ordem" onchange="renderScreenAlunos()" hidden>
+        <option value="nome">Nome A→Z</option>
+        <option value="nome_desc">Nome Z→A</option>
+        <option value="nivel">Nível</option>
+        <option value="objetivo">Objetivo</option>
+        <option value="idade">Idade</option>
+        <option value="recente">Mais recentes</option>
+      </select>
+      <select id="alunos-filtro-presc" onchange="renderScreenAlunos()" hidden>
+        <option value="">Todos</option>
+        <option value="com">Com prescrição</option>
+        <option value="sem">Sem prescrição</option>
+      </select>
+
+      <div class="main-scroll">
+        <div class="content">
+          <div class="card" style="padding:0;overflow:hidden">
+            <div style="overflow-x:auto">
+              <table class="alunos-table">
+                <thead>
+                  <tr>
+                    <th style="min-width:230px">
+                      <div class="th-label">Nome</div>
+                      <div class="th-search"><i class=ph-magnifying-glass></i><input id="alunos-busca" placeholder="Buscar aluno" oninput="renderScreenAlunos()" autocomplete="off"></div>
+                    </th>
+                    <th style="min-width:104px">
+                      <div class="th-label">Sexo</div>
+                      <select id="alunos-filtro-sexo" onchange="renderScreenAlunos()">
+                        <option value="">Todos</option>
+                        <option value="M">Masc.</option>
+                        <option value="F">Fem.</option>
+                      </select>
+                    </th>
+                    <th style="min-width:132px">
+                      <div class="th-label">Nível</div>
+                      <select id="alunos-filtro-nivel" onchange="renderScreenAlunos()">
+                        <option value="">Todos</option>
+                        <option>Iniciante</option><option>Intermediário</option><option>Avançado</option>
+                      </select>
+                    </th>
+                    <th style="min-width:128px">
+                      <div class="th-label">Atendimento</div>
+                      <select id="alunos-filtro-modal" onchange="renderScreenAlunos()">
+                        <option value="">Todos</option>
+                        <option value="presencial">Presencial</option>
+                        <option value="online">Online</option>
+                        <option value="hibrido">Híbrido</option>
+                      </select>
+                    </th>
+                    <th class="sortable" style="min-width:140px" onclick="sortAlunos('ultAval')" title="Clique para ordenar">
+                      <div class="th-label">Última avaliação <i class=ph-arrows-down-up></i><span id="alunos-sort-ultAval" class="alunos-sort-ind" style="color:var(--accent)"></span></div>
+                    </th>
+                    <th class="sortable" style="min-width:140px" onclick="sortAlunos('ultTreino')" title="Clique para ordenar">
+                      <div class="th-label">Último treino <i class=ph-arrows-down-up></i><span id="alunos-sort-ultTreino" class="alunos-sort-ind" style="color:var(--accent)"></span></div>
+                    </th>
+                    <th style="width:40px;text-align:right;vertical-align:bottom">
+                      <button class="icon-btn" onclick="limparFiltrosAlunos()" title="Limpar filtros" aria-label="Limpar filtros"><i class=ph-funnel-x></i></button>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody id="alunos-grid"></tbody>
+              </table>
+            </div>
+            <div id="alunos-empty" class="empty hidden">
+              <i class=ph-users></i>
+              <div class="empty-title">Nenhum aluno cadastrado</div>
+              <div class="empty-text">Cadastre o primeiro aluno ou compartilhe o link do Portal para ele mesmo se cadastrar.</div>
+              <button class="btn btn-primary" onclick="abrirNovoAluno()"><i class=ph-plus></i>Novo aluno</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TELA: LOCAIS DE TREINO ══ -->
+    <div id="screen-locais" class="hidden" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Locais de Treino</div>
+          <div class="page-subtitle">Filtro de equipamentos na prescrição</div>
+        </div>
+        <div class="page-header-actions" id="locais-header-actions">
+          <button class="btn btn-primary btn-sm" onclick="abrirModalLocal()">+ Novo Local</button>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="subtab active" id="locais-tab-meus" role="button" tabindex="0" onclick="switchLocaisTab('meus')">Meus Locais</div>
+        <div class="subtab" id="locais-tab-alunos" role="button" tabindex="0" onclick="switchLocaisTab('alunos')">Locais de Alunos</div>
+      </div>
+      <div class="main-scroll">
+        <div class="content" id="locais-sub-meus">
+          <div class="alert alert-blue"><i class=ph-lightbulb></i> Ao prescrever, selecione o local do aluno - o motor filtra apenas exercícios com os equipamentos disponíveis aqui.</div>
+          <div id="locais-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px"></div>
+        </div>
+        <div class="content hidden" id="locais-sub-alunos">
+          <div class="alert alert-blue"><i class=ph-lightbulb></i> Locais cadastrados pelos próprios alunos no Portal (academia, casa etc.), já disponíveis pra eles. "Compartilhar" só decide se aparece na busca de outros alunos seus.</div>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+            <input type="text" id="locais-alunos-busca" placeholder="Buscar por nome, cidade, estado..." oninput="renderLocaisAlunos()"
+              style="padding:6px 10px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg4);color:var(--text);font-family:var(--sans);font-size:13px;outline:none;width:260px">
+          </div>
+          <div id="locais-alunos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TELA: PORTAL DO ALUNO (link de cadastro/acesso + transferências) ══ -->
+    <div id="screen-portal-aluno" class="hidden" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Portal do Aluno</div>
+          <div class="page-subtitle">Cadastro, anamnese e avaliação enviados pelo próprio aluno</div>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="subtab active" id="portal-tab-link" role="button" tabindex="0" onclick="switchPortalSubtab('link')">Meus links</div>
+        <div class="subtab" id="portal-tab-transferencias" role="button" tabindex="0" onclick="switchPortalSubtab('transferencias')">Transferências<span id="portal-transferencias-count" style="display:none;margin-left:6px;font-size:12px;background:var(--amber);color:#fff;border-radius:10px;padding:1px 6px"></span></div>
+      </div>
+      <div class="main-scroll">
+        <div class="content" id="portal-sub-link">
+          <div id="portal-link-wrap" style="max-width:560px"></div>
+        </div>
+        <div class="content hidden" id="portal-sub-transferencias">
+          <div class="alert alert-blue"><i class=ph-lightbulb></i> Quando um aluno pede pra trocar de personal, ele segue com acesso normal por até 30 dias. Você pode liberar antes (cortesia); passado o prazo a troca acontece sozinha, sem os treinos. Você não pode recusar.</div>
+          <div id="portal-transferencias-lista"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: editar equipamentos de um local de aluno -->
+    <div id="modal-local-aluno" class="modal-overlay hidden">
+      <div class="modal" style="width:520px;max-height:90vh;overflow-y:auto">
+        <div class="modal-title">Local do aluno</div>
+        <input type="hidden" id="local-aluno-edit-id">
+        <div class="field"><label>Nome</label><input id="local-aluno-nome"></div>
+        <div class="grid-2">
+          <div class="field"><label>Cidade</label><input id="local-aluno-cidade"></div>
+          <div class="field"><label>Estado</label><input id="local-aluno-estado"></div>
+        </div>
+        <div class="field"><label>País</label><input id="local-aluno-pais"></div>
+        <div class="field"><label>Tipo</label>
+          <select id="local-aluno-tipo">
+            <option>Academia completa</option><option>Academia pequena</option><option>Home gym</option><option>Área externa</option><option>Condomínio</option><option>Outro</option>
+          </select>
+        </div>
+        <div class="field"><label>Equipamentos disponíveis</label>
+          <div id="local-aluno-equip-wrap" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;display:grid;grid-template-columns:1fr;gap:4px;max-height:260px;overflow-y:auto"></div>
+        </div>
+        <div class="field"><label>Observações</label><textarea id="local-aluno-obs" rows="2"></textarea></div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="fecharModalLocalAluno()">Cancelar</button>
+          <button class="btn btn-primary" onclick="salvarLocalAluno()">Salvar e marcar revisado</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TELA: ARQUIVADAS ══ -->
+    <div id="screen-arquivadas" class="hidden" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Arquivadas</div>
+          <div class="page-subtitle">Nada é apagado de verdade</div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-ghost btn-sm" id="arq-btn-historico" onclick="arqToggleHistorico()"><i class=ph-clock></i> Ver histórico completo</button>
+        </div>
+      </div>
+      <div class="main-scroll">
+        <div class="content">
+          <div class="alert alert-blue"><i class=ph-lightbulb></i> Tudo que você exclui no sistema - aluno, avaliação, treino, local, template, divisão, periodização - vem parar aqui inteiro. Restaurar devolve o registro às telas de trabalho com um identificador novo.</div>
+
+          <div id="arq-aviso-legado" class="alert alert-amber" style="display:none">
+            <i class=ph-warning></i> Este navegador tem alunos salvos antes da separação por conta. Eles não são carregados automaticamente para não misturar as contas.
+            <button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="arqImportarLegado()">Importar para esta conta</button>
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+            <input type="text" id="arq-busca" placeholder="Buscar por item ou aluno..." oninput="arqSetBusca(this.value)"
+              style="padding:6px 10px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg4);color:var(--text);font-family:var(--sans);font-size:13px;outline:none;width:240px">
+            <select id="arq-tipo" onchange="arqSetTipo(this.value)"
+              style="font-size:12px;padding:5px 8px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg2);color:var(--text)">
+              <option value="">Todos os tipos</option>
+              <option value="aluno">Aluno</option>
+              <option value="avaliacao">Avaliação</option>
+              <option value="treino">Treino</option>
+              <option value="local">Local de treino</option>
+              <option value="template">Template de treino</option>
+              <option value="divisao">Divisão de treino</option>
+              <option value="periodizacao">Periodização</option>
+            </select>
+          </div>
+
+          <div id="arquivadas-lista"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         CRM DE PRAZOS — extraído do FitCPX Flow (ver ESTRATEGIA-MERGE.md)
+    ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- ══ TELA: AGENDA ══ -->
+    <div id="screen-agenda" class="main-scroll hidden">
+      <div class="page-head"><h2>Agenda</h2></div>
+      <div class="screen-pad" id="screen-agenda-body"></div>
+    </div>
+
+    <!-- ══ TELA: PIPELINE ══ -->
+    <div id="screen-pipeline" class="main-scroll hidden">
+      <div class="page-head"><h2>Pipeline</h2></div>
+      <div class="screen-pad" id="screen-pipeline-body"></div>
+    </div>
+
+    <!-- ══ TELA: WHATSAPP ══ -->
+    <div id="screen-whatsapp" class="main-scroll hidden">
+      <div class="page-head"><h2>WhatsApp</h2></div>
+      <div class="screen-pad" id="screen-whatsapp-body"></div>
+    </div>
+
+    <!-- ══ TELA: FLUXOS DE TRABALHO (categorias + fluxos + modalidades) ══ -->
+    <div id="screen-fluxos" class="main-scroll hidden">
+      <div class="page-head"><h2>Fluxos de Trabalho</h2></div>
+      <div class="screen-pad" id="screen-fluxos-body"></div>
+    </div>
+
+    <!-- ══ TELA: CONFIGURAÇÕES DO CRM ══ -->
+    <div id="screen-config" class="main-scroll hidden">
+      <div class="page-head"><h2>Configurações</h2></div>
+      <div class="screen-pad" id="screen-config-body"></div>
+    </div>
+
+    <!-- Overlay de tela cheia: detalhe do cliente no CRM (navAlunoCrm/closeAlunoCrm,
+         js/crm-alunos.js). Não é um item de navegação — abre a partir de qualquer
+         card/linha que referencie um cliente (agenda, pipeline, whatsapp, lista). -->
+    <div id="screen-aluno-crm" class="hidden" style="position:fixed;inset:0 0 0 248px;background:var(--bg);z-index:500;overflow-y:auto"></div>
+
+    <!-- ══ TELA: BIBLIOTECA DE TREINOS ══ -->
+    <div id="screen-biblioteca" class="hidden" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Biblioteca de Treinos</div>
+          <div class="page-subtitle">Templates prontos para prescrição rápida</div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary btn-sm" onclick="abrirModalBib()">+ Novo Template</button>
+        </div>
+      </div>
+      <div class="main-scroll">
+        <div class="content">
+          <div class="alert alert-blue"><i class=ph-lightbulb></i> Treinos validados com alunos reais. Salve ao finalizar uma prescrição - o perfil do aluno é registrado automaticamente para facilitar replicação.</div>
+          <!-- Filtros -->
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+            <select id="bib-filtro-obj" onchange="renderBiblioteca()" style="font-size:12px;padding:5px 8px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer">
+              <option value="">Todos os objetivos</option>
+              <option value="Hip">Hipertrofia</option><option value="Emagr">Emagrecimento</option>
+              <option value="Forca">Força</option><option value="Comp">Composição</option>
+              <option value="Resist">Resistência</option><option value="CardioR">Cardio</option>
+              <option value="Func">Funcional</option><option value="Saude">Saúde</option>
+              <option value="Esport">Esportivo</option><option value="Reab">Reabilitação</option>
+              <option value="Envelhec">Envelhecimento</option><option value="Gestacao">Gestação</option>
+            </select>
+            <select id="bib-filtro-nv" onchange="renderBiblioteca()" style="font-size:12px;padding:5px 8px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer">
+              <option value="">Todos os níveis</option>
+              <option>Iniciante</option><option>Intermediário</option><option>Avançado</option>
+            </select>
+            <select id="bib-filtro-freq" onchange="renderBiblioteca()" style="font-size:12px;padding:5px 8px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer">
+              <option value="">Todas as frequências</option>
+              <option>2x</option><option>3x</option><option>4x</option><option>5x</option><option>6x</option>
+            </select>
+            <select id="bib-filtro-sexo" onchange="renderBiblioteca()" style="font-size:12px;padding:5px 8px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer">
+              <option value="">M/F</option>
+              <option value="M">Masculino</option><option value="F">Feminino</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" id="bib-btn-filtrar-aluno" onclick="filtrarBibPorAlunoAtivo()" style="display:none"><i class=ph-target></i> Perfil do aluno ativo</button>
+            <button class="btn btn-ghost btn-sm" onclick="limparFiltrosBib()" style="color:var(--text3)"><i class=ph-x></i> Limpar</button>
+          </div>
+          <div id="bib-aluno-badge" style="display:none;margin-bottom:12px"></div>
+          <div id="bib-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TELA: DISTRIBUIÇÃO ══ -->
+    <div id="screen-distribuicao" class="hidden" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Modelos de Distribuição</div>
+          <div class="page-subtitle">Divisões de treino por frequência e objetivo</div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary btn-sm" onclick="abrirModalDistrib()">+ Nova Divisão</button>
+        </div>
+      </div>
+      <div class="main-scroll">
+        <div class="content">
+          <div class="alert alert-blue"><i class=ph-lightbulb></i> Cada modelo indica quando deve ser utilizado (critérios de uso) e quando deve ser descartado (contraindicações).</div>
+          <div id="distrib-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TELA: PERIODIZAÇÃO ══ -->
+    <div id="screen-periodizacao" class="hidden" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Modelos de Periodização</div>
+          <div class="page-subtitle">Macrociclos com progressão de carga por fase</div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-ghost btn-sm" id="btn-period-acomp" onclick="abrirAcompPeriod()" style="display:none"><i class=ph-chart-bar></i> Acompanhamento</button>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalPeriod()">+ Novo Modelo</button>
+        </div>
+      </div>
+      <div class="main-scroll">
+        <div class="content">
+          <div class="alert alert-blue"><i class=ph-lightbulb></i> Cada modelo define perfil de aluno, bloqueios (nível/sexo/objetivo), mesociclos com progressão de carga e regras de ajuste entre fases.</div>
+          <div id="period-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ MODAL PERIODIZAÇÃO COMPLETO ══ -->
+    <div id="modal-period" class="modal-overlay hidden">
+      <div class="modal" style="width:720px;max-height:93vh;overflow-y:auto">
+        <div class="modal-title" id="modal-period-title">Novo Modelo de Periodização</div>
+        <input type="hidden" id="period-edit-id">
+
+        <!-- BLOCO 1: Identidade -->
+        <div class="section-label" style="margin-top:0">Identidade do Modelo</div>
+        <div class="grid-3">
+          <div class="field"><label>Nome</label><input id="period-nome" placeholder="Ex: Linear Progressiva LP"></div>
+          <div class="field"><label>Sigla</label>
+            <select id="period-sigla">
+              <option value="LP">LP — Linear Progressiva</option>
+              <option value="LPR">LPR — Linear Reversa</option>
+              <option value="DUP">DUP — Ondulatória Diária</option>
+              <option value="CB">CB — Periodização em Blocos</option>
+              <option value="CONJ">CONJ — Conjugado</option>
+            </select>
+          </div>
+          <div class="field"><label>Duração total</label>
+            <select id="period-duracao">
+                            <option value="4 semanas">4 semanas (1 mesociclo)</option>
+              <option value="6 semanas">6 semanas</option>
+              <option value="8 semanas" selected>8 semanas — padrão ACM (2×4)</option>
+              <option value="10 semanas">10 semanas</option>
+              <option value="12 semanas">12 semanas (3×4)</option>
+              <option value="16 semanas">16 semanas (4×4)</option>
+              <option value="20 semanas">20 semanas (Blocos longos)</option>
+              <option value="24 semanas">24 semanas (6 meses)</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Divisão de treino</label>
+            <select id="period-divisao">
+              <option>Full Body</option>
+              <option>Full Body A/B</option>
+              <option>Full Body A/B/A</option>
+              <option>Upper/Lower</option>
+              <option>Upper/Lower/Full</option>
+              <option>Push/Pull/Legs (PPL)</option>
+              <option>A/B/C (ABC)</option>
+              <option>Varia por bloco</option>
+            </select>
+          </div>
+          <div class="field"><label>Estrutura dos mesociclos</label>
+            <select id="period-estrutura-meso">
+              <option value="2x3">2 mesos × 3 sem (2 carga + 1 deload)</option>
+              <option value="2x4" selected>2 mesos × 4 sem (3 carga + 1 deload) — padrão</option>
+              <option value="3x3">3 mesos × 3 sem</option>
+              <option value="3x4">3 mesos × 4 sem (3 carga + 1 deload)</option>
+              <option value="4x4">4 mesos × 4 sem</option>
+              <option value="blocos">Blocos variáveis (4–6 sem cada)</option>
+              <option value="custom">Configuração personalizada</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>Descrição geral</label>
+          <textarea id="period-desc" rows="2" placeholder="Lógica de progressão, princípio central do modelo..."></textarea>
+        </div>
+        <div class="field"><label>Referência científica</label>
+          <input id="period-ref" placeholder="Ex: Schoenfeld 2016, Israetel & Hoffman, NSCA...">
+        </div>
+
+        <!-- BLOCO 2: Parâmetros de treino — TODOS FECHADOS -->
+        <div class="section-label">Parâmetros de Treino Base <span style="font-size:12px;color:var(--text3);font-weight:400">— Tabela Mestre FASE-3 ACM</span></div>
+        <div class="grid-3">
+          <div class="field">
+            <label>Intensidade-alvo (%1RM)</label>
+            <select id="period-intensidade">
+                            <option value="20–50%">20–50% — Reabilitação</option>
+              <option value="40–60%">40–60% — Gestação / Funcional leve</option>
+              <option value="40–65%">40–65% — Funcional / Mobilidade / Envelhecimento</option>
+              <option value="50–65%">50–65% — Saúde Geral iniciante</option>
+              <option value="50–70%">50–70% — Saúde Geral</option>
+              <option value="50–75%">50–75% — Emagrecimento</option>
+              <option value="55–70%">55–70% — Saúde intermediário</option>
+              <option value="55–85%">55–85% — DUP (varia por sessão)</option>
+              <option value="60–75%">60–75% — Hipertrofia / Linear iniciante</option>
+              <option value="60–80%">60–80% — Composição Corporal</option>
+              <option value="60–85%">60–85% — Hipertrofia (faixa completa)</option>
+              <option value="70–90%">70–90% — Performance Esportiva</option>
+              <option value="80–95%">80–95% — Força Máxima</option>
+              <option value="Varia">Varia por sessão (DUP/Blocos)</option>
+            </select>
+            <div class="field-sub">Vault FASE-3 - faixa para a maioria das sessões</div>
+          </div>
+          <div class="field">
+            <label>RPE alvo</label>
+            <select id="period-rpe">
+                            <option value="3–6">3–6 — Reabilitação</option>
+              <option value="4–6">4–6 — Gestação</option>
+              <option value="5–7">5–7 — Funcional / Resistência / Saúde leve</option>
+              <option value="6–7">6–7 — Saúde Geral / Linear iniciante</option>
+              <option value="6–8">6–8 — Hipertrofia / Emagrecimento / Composição</option>
+              <option value="7–9">7–9 — Performance Esportiva</option>
+              <option value="8–9">8–9 — Força Máxima</option>
+              <option value="6–9">6–9 — Varia por sessão (DUP)</option>
+            </select>
+            <div class="field-sub">Borg mod. 0–10; 10 = falha concêntrica</div>
+          </div>
+          <div class="field">
+            <label>Volume semanal / músculo</label>
+            <select id="period-vol-sem">
+                            <option value="6–12">6–12 séries — Reabilitação</option>
+              <option value="8–12">8–12 séries — Gestação</option>
+              <option value="8–15">8–15 séries — Saúde / Funcional / Envelhecimento</option>
+              <option value="10–16">10–16 séries — Força Máxima</option>
+              <option value="10–20">10–20 séries — Hipertrofia (MEV→MAV)</option>
+              <option value="12–20">12–20 séries — Emagrecimento / Resistência / Composição</option>
+              <option value="10–20">10–20 séries — Performance Esportiva</option>
+            </select>
+            <div class="field-sub">Vault: MEV→MAV (Israetel 2019)</div>
+          </div>
+        </div>
+        <div class="grid-3">
+          <div class="field">
+            <label>Repetições-alvo</label>
+            <select id="period-reps">
+                            <option value="1–5">1–5 reps — Força neural máxima</option>
+              <option value="3–10">3–10 reps — Performance Esportiva</option>
+              <option value="6–20">6–20 reps — Hipertrofia (faixa ampla)</option>
+              <option value="8–15">8–15 reps — Funcional / Envelhecimento / Composição</option>
+              <option value="10–15">10–15 reps — Saúde Geral / Linear</option>
+              <option value="10–20">10–20 reps — Emagrecimento / Reabilitação</option>
+              <option value="12–15">12–15 reps — Gestação</option>
+              <option value="15–30+">15–30+ reps — Resistência Muscular</option>
+              <option value="Varia">Varia por sessão (DUP: 1–5 / 8–12 / 15–20)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Intervalo entre séries</label>
+            <select id="period-intervalo">
+                            <option value="30–45s">30–45s — Resistência Muscular</option>
+              <option value="30–60s">30–60s — Emagrecimento</option>
+              <option value="60–90s">60–90s — Saúde / Funcional / Cardio / Linear</option>
+              <option value="60–120s">60–120s — Hipertrofia</option>
+              <option value="45–90s">45–90s — Composição Corporal</option>
+              <option value="90–120s">90–120s — Envelhecimento / Gestação / Reabilitação</option>
+              <option value="120–240s">120–240s — Performance Esportiva</option>
+              <option value="180–300s">180–300s — Força Máxima</option>
+              <option value="Varia">Varia por sessão (DUP)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Cadência / TUT</label>
+            <select id="period-tut">
+                            <option value="2-0-2">2-0-2 — Emagrecimento</option>
+              <option value="2-1-2">2-1-2 — Saúde / Gestação / Composição</option>
+              <option value="3-1-3">3-1-3 — Hipertrofia com ênfase excêntrica</option>
+              <option value="2-1-2 a 3-1-3">2-1-2 a 3-1-3 — Hipertrofia (faixa)</option>
+              <option value="Explosivo">Explosivo concêntrico — Força Máxima / Potência</option>
+              <option value="Controlado">Controlado — Funcional / Resistência</option>
+              <option value="Lento controlado">Lento e controlado — Envelhecimento / Reabilitação</option>
+              <option value="Varia">Varia por sessão (DUP/Blocos)</option>
+            </select>
+            <div class="field-sub">Excêntrico–Isométrico–Concêntrico</div>
+          </div>
+        </div>
+
+        <!-- BLOCO 3: Perfil de aluno -->
+        <div class="section-label">Perfil de Aluno Ideal</div>
+        <div class="grid-3">
+          <div class="field"><label>Nível mínimo</label>
+            <select id="period-nivel">
+              <option value="">Qualquer nível</option>
+              <option>Iniciante</option><option>Intermediário</option><option>Avançado</option>
+            </select>
+          </div>
+          <div class="field"><label>Nível máximo</label>
+            <select id="period-nivel-max">
+              <option value="">Sem limite</option>
+              <option>Iniciante</option><option>Intermediário</option><option>Avançado</option>
+            </select>
+          </div>
+          <div class="field"><label>Sexo</label>
+            <select id="period-sexo">
+              <option value="">Ambos os sexos</option>
+              <option value="M">Masculino</option>
+              <option value="F">Feminino</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>Objetivos compatíveis <span style="font-size:12px;font-weight:400;color:var(--text3)">(Vault FASE-2 - Tabela de Decisão)</span></label>
+          <div id="period-obj-wrap" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;display:flex;flex-wrap:wrap;gap:6px 16px">
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" value="Hip"> Hipertrofia (Hip)</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" value="Forca"> Força (Forca)</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" value="Emagr"> Emagrecimento (Emagr)</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" value="Comp"> Composição (Comp)</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" value="Resist"> Resistência (Resist)</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" value="CardioR"> Cardio (CardioR)</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" value="Func"> Funcional (Func)</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" value="Saude"> Saúde (Saude)</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" value="Esport"> Esportivo (Esport)</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" value="Reab"> Reabilitação (Reab)</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" value="Envelhec"> Envelhecimento (Envelhec)</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" value="Gestacao"> Gestação (Gestacao)</label>
+          </div>
+        </div>
+        <div class="field"><label>Frequência semanal compatível <span style="font-size:12px;font-weight:400;color:var(--text3)">(Vault FASE-2 §7)</span></label>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;padding:8px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius)">
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer" title="LP, LP Reverso - full body ou A/B"><input type="checkbox" id="pf-2x" value="2x"> 2x/sem</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer" title="LP, DUP básico - ABC ou ABA"><input type="checkbox" id="pf-3x" value="3x"> 3x/sem</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer" title="LP, DUP, Blocos - ABAB"><input type="checkbox" id="pf-4x" value="4x"> 4x/sem</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer" title="Todos os modelos"><input type="checkbox" id="pf-5x" value="5x"> 5x/sem</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer" title="DUP, Blocos, Conjugado - somente avançados"><input type="checkbox" id="pf-6x" value="6x"> 6x+/sem</label>
+          </div>
+        </div>
+
+        <!-- BLOCO 4: Bloqueios -->
+        <div class="section-label">Bloqueios - Perfis Contraindicados</div>
+        <div class="alert alert-amber" style="margin-bottom:10px"><i class=ph-warning></i> Perfis abaixo <strong>não verão este modelo sugerido</strong> na prescrição automática.</div>
+        <div class="grid-2">
+          <div class="field"><label>Bloquear nível(is)</label>
+            <div style="display:flex;gap:14px;padding:8px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius)">
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="bl-inic" value="Iniciante"> Iniciante</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="bl-inte" value="Intermediário"> Intermediário</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="bl-avan" value="Avançado"> Avançado</label>
+            </div>
+          </div>
+          <div class="field"><label>Bloquear condição clínica</label>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;padding:8px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius)">
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="bc-gestacao" value="Gestação"> Gestação</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="bc-lesao" value="Lesão ativa"> Lesão ativa</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="bc-card" value="Cardiopatia"> Cardiopatia</label>
+            </div>
+          </div>
+        </div>
+        <div class="field"><label>Observação de bloqueio</label>
+          <input id="period-bloq-obs" placeholder="Ex: Conjugado reservado apenas para atletas avançados masculinos">
+        </div>
+
+        <!-- BLOCO 5: Mesociclos -->
+        <div class="section-label">Mesociclos e Fases de Progressão
+          <span style="font-size:12px;font-weight:400;color:var(--text3)">— Δ carga% e Δ vol% definem como o sistema calcula cargas por semana</span>
+        </div>
+        <div class="alert alert-green" style="margin-bottom:10px">
+          <i class=ph-lightbulb></i> <strong>Δ carga%</strong> = variação sobre a carga da semana anterior. <strong>Δ vol%</strong> = variação de volume. Vault: deload padrão = −10% carga / −40 a −50% vol.
+        </div>
+        <div id="period-mesos-wrap"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addMesoPeriod()" style="margin-bottom:14px">+ Adicionar Mesociclo</button>
+
+        <!-- BLOCO 6: Regras de Progressão -->
+        <div class="section-label">Regras de Progressão <span style="font-size:12px;font-weight:400;color:var(--text3)">— Vault FASE-4 §5</span></div>
+        <div id="period-regras-wrap"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addRegraPeriod()" style="margin-bottom:14px">+ Adicionar Regra</button>
+
+        <!-- BLOCO 7: Critérios -->
+        <div class="section-label">Critérios de Avanço e Acionamentos</div>
+        <div class="field">
+          <label>Critérios de avanço de nível <span style="font-size:12px;font-weight:400;color:var(--text3)">(Vault FASE-4 §5.1)</span></label>
+          <textarea id="period-criterios" rows="3" placeholder="Ex: Técnica segura em todos os exercícios | Aderência ≥80% | Progrediu carga em ≥60% dos exercícios | Tolerou volume sem overreaching → Próximo: Intermediário"></textarea>
+        </div>
+        <div class="field">
+          <label>Acionamentos para outros módulos <span style="font-size:12px;font-weight:400;color:var(--text3)">(Vault FASE-4)</span></label>
+          <textarea id="period-acionamentos" rows="2" placeholder="Ex: Dor articular >2 sem → FT (Alta) | Estagnação composição >4 sem → NUT (Média) | Sintoma cardiovascular → Médico (Emergência)"></textarea>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="fecharModalPeriod()">Cancelar</button>
+          <button class="btn btn-primary" onclick="salvarPeriod()">Salvar Modelo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Acompanhamento de Carga -->
+    <div id="modal-acomp-period" class="modal-overlay hidden">
+      <div class="modal" style="width:680px;max-height:93vh;overflow-y:auto">
+        <div class="modal-title">Acompanhamento de Carga - <span id="acomp-nome-aluno"></span></div>
+        <div class="alert alert-blue" style="margin-bottom:12px">Registre a carga atual do aluno por exercício. O sistema calcula os ajustes sugeridos para cada fase do macrociclo.</div>
+        <div class="grid-2" style="margin-bottom:14px">
+          <div class="field"><label>Aluno</label>
+            <select id="acomp-aluno-sel" onchange="acompCarregarAluno()">
+              <option value="">Selecionar aluno...</option>
+            </select>
+          </div>
+          <div class="field"><label>Modelo de periodização</label>
+            <select id="acomp-period-sel" onchange="acompCarregarModelo()">
+              <option value="">Selecionar modelo...</option>
+            </select>
+          </div>
+        </div>
+        <div id="acomp-fase-atual" style="margin-bottom:14px;display:none">
+          <div class="param-block">
+            <div class="param-grid">
+              <div><div class="param-key">Mesociclo atual</div><div class="param-val" id="acomp-meso-label">—</div></div>
+              <div><div class="param-key">Semana atual</div><div class="param-val" id="acomp-sem-label">—</div></div>
+              <div><div class="param-key">Tipo</div><div class="param-val" id="acomp-tipo-label">—</div></div>
+            </div>
+          </div>
+        </div>
+        <div id="acomp-cargas-wrap">
+          <div class="section-label">Cargas atuais por exercício</div>
+          <div id="acomp-cargas-body"></div>
+          <button class="btn btn-ghost btn-sm" onclick="addCargaAcomp()">+ Adicionar exercício</button>
+        </div>
+        <div id="acomp-progressao-wrap" style="display:none;margin-top:16px">
+          <div class="section-label">Progressão sugerida por fase</div>
+          <div id="acomp-progressao-body"></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="$('modal-acomp-period').classList.add('hidden')">Fechar</button>
+          <button class="btn btn-primary" onclick="salvarAcompPeriod()">Salvar acompanhamento</button>
+          <button class="btn btn-ghost" onclick="calcularProgressao()" id="btn-calc-prog" style="display:none"><i class=ph-arrows-clockwise></i>Calcular progressão</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ MODALS das bibliotecas ══ -->
+    <!-- Modal Local -->
+    <div id="modal-local" class="modal-overlay hidden">
+      <div class="modal" style="width:520px;max-height:90vh;overflow-y:auto">
+        <div class="modal-title" id="modal-local-title">Novo Local de Treino</div>
+        <input type="hidden" id="local-edit-id">
+        <div class="field"><label>Nome do Local</label><input id="local-nome" placeholder="Ex: Academia Central, Casa do Aluno, Parque..."></div>
+        <div class="field"><label>Tipo</label>
+          <select id="local-tipo">
+            <option>Academia completa</option><option>Academia pequena</option><option>Home gym</option><option>Área externa</option><option>Condomínio</option><option>Outro</option>
+          </select>
+        </div>
+        <div class="field"><label>Equipamentos disponíveis</label>
+          <div id="local-equip-wrap" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;display:grid;grid-template-columns:1fr;gap:4px;max-height:260px;overflow-y:auto"></div>
+        </div>
+        <div class="field"><label>Observações</label><textarea id="local-obs" rows="2" placeholder="Restrições, horários, particularidades..."></textarea></div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="fecharModalLocal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="salvarLocal()">Salvar Local</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Biblioteca -->
+    <div id="modal-bib" class="modal-overlay hidden">
+      <div class="modal" style="width:560px;max-height:90vh;overflow-y:auto">
+        <div class="modal-title" id="modal-bib-title">Novo Template de Treino</div>
+        <input type="hidden" id="bib-edit-id">
+        <div class="grid-2">
+          <div class="field"><label>Nome do Template</label><input id="bib-nome" placeholder="Ex: Hipertrofia 4x Intermediário"></div>
+          <div class="field"><label>Objetivo</label>
+            <select id="bib-obj"><option>Hipertrofia</option><option>Emagrecimento</option><option>Força</option><option>Resistência</option><option>Funcional</option><option>Saúde</option><option>Esportivo</option><option>Reabilitação</option></select>
+          </div>
+          <div class="field"><label>Nível</label>
+            <select id="bib-nivel"><option>Iniciante</option><option>Intermediário</option><option>Avançado</option></select>
+          </div>
+          <div class="field"><label>Frequência</label>
+            <select id="bib-freq"><option>2x</option><option>3x</option><option>4x</option><option>5x</option><option>6x</option></select>
+          </div>
+        </div>
+        <div class="field"><label><i class=ph-check-circle></i> Critérios de uso - QUANDO aplicar</label>
+          <textarea id="bib-uso" rows="3" placeholder="Ex: Aluno intermediário, sem lesões, objetivo hipertrofia, 4x/sem disponíveis, boa recuperação..."></textarea></div>
+        <div class="field"><label><i class=ph-x-circle></i> Contraindicações - QUANDO descartar</label>
+          <textarea id="bib-contra" rows="3" placeholder="Ex: Iniciante, lesão de ombro ativa, menos de 3x/sem, objetivo cardio..."></textarea></div>
+        <div class="field"><label><i class=ph-push-pin></i> Critérios de seleção de exercícios</label>
+          <textarea id="bib-crit-ex" rows="3" placeholder="Ex: Priorizar multiarticulares, evitar isolados no início, usar máquinas em lesões, preferir bilateral..."></textarea></div>
+        <div class="field"><label><i class=ph-chart-bar></i> Estrutura / Volume</label>
+          <textarea id="bib-estrutura" rows="3" placeholder="Ex: 3–4 exercícios/sessão, 3–4 séries, 8–12 reps, 60–75% 1RM, intervalo 60–90s..."></textarea></div>
+        <div class="field"><label>Observações</label><textarea id="bib-obs" rows="2"></textarea></div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="fecharModalBib()">Cancelar</button>
+          <button class="btn btn-primary" onclick="salvarBib()">Salvar Template</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Distribuição -->
+    <div id="modal-distrib" class="modal-overlay hidden">
+      <div class="modal" style="width:740px;max-height:93vh;overflow-y:auto">
+        <div class="modal-title" id="modal-distrib-title">Nova Divisão de Treino</div>
+        <input type="hidden" id="distrib-edit-id">
+
+        <!-- BLOCO 1: Identidade -->
+        <div class="section-label" style="margin-top:0">Identidade da Divisão</div>
+        <div class="grid-3">
+          <div class="field"><label>Nome</label><input id="distrib-nome" placeholder="Ex: Full Body A/B/A"></div>
+          <div class="field"><label>Tipo de divisão</label>
+            <select id="distrib-tipo">
+              <option value="Full Body">Full Body</option>
+              <option value="Upper/Lower">Upper / Lower</option>
+              <option value="Upper/Lower/Full">Upper / Lower / Full</option>
+              <option value="PPL">Push / Pull / Legs (PPL)</option>
+              <option value="ABC">ABC (3 treinos distintos)</option>
+              <option value="ABCD">ABCD (4 treinos distintos)</option>
+              <option value="ABCDE">ABCDE (5 treinos distintos)</option>
+            </select>
+          </div>
+          <div class="field"><label>Frequência semanal</label>
+            <select id="distrib-freq">
+              <option value="2x">2x/semana</option>
+              <option value="3x" selected>3x/semana</option>
+              <option value="4x">4x/semana</option>
+              <option value="5x">5x/semana</option>
+              <option value="6x">6x+/semana</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Frequência por grupamento muscular</label>
+            <select id="distrib-freq-musculo">
+              <option value="1x">1x/sem — volume concentrado</option>
+              <option value="1.5x">1,5x/sem — alternado A/B</option>
+              <option value="2x" selected>2x/sem — padrão hipertrofia (recomendado)</option>
+              <option value="2.5x">2,5x/sem — frequência alta</option>
+              <option value="3x">3x/sem — circuito / metabólico</option>
+            </select>
+            <div class="field-sub">Vault FASE-2 §4: 2–3x/sem por músculo para hipertrofia</div>
+          </div>
+          <div class="field"><label>Referência científica</label>
+            <input id="distrib-ref" placeholder="Ex: Schoenfeld 2016, NSCA, Colquhoun 2018...">
+          </div>
+        </div>
+
+        <!-- BLOCO 2: Dias — configuração por treino -->
+        <div class="section-label">Dias de Treino - Grupos Musculares por Sessão
+          <span style="font-size:12px;font-weight:400;color:var(--text3)"> - grupos canônicos do banco de exercícios ACM</span>
+        </div>
+        <div class="alert alert-blue" style="margin-bottom:10px">
+          <i class=ph-lightbulb></i> Cada dia define quais grupos são trabalhados naquela sessão. O motor usa isso para filtrar exercícios por dia e calcular volume semanal por grupamento.
+        </div>
+        <div id="distrib-dias-wrap"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addDiaDistrib()" style="margin-bottom:14px">+ Adicionar Dia</button>
+
+        <!-- BLOCO 3: Perfil de aluno -->
+        <div class="section-label">Perfil de Aluno Ideal</div>
+        <div class="grid-3">
+          <div class="field"><label>Nível mínimo</label>
+            <select id="distrib-nivel-min">
+              <option value="">Qualquer nível</option>
+              <option>Iniciante</option><option>Intermediário</option><option>Avançado</option>
+            </select>
+          </div>
+          <div class="field"><label>Nível máximo</label>
+            <select id="distrib-nivel-max">
+              <option value="">Sem limite</option>
+              <option>Iniciante</option><option>Intermediário</option><option>Avançado</option>
+            </select>
+          </div>
+          <div class="field"><label>Frequência compatível</label>
+            <div style="display:flex;gap:10px;padding:8px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius)">
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" class="dfreq-cb" value="2x"> 2x</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" class="dfreq-cb" value="3x"> 3x</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" class="dfreq-cb" value="4x"> 4x</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" class="dfreq-cb" value="5x"> 5x</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" class="dfreq-cb" value="6x"> 6x+</label>
+            </div>
+          </div>
+        </div>
+        <div class="field"><label>Objetivos compatíveis <span style="font-size:12px;font-weight:400;color:var(--text3)">(Vault FASE-2 - Tabela de Decisão)</span></label>
+          <div id="distrib-obj-wrap" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;display:flex;flex-wrap:wrap;gap:6px 14px">
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dobj-cb" value="Hip"> Hip</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dobj-cb" value="Forca"> Força</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dobj-cb" value="Emagr"> Emagr</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dobj-cb" value="Comp"> Comp</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dobj-cb" value="Resist"> Resist</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dobj-cb" value="CardioR"> CardioR</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dobj-cb" value="Func"> Func</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dobj-cb" value="Saude"> Saúde</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dobj-cb" value="Esport"> Esport</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dobj-cb" value="Reab"> Reab</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dobj-cb" value="Envelhec"> Envelhec</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dobj-cb" value="Gestacao"> Gestação</label>
+          </div>
+        </div>
+
+        <!-- BLOCO 4: Bloqueios -->
+        <div class="section-label">Bloqueios - Perfis Contraindicados</div>
+        <div class="grid-2">
+          <div class="field"><label>Bloquear nível(is)</label>
+            <div style="display:flex;gap:12px;padding:8px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius)">
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="dbl-inic" value="Iniciante"> Iniciante</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="dbl-inte" value="Intermediário"> Intermediário</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="dbl-avan" value="Avançado"> Avançado</label>
+            </div>
+          </div>
+          <div class="field"><label>Bloquear condição clínica</label>
+            <div style="display:flex;gap:12px;padding:8px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius)">
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="dbc-gestacao" value="Gestação"> Gestação</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="dbc-lesao" value="Lesão ativa"> Lesão ativa</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="dbc-card" value="Cardiopatia"> Cardiopatia</label>
+            </div>
+          </div>
+        </div>
+        <div class="field"><label>Bloquear objetivos</label>
+          <div id="distrib-bloq-obj-wrap" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;display:flex;flex-wrap:wrap;gap:6px 14px">
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dbloq-obj-cb" value="Hip"> Hip</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dbloq-obj-cb" value="Forca"> Força</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dbloq-obj-cb" value="Emagr"> Emagr</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dbloq-obj-cb" value="Comp"> Comp</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dbloq-obj-cb" value="Resist"> Resist</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dbloq-obj-cb" value="CardioR"> CardioR</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dbloq-obj-cb" value="Func"> Func</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dbloq-obj-cb" value="Saude"> Saúde</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dbloq-obj-cb" value="Esport"> Esport</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dbloq-obj-cb" value="Reab"> Reab</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dbloq-obj-cb" value="Envelhec"> Envelhec</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" class="dbloq-obj-cb" value="Gestacao"> Gestação</label>
+          </div>
+        </div>
+
+        <!-- BLOCO 5: Regras de escolha / descarte -->
+        <div class="section-label">Regras de Escolha e Descarte</div>
+        <div class="grid-2">
+          <div class="field">
+            <label><i class=ph-check-circle></i> Critérios de escolha <span style="font-size:12px;font-weight:400;color:var(--text3)">(um por linha)</span></label>
+            <div id="distrib-uso-wrap"></div>
+            <button class="btn btn-ghost btn-sm" onclick="addItemDistrib('uso')" style="margin-top:4px">+ Adicionar critério</button>
+          </div>
+          <div class="field">
+            <label><i class=ph-x-circle></i> Critérios de descarte <span style="font-size:12px;font-weight:400;color:var(--text3)">(um por linha)</span></label>
+            <div id="distrib-contra-wrap"></div>
+            <button class="btn btn-ghost btn-sm" onclick="addItemDistrib('contra')" style="margin-top:4px">+ Adicionar critério</button>
+          </div>
+        </div>
+
+        <!-- BLOCO 6: Vantagens / Desvantagens -->
+        <div class="section-label">Características</div>
+        <div class="grid-2">
+          <div class="field"><label><i class=ph-arrow-up></i> Vantagens</label>
+            <textarea id="distrib-vant" rows="2" placeholder="Ex: Frequência 2x/sem por grupamento. Simples de organizar."></textarea>
+          </div>
+          <div class="field"><label><i class=ph-arrow-down></i> Desvantagens / Restrições</label>
+            <textarea id="distrib-desv" rows="2" placeholder="Ex: Exige 4 dias. Volume por sessão alto para iniciantes."></textarea>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="fecharModalDistrib()">Cancelar</button>
+          <button class="btn btn-primary" onclick="salvarDistrib()">Salvar Divisão</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal confirmação exclusão -->
+    <div id="modal-del-lib" class="modal-overlay hidden">
+      <div class="modal" style="width:360px">
+        <div class="modal-title">Confirmar exclusão</div>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px" id="modal-del-msg">Deseja excluir este item?</p>
+        <div class="btn-row"><button class="btn btn-ghost" onclick="closeDelModal()">Cancelar</button><button class="btn btn-danger" id="modal-del-confirm">Excluir</button></div>
+      </div>
+    </div>
+
+    <!-- ══ AVISO: AJUSTE DE SESSÕES NÃO SALVO (Modelo de Divisão) ══ -->
+    <div id="modal-edicao-divisao" class="modal-overlay hidden">
+      <div class="modal" style="width:420px">
+        <div class="modal-title">Ajuste de sessões não salvo</div>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
+          Você ajustou as sessões de um modelo de divisão em "<i class=ph-gear></i> Ajustar sessões" mas ainda não salvou como modelo reutilizável. Se sair agora, esse ajuste é perdido.
+        </p>
+        <div class="btn-row" style="justify-content:space-between">
+          <button class="btn btn-ghost" onclick="modalDivisaoCancelar()">Cancelar</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-danger" onclick="modalDivisaoDescartar()">Descartar alterações</button>
+            <button class="btn btn-primary" onclick="modalDivisaoSalvar()">Salvar como modelo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ══ TELA: EXERCÍCIOS ══ -->
+    <div id="screen-exercicios" class="hidden" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Banco de Exercícios</div>
+          <div class="page-subtitle">693 exercícios em 19 grupos musculares (Vault ACM v1.1)</div>
+        </div>
+        <div class="page-header-actions">
+          <span id="ex-count-label" class="text-muted"></span>
+        </div>
+      </div>
+      <div class="main-scroll">
+        <div class="content">
+          <div class="toolbar">
+            <div class="th-search toolbar-search"><i class=ph-magnifying-glass></i><input id="ex-search" placeholder="Buscar exercício" oninput="renderExercicios()" autocomplete="off"></div>
+            <select id="ex-f-gp" onchange="renderExercicios()">
+              <option value="">Todos os grupos</option>
+            </select>
+            <select id="ex-f-nv" onchange="renderExercicios()">
+              <option value="">Todos os níveis</option>
+              <option value="I">Iniciante</option><option value="M">Intermediário</option><option value="A">Avançado</option>
+            </select>
+            <select id="ex-f-res" onchange="renderExercicios()">
+              <option value="">Todas as resistências</option>
+              <option value="PL">Peso Livre</option><option value="MA">Máquina</option><option value="CA">Cabo</option>
+              <option value="PC">Peso Corporal</option><option value="EL">Elástico</option><option value="SU">Suspenso</option>
+            </select>
+            <select id="ex-f-tp" onchange="renderExercicios()">
+              <option value="">Todos os tipos</option>
+              <option>Força</option><option>Mobilidade</option><option>Estabilidade</option><option>Aeróbio</option>
+              <option>Liberação Miofascial</option><option>Flexibilidade</option><option>Potência</option><option>Ativação</option>
+            </select>
+            <button class="btn btn-ghost" onclick="limparFiltrosEx()"><i class=ph-funnel-x></i>Limpar</button>
+          </div>
+          <div class="card" style="padding:0;overflow:hidden">
+            <div style="overflow-x:auto">
+              <table class="tbl" id="ex-table">
+                <thead>
+                  <tr>
+                    <th style="width:30%">Exercício</th>
+                    <th>Grupo principal</th>
+                    <th>Padrão</th>
+                    <th>Resistência</th>
+                    <th>Equipamentos</th>
+                    <th>Nível</th>
+                    <th>Tipo</th>
+                    <th>Contraindicação</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="ex-tbody"></tbody>
+              </table>
+            </div>
+            <div id="ex-empty" class="empty hidden"><i class=ph-magnifying-glass></i><div class="empty-title">Nenhum exercício encontrado</div><div class="empty-text">Ajuste ou limpe os filtros.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal detalhe exercício -->
+    <div id="modal-ex-detail" class="modal-overlay hidden">
+      <div class="modal" style="width:560px;max-height:90vh;overflow-y:auto">
+        <div class="modal-title" id="modal-ex-nome"></div>
+        <div id="modal-ex-body"></div>
+        <div class="btn-row"><button class="btn btn-ghost" onclick="$('modal-ex-detail').classList.add('hidden')">Fechar</button></div>
+      </div>
+    </div>
+
+    <!-- ══ MODAL: VÍDEO EMBUTIDO ══ -->
+    <div id="modal-video" class="modal-overlay hidden" onclick="if(event.target===this)fecharVideoModal()" style="background:rgba(0,0,0,.75)">
+      <div style="background:var(--bg2);border-radius:var(--radius);overflow:hidden;width:min(680px,94vw);box-shadow:0 8px 40px rgba(0,0,0,.6)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg3);border-bottom:1px solid var(--border)">
+          <span id="modal-video-titulo" style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:580px"></span>
+          <button class="icon-btn" onclick="fecharVideoModal()" title="Fechar" aria-label="Fechar"><i class=ph-x></i></button>
+        </div>
+        <div style="position:relative;padding-bottom:56.25%;height:0">
+          <iframe id="modal-video-iframe" src="" title="Vídeo demonstrativo" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer;autoplay;encrypted-media;gyroscope;picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border:none"></iframe>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ══ MODAL: EXPORTAR / INJETAR NO FITCPX LEGADO ══ -->
+    <div id="modal-fitcpx-export" class="modal-overlay hidden">
+      <div class="modal" style="width:680px;max-height:93vh;overflow-y:auto">
+        <div class="modal-title">Injetar treino no FitCpx</div>
+
+        <div id="fitcpx-export-avisos" class="alert alert-amber hidden" style="margin-bottom:12px;font-size:12px"></div>
+
+        <ol style="font-size:13px;color:var(--text2);line-height:1.7;margin:0 0 16px 18px;padding:0">
+          <li>Abra <code>app.fitcpx.com</code> e entre na tela <strong>"Treino do aluno: [nome]"</strong> do aluno certo.</li>
+          <li>Abra o Console do navegador (F12 → aba Console).</li>
+          <li>Cole o <strong>Código 1</strong> abaixo e aperte Enter.</li>
+          <li>Clique em qualquer outra aba da tela (ex: "Treinos" ou "Avaliações Físicas") - isso dispara uma request que carrega o token de acesso.</li>
+          <li>Volte pro Console, cole o <strong>Código 2</strong> e aperte Enter.</li>
+          <li>Confira o resultado no console: <code>STATUS: 201</code> = deu certo. Qualquer outro status, leia a mensagem de erro (geralmente é token expirado - repete o passo 3 e 4).</li>
+          <li>Volte aqui e confirma o resultado abaixo - a lite não sabe sozinha se deu certo, o POST roda no console do outro domínio.</li>
+        </ol>
+
+        <div class="section-label" style="margin-top:0;display:flex;align-items:center;justify-content:space-between">
+          <span>Código 1 - Interceptor</span>
+          <button class="tbtn" onclick="_copiarBlocoFitCpx('fitcpx-cod1', this)"><i class=ph-clipboard-text></i> Copiar</button>
+        </div>
+        <pre id="fitcpx-cod1" style="white-space:pre-wrap;word-break:break-all;font-variant-numeric:tabular-nums;font-size:12px;line-height:1.5;max-height:140px;overflow-y:auto;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:10px;color:var(--text2);margin-bottom:14px"></pre>
+
+        <div class="section-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Código 2 - Injeção (com o treino já embutido)</span>
+          <button class="tbtn" onclick="_copiarBlocoFitCpx('fitcpx-cod2', this)"><i class=ph-clipboard-text></i> Copiar</button>
+        </div>
+        <pre id="fitcpx-cod2" style="white-space:pre-wrap;word-break:break-all;font-variant-numeric:tabular-nums;font-size:12px;line-height:1.5;max-height:280px;overflow-y:auto;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:10px;color:var(--text2);margin-bottom:14px"></pre>
+
+        <div id="fitcpx-export-status" style="font-size:12px;color:var(--text3);margin-bottom:10px"></div>
+
+        <div class="btn-row" style="justify-content:space-between">
+          <div style="display:flex;gap:8px">
+            <button class="btn" style="background:var(--accent-dim);border:1px solid rgba(0,229,160,.3);color:var(--accent)" onclick="_fitcpxMarcarEnviado(true)"><i class=ph-check-circle></i> Deu certo (201)</button>
+            <button class="btn" style="background:var(--red-dim);border:1px solid #fecaca;color:var(--red)" onclick="_fitcpxMarcarEnviado(false)"><i class=ph-x-circle></i> Deu erro</button>
+          </div>
+          <button class="btn btn-ghost" onclick="fecharModalExportFitCpx()">Fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ MODAL: SALVAR TREINO NA BIBLIOTECA ══ -->
+    <div id="modal-salvar-bib" class="modal-overlay hidden">
+      <div class="modal" style="width:600px;max-height:93vh;overflow-y:auto">
+        <div class="modal-title">Salvar Treino na Biblioteca</div>
+        <div class="alert alert-green" style="margin-bottom:14px">
+          Este treino será salvo na Biblioteca de Treinos e poderá ser usado como base para alunos com perfil similar.
+        </div>
+
+        <!-- Perfil do treino -->
+        <div class="section-label" style="margin-top:0">Identificação do Template</div>
+        <div class="field"><label>Nome do template</label>
+          <input id="bsv-nome" placeholder="Ex: Hipertrofia 4x Intermediário Feminino - Ênfase MMII">
+        </div>
+
+        <div class="section-label">Perfil de Referência <span style="font-size:12px;font-weight:400;color:var(--text3)">— preenchido automaticamente pelo perfil do aluno</span></div>
+        <div class="grid-3">
+          <div class="field"><label>Objetivo</label>
+            <select id="bsv-obj">
+              <option>Hipertrofia</option><option>Força</option><option>Emagrecimento</option>
+              <option>Composição</option><option>Resistência</option><option>Cardio</option>
+              <option>Funcional</option><option>Saúde</option><option>Esportivo</option>
+              <option>Reabilitação</option><option>Envelhecimento</option><option>Gestação</option>
+            </select>
+          </div>
+          <div class="field"><label>Nível</label>
+            <select id="bsv-nivel">
+              <option>Iniciante</option><option>Intermediário</option><option>Avançado</option>
+            </select>
+          </div>
+          <div class="field"><label>Frequência</label>
+            <select id="bsv-freq">
+              <option>2x</option><option>3x</option><option>4x</option><option>5x</option><option>6x</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-3">
+          <div class="field"><label>Sexo de referência</label>
+            <select id="bsv-sexo">
+              <option value="">Ambos</option>
+              <option value="M">Masculino</option>
+              <option value="F">Feminino</option>
+            </select>
+          </div>
+          <div class="field"><label>Modelo de periodização</label>
+            <select id="bsv-modelo">
+              <option value="LP">LP — Linear</option>
+              <option value="LPR">LPR — Linear Reversa</option>
+              <option value="DUP">DUP — Ondulatória</option>
+              <option value="CB">CB — Blocos</option>
+              <option value="CONJ">Conjugado</option>
+            </select>
+          </div>
+          <div class="field"><label>Local de treino</label>
+            <select id="bsv-local">
+              <option value="">Selecionar</option>
+              <!-- Buckets genericos (academia/casa/ar livre/hibrido) removidos em 2026-09-02:
+                         classificacao desnecessaria. As opcoes reais vem dos locais do personal
+                         (LIBS.locais), preenchidas por JS. -->
+            </select>
+          </div>
+        </div>
+
+        <!-- Critérios de uso -->
+        <div class="section-label">Critérios de Uso e Descarte</div>
+        <div class="field">
+          <label><i class=ph-check-circle></i> Quando usar este template</label>
+          <textarea id="bsv-uso" rows="2" placeholder="Ex: Intermediário com 3–4 anos de treino, objetivo hipertrofia, 4 dias disponíveis, sem lesões ativas..."></textarea>
+        </div>
+        <div class="field">
+          <label><i class=ph-x-circle></i> Quando não usar / adaptar</label>
+          <textarea id="bsv-contra" rows="2" placeholder="Ex: Não usar para iniciantes, lesão de joelho ativa, menos de 4 dias disponíveis..."></textarea>
+        </div>
+        <div class="field">
+          <label><i class=ph-push-pin></i> Critérios de seleção de exercícios usados</label>
+          <textarea id="bsv-crit" rows="2" placeholder="Ex: Prioridade para multiarticulares, evitado impacto, substituído terra por terra romeno..."></textarea>
+        </div>
+
+        <!-- Estrutura resumida -->
+        <div class="section-label">Estrutura do Treino</div>
+        <div class="field">
+          <label>Divisão / Organização das sessões</label>
+          <input id="bsv-estrutura" placeholder="Ex: A=MMII / B=MMSS / C=Full Body">
+        </div>
+
+        <!-- Referência ao aluno origem (opcional) -->
+        <div class="field">
+          <label>Observações e notas clínicas</label>
+          <textarea id="bsv-obs" rows="2" placeholder="Contexto de uso original, adaptações feitas, resultados observados..."></textarea>
+        </div>
+
+        <!-- Origem -->
+        <div id="bsv-origem-info" style="font-size:12px;color:var(--text3);padding:8px 10px;background:var(--bg4);border-radius:var(--radius);border:1px solid var(--border);margin-bottom:12px"></div>
+
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="$('modal-salvar-bib').classList.add('hidden')">Cancelar</button>
+          <button class="btn btn-primary" onclick="confirmarSalvarBiblioteca()">Salvar na Biblioteca</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STUDENT VIEW -->
+    <div id="student-view" class="hidden" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+
+      <div style="padding:16px 32px 0">
+        <button class="btn btn-ghost btn-sm" onclick="navGo('alunos')"><i class=ph-arrow-left></i>Alunos</button>
+      </div>
+
+      <div class="student-header-card">
+        <div class="profile-bar"></div>
+        <div class="page-header" style="border-bottom:none;align-items:center">
+          <div class="avatar-circle"><i class=ph-user style="font-size:24px"></i></div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="page-title" id="student-header-name">—</div>
+              <span id="saved-indicator" class="hidden" style="font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums;"><i class=ph-check></i> Salvo</span>
+            </div>
+            <div class="page-subtitle" id="student-badges"></div>
+          </div>
+        </div>
+        <div id="aluno-transf-banner" class="hidden" style="padding:0 20px 16px"></div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" role="button" tabindex="0" onclick="switchTab('perfil')" id="tab-perfil">Perfil</div>
+        <div class="tab" role="button" tabindex="0" onclick="switchTab('anamnese')" id="tab-anamnese">Avaliação</div>
+        <div class="tab" role="button" tabindex="0" onclick="switchTab('prescricao')" id="tab-prescricao">Prescrição</div>
+        <div class="tab" role="button" tabindex="0" onclick="switchTab('evolucao')" id="tab-evolucao">Evolução</div>
+      </div>
+
+      <div class="main-scroll" id="tab-content">
+
+        <!-- ══════════════ PERFIL ══════════════ -->
+        <div id="panel-perfil" class="content">
+          <div class="card">
+            <div class="card-title">Dados Pessoais <i class=ph-globe></i> COMUM</div>
+            <div class="grid-2" style="gap:12px">
+              <div class="field span2">
+                <label>Nome completo</label>
+                <input type="text" id="p-nome" oninput="onPerfilChange()" placeholder="Nome do aluno">
+              </div>
+              <div class="field">
+                <label>Data de nascimento</label>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="date" id="p-nascimento" oninput="onPerfilChange();calcIdade()" style="flex:1">
+                  <span id="p-idade-label" style="font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap"></span>
+                </div>
+              </div>
+              <div class="field">
+                <label>Sexo biológico</label>
+                <select id="p-sexo" onchange="onPerfilChange();toggleFeminino()">
+                  <option value="">Selecionar</option>
+                  <option value="M">Masculino</option>
+                  <option value="F">Feminino</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Profissão / ocupação</label>
+                <input type="text" id="p-profissao" oninput="onPerfilChange()" placeholder="Ex: Analista de sistemas, professor, auxiliar de enfermagem...">
+              </div>
+              <div class="field">
+                <label>Contato (WhatsApp)</label>
+                <input type="text" id="p-whatsapp" oninput="onPerfilChange()" placeholder="(00) 00000-0000">
+              </div>
+              <div class="field">
+                <label>Modalidade de atendimento</label>
+                <select id="p-modalidade" onchange="onPerfilChange()">
+                  <option value="">Selecionar</option>
+                  <option value="presencial">Presencial</option>
+                  <option value="online">Online</option>
+                  <option value="hibrido">Híbrido (presencial + online)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Cód. aluno no FitCpx (legado)</label>
+                <input type="text" id="p-cod-aluno-legado" oninput="onPerfilChange()" placeholder="Ex: 339">
+                <div style="font-size:12px;color:var(--text3);margin-top:2px">Vínculo pro envio de treino ao app.fitcpx.com - confere com o cod_aluno da tela do aluno lá antes de injetar.</div>
+              </div>
+              <div class="field">
+                <label>CPF</label>
+                <input type="text" id="p-cpf" inputmode="numeric" maxlength="14" oninput="mascararCpfInput(this);onPerfilChange()" placeholder="000.000.000-00" autocomplete="off">
+                <div style="font-size:12px;color:var(--text3);margin-top:2px" id="p-cpf-ajuda">Junto com nome e e-mail, identifica o aluno no sistema e evita cadastro duplicado. Fica guardado só pra você; entre personals circula apenas um código irreversível.</div>
+                <div id="p-cpf-msg" class="hidden" style="font-size:12px;margin-top:4px"></div>
+              </div>
+              <div class="field">
+                <label>E-mail (acesso ao Portal do Aluno)</label>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="email" id="p-email" oninput="onPerfilChange()" placeholder="email@exemplo.com" style="flex:1">
+                  <button class="btn btn-ghost btn-sm hidden" id="p-email-alterar-btn" onclick="alunoAlterarEmail()"><i class=ph-pencil-simple></i> Alterar</button>
+                </div>
+                <div style="font-size:12px;color:var(--text3);margin-top:2px" id="p-email-ajuda">É por aqui que ele loga no portal. Depois que o aluno tem acesso, o e-mail só muda pelo botão Alterar.</div>
+              </div>
+              <div class="field">
+                <label>Acesso ao Portal do Aluno</label>
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                  <span id="p-portal-status-badge" class="badge badge-gray">— preencha o e-mail</span>
+                  <button class="btn btn-ghost btn-sm" id="p-portal-reset-btn" style="display:none" onclick="alunoResetarSenha()"><i class=ph-key></i> Resetar senha</button>
+                  <button class="btn btn-ghost btn-sm" id="p-portal-status-btn" style="display:none" onclick="alunoTogglePortalStatus()">Bloquear acesso</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="btn-row" style="margin-top:16px;padding:0 4px">
+            <button class="btn btn-primary btn-save" onclick="salvarPerfil()" style="min-width:130px;gap:6px"><span><i class=ph-check></i></span> Salvar</button>
+          </div>
+        </div>
+
+        <!-- ══════════════ AVALIAÇÃO ══════════════ -->
+        <div id="panel-anamnese" class="content hidden">
+
+          <!-- Subabas -->
+          <div class="tabs sub">
+            <div class="subtab active" role="button" tabindex="0" onclick="switchSubtab('anamnese-hist')" id="subtab-anamnese-hist">Anamnese</div>
+            <div class="subtab" role="button" tabindex="0" onclick="switchSubtab('anamnese-antro')" id="subtab-anamnese-antro">Antropométrica</div>
+            <div class="subtab" role="button" tabindex="0" onclick="switchSubtab('anamnese-meta')" id="subtab-anamnese-meta">Meta</div>
+          </div>
+
+
+          <!-- ── SUBPAINEL: ANAMNESE ── -->
+          <div id="subpanel-anamnese-hist" class="content" style="padding:0">
+            <div class="card">
+              <div class="card-title">Anamnese EF <i class=ph-lock></i></div>
+              <div style="font-size:12px;color:var(--text3);margin-bottom:16px">Preenchida pelo aluno no app (Portal) ou por você aqui. Os dois lados gravam no mesmo lugar.</div>
+
+              <!-- ══════════════ BLOCO 1 — HISTÓRICO DE SAÚDE ══════════════ -->
+              <div class="section-label" style="font-size:13px;color:var(--accent)">① Histórico de Saúde</div>
+
+              <div class="grid-2" style="gap:12px">
+                <div class="field" style="grid-column:1/-1">
+                  <label>Sintomas de alerta ao esforço físico <span style="color:var(--text3);font-size:12px">(triagem de segurança)</span></label>
+                  <div id="a-sintomas-wrap" class="chk-grid" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
+                    <label class="chk-label"><input type="checkbox" class="sintoma-check" value="Nenhum" onchange="onSintomaChange(this)"><span> Nenhum</span></label>
+                    <label class="chk-label"><input type="checkbox" class="sintoma-check" value="Dor no peito" onchange="onSintomaChange(this)"><span> Dor no peito</span></label>
+                    <label class="chk-label"><input type="checkbox" class="sintoma-check" value="Tontura ou vertigem" onchange="onSintomaChange(this)"><span> Tontura / vertigem</span></label>
+                    <label class="chk-label"><input type="checkbox" class="sintoma-check" value="Falta de ar desproporcional" onchange="onSintomaChange(this)"><span> Falta de ar</span></label>
+                    <label class="chk-label"><input type="checkbox" class="sintoma-check" value="Palpitações" onchange="onSintomaChange(this)"><span> Palpitações</span></label>
+                    <label class="chk-label"><input type="checkbox" class="sintoma-check" value="Desmaio ou quase-desmaio" onchange="onSintomaChange(this)"><span> Desmaio</span></label>
+                  </div>
+                  <input type="hidden" id="a-sintomas">
+                </div>
+                <div class="field" id="field-gestacao">
+                  <label>Gestante / Pós-parto</label>
+                  <div style="display:flex;gap:8px">
+                    <select id="a-gestacao" onchange="onAnamneseChange()" style="flex:1">
+                      <option value="">Selecionar</option>
+                      <option value="Não">Não</option>
+                      <option value="Gestante">Gestante</option>
+                      <option value="Pós-parto">Pós-parto (menos de 6 meses)</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Liberação médica para exercício</label>
+                  <select id="p-liberacao" onchange="onPerfilChange()">
+                    <option value="">Selecionar</option>
+                    <option value="sim">Sim — possui atestado</option>
+                    <option value="nao">Não — sem atestado</option>
+                    <option value="nao_aplica">Não se aplica — sem restrições conhecidas</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="section-label">Condições & Restrições Clínicas <span style="color:var(--text3);font-size:12px;font-weight:400"><i class=ph-globe></i></span> compartilhado com NUT/FT - gravado no Perfil</div>
+              <div class="grid-2" style="gap:12px">
+                <div class="field" style="grid-column:1/-1">
+                  <label>Condições de saúde ativas</label>
+                  <div id="p-condicoes-wrap" class="chk-grid" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
+                    <label class="chk-label"><input type="checkbox" class="cond-check" value="Nenhuma" onchange="onCondicaoChange(this)"><span> Nenhuma</span></label>
+                    <label class="chk-label"><input type="checkbox" class="cond-check" value="Hipertensão arterial" onchange="onCondicaoChange(this)"><span> Hipertensão arterial</span></label>
+                    <label class="chk-label"><input type="checkbox" class="cond-check" value="Diabetes" onchange="onCondicaoChange(this)"><span> Diabetes</span></label>
+                    <label class="chk-label"><input type="checkbox" class="cond-check" value="Dislipidemia" onchange="onCondicaoChange(this)"><span> Dislipidemia</span></label>
+                    <label class="chk-label"><input type="checkbox" class="cond-check" value="Obesidade" onchange="onCondicaoChange(this)"><span> Obesidade</span></label>
+                    <label class="chk-label"><input type="checkbox" class="cond-check" value="Hipotireoidismo" onchange="onCondicaoChange(this)"><span> Hipotireoidismo</span></label>
+                    <label class="chk-label"><input type="checkbox" class="cond-check" value="Asma / DPOC" onchange="onCondicaoChange(this)"><span> Asma / DPOC</span></label>
+                    <label class="chk-label"><input type="checkbox" class="cond-check" value="Cardiopatia" onchange="onCondicaoChange(this)"><span> Cardiopatia</span></label>
+                    <label class="chk-label"><input type="checkbox" class="cond-check" value="Osteoporose / Osteopenia" onchange="onCondicaoChange(this)"><span> Osteoporose / Osteopenia</span></label>
+                    <label class="chk-label"><input type="checkbox" class="cond-check" value="Ansiedade / Depressão" onchange="onCondicaoChange(this)"><span> Ansiedade / Depressão</span></label>
+                    <label class="chk-label"><input type="checkbox" class="cond-check" value="SOP" onchange="onCondicaoChange(this)"><span> SOP</span></label>
+                    <label class="chk-label"><input type="checkbox" class="cond-check" value="Outros" id="cond-outros-check" onchange="onCondicaoChange(this)"><span> Outros</span></label>
+                  </div>
+                  <input type="text" id="p-condicoes-outros" oninput="onPerfilChange()" placeholder="Descrever condição..." style="margin-top:6px;display:none">
+                  <input type="hidden" id="p-condicoes">
+                </div>
+                <div class="field" style="grid-column:1/-1">
+                  <label>Medicamentos em uso contínuo</label>
+                  <div id="p-medicamentos-wrap" class="chk-grid" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
+                    <label class="chk-label"><input type="checkbox" class="med-check" value="Nenhum" onchange="onMedChange(this)"><span> Nenhum</span></label>
+                    <label title="Betabloqueadores, ECA, BRA - afetam FC-alvo" class="chk-label"><input type="checkbox" class="med-check" value="Anti-hipertensivos" onchange="onMedChange(this)"><span> Anti-hipertensivos</span></label>
+                    <label title="Metformina, SGLT2, GLP-1 - monitorar glicemia no treino" class="chk-label"><input type="checkbox" class="med-check" value="Hipoglicemiantes orais" onchange="onMedChange(this)"><span> Antidiabéticos</span></label>
+                    <label title="Risco de hipoglicemia peri-treino" class="chk-label"><input type="checkbox" class="med-check" value="Insulina" onchange="onMedChange(this)"><span> Insulina</span></label>
+                    <label title="Levotiroxina - impacto no metabolismo basal" class="chk-label"><input type="checkbox" class="med-check" value="Hormônios tireoidianos" onchange="onMedChange(this)"><span> Tireoidianos</span></label>
+                    <label title="Hormônios sexuais, TRH, anabolizantes prescritos" class="chk-label"><input type="checkbox" class="med-check" value="Hormônios sexuais / TRH" onchange="onMedChange(this)"><span> Hormônios / TRH</span></label>
+                    <label title="Corticoides sistêmicos - catabolismo muscular" class="chk-label"><input type="checkbox" class="med-check" value="Corticosteróides" onchange="onMedChange(this)"><span> Corticosteróides</span></label>
+                    <label title="ISRS, IRSN - podem afetar FC e termorregulação" class="chk-label"><input type="checkbox" class="med-check" value="Antidepressivos / ansiolíticos" onchange="onMedChange(this)"><span> Antidepressivos</span></label>
+                    <label title="Varfarina, rivaroxabana - evitar risco de trauma/queda" class="chk-label"><input type="checkbox" class="med-check" value="Anticoagulantes" onchange="onMedChange(this)"><span> Anticoagulantes</span></label>
+                    <label title="AINEs - podem mascarar dor de lesão" class="chk-label"><input type="checkbox" class="med-check" value="Analgésicos / anti-inflamatórios" onchange="onMedChange(this)"><span> Analgésicos / AINEs</span></label>
+                    <label class="chk-label"><input type="checkbox" class="med-check" value="Outros medicamentos" id="med-outros-check" onchange="onMedChange(this)"><span> Outros</span></label>
+                  </div>
+                  <input type="hidden" id="p-medicamentos">
+                </div>
+                <div class="field" style="grid-column:1/-1">
+                  <label>Região de dor ou lesão ativa</label>
+                  <div id="p-lesoes-wrap" class="chk-grid" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Nenhuma" onchange="onLesaoChange(this)"><span> Nenhuma</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Joelho D" onchange="onLesaoChange(this)"><span> Joelho D</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Joelho E" onchange="onLesaoChange(this)"><span> Joelho E</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Ombro D" onchange="onLesaoChange(this)"><span> Ombro D</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Ombro E" onchange="onLesaoChange(this)"><span> Ombro E</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Lombar / coluna baixa" onchange="onLesaoChange(this)"><span> Lombar</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Cervical / coluna alta" onchange="onLesaoChange(this)"><span> Cervical</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Cotovelo D" onchange="onLesaoChange(this)"><span> Cotovelo D</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Cotovelo E" onchange="onLesaoChange(this)"><span> Cotovelo E</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Quadril D" onchange="onLesaoChange(this)"><span> Quadril D</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Quadril E" onchange="onLesaoChange(this)"><span> Quadril E</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Tornozelo / pé D" onchange="onLesaoChange(this)"><span> Tornozelo D</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Tornozelo / pé E" onchange="onLesaoChange(this)"><span> Tornozelo E</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Pós-cirurgia" onchange="onLesaoChange(this)"><span> Pós-cirurgia</span></label>
+                    <label class="chk-label"><input type="checkbox" class="lesao-check" value="Outros" id="lesao-outros-check" onchange="onLesaoChange(this)"><span> Outros</span></label>
+                  </div>
+                  <input type="text" id="p-lesoes-outros" oninput="onPerfilChange()" placeholder="Descrever região..." style="margin-top:6px;display:none">
+                  <input type="hidden" id="p-lesoes">
+                </div>
+              </div>
+
+              <div class="section-label">Observações clínicas <span style="color:var(--text3);font-size:12px;font-weight:400">texto livre - você lê, não entra no motor</span></div>
+              <div class="grid-2" style="gap:12px">
+                <div class="field" style="grid-column:1/-1">
+                  <label>Lesões passadas <span style="color:var(--text3);font-size:12px">(já resolvidas, mas que moldam a progressão)</span></label>
+                  <textarea id="a-lesoes-passadas" oninput="onAnamneseChange()" placeholder="Ex: Estirou o ombro fazendo supino há 2 anos, hoje sem dor, mas evita carga alta em desenvolvimento." style="min-height:45px"></textarea>
+                </div>
+                <div class="field" style="grid-column:1/-1">
+                  <label>Cirurgias</label>
+                  <textarea id="a-cirurgias" oninput="onAnamneseChange()" placeholder="Ex: Cirurgia de LCA no joelho D em 2022, sem sequelas atuais." style="min-height:45px"></textarea>
+                </div>
+                <div class="field" style="grid-column:1/-1">
+                  <label>Medicamentos - nome, dose e frequência</label>
+                  <input type="text" id="p-medicamentos-detalhe" oninput="onPerfilChange()" placeholder="Nome(s) do(s) medicamento(s) e/ou informações adicionais...">
+                </div>
+                <div class="field" style="grid-column:1/-1">
+                  <label>Outras observações</label>
+                  <textarea id="p-obs-clinicas" oninput="onPerfilChange()" placeholder="Ex: Cirurgia de joelho D há 8 meses (LCA). Uso de anti-inflamatório para dor lombar. Restrição: agachamento profundo e impacto. Médico: liberar fortalecimento progressivo." style="min-height:65px"></textarea>
+                </div>
+              </div>
+
+              <!-- ══════════════ BLOCO 2 — HISTÓRICO DE EXPERIÊNCIA COM TREINO ══════════════ -->
+              <div class="section-label" style="font-size:13px;color:var(--accent);margin-top:24px">② Histórico de Experiência com Treino</div>
+              <div class="grid-3" style="gap:12px">
+                <div class="field">
+                  <label>Nível de treinamento <span style="color:var(--text3);font-size:12px">(calculado)</span></label>
+                  <select id="a-nivel" disabled title="Calculado: tempo de treino (&lt;6m Iniciante · 6m–2a Intermediário · 2a+ Avançado), consistência irregular desce um nível. Ajuste fino na Prescrição.">
+                    <option value="">— preencha tempo e consistência</option>
+                    <option value="Inic">Iniciante (0–6 meses ou retorno após pausa longa)</option>
+                    <option value="Inte">Intermediário (6 meses–2 anos, consistente)</option>
+                    <option value="Avan">Avançado (2+ anos consistentes, boa técnica)</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Tempo de treino contínuo atual</label>
+                  <select id="a-tempo" onchange="onAnamneseChange()">
+                    <option value="">Selecionar</option>
+                    <option value="Menos de 1 mês">Menos de 1 mês</option>
+                    <option value="1–3 meses">1–3 meses</option>
+                    <option value="3–6 meses">3–6 meses</option>
+                    <option value="6–12 meses">6–12 meses</option>
+                    <option value="1–2 anos">1–2 anos</option>
+                    <option value="2–4 anos">2–4 anos</option>
+                    <option value="Mais de 4 anos">Mais de 4 anos</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Consistência histórica</label>
+                  <select id="a-consistencia" onchange="onAnamneseChange()">
+                    <option value="">Selecionar</option>
+                    <option value="irregular">Irregular — treina e para com frequência</option>
+                    <option value="regular">Regular — treina na maioria das semanas</option>
+                    <option value="alta">Alta — raramente perde treinos</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- ══════════════ BLOCO 3 — DADOS ATUAIS DE TREINO ══════════════ -->
+              <div class="section-label" style="font-size:13px;color:var(--accent);margin-top:24px">③ Dados Atuais de Treino <span style="color:var(--text3);font-size:12px;font-weight:400">chave pra prescrição - importado automaticamente na Prescrição, editável lá sem alterar aqui</span></div>
+              <div class="grid-3" style="gap:12px">
+                <div class="field">
+                  <label>Objetivo principal</label>
+                  <select id="a-objetivo-ef" onchange="_onObjetivoEfChange()">
+                    <option value="">Selecionar</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Objetivo secundário <span style="color:var(--text3);font-size:12px">(opcional)</span></label>
+                  <select id="a-objetivo-sec" onchange="_onObjetivoSecChange()" disabled>
+                    <option value="">Nenhum</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Frequência semanal disponível</label>
+                  <select id="a-frequencia" onchange="onAnamneseChange()">
+                    <option value="">Selecionar</option>
+                    <option value="2x">2x por semana</option>
+                    <option value="3x">3x por semana</option>
+                    <option value="4x">4x por semana</option>
+                    <option value="5x">5x por semana</option>
+                    <option value="6x">6x por semana</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Duração por sessão</label>
+                  <select id="a-duracao" onchange="onAnamneseChange()">
+                    <option value="">Selecionar</option>
+                    <option value="30">Até 30 minutos</option>
+                    <option value="45">30–45 minutos</option>
+                    <option value="60">45–60 minutos</option>
+                    <option value="75">60–75 minutos</option>
+                    <option value="90">75–90 minutos</option>
+                    <option value="90+">Mais de 90 minutos</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Melhor horário para treinar</label>
+                  <select id="a-horario" onchange="onAnamneseChange()">
+                    <option value="">Selecionar</option>
+                    <option value="manhã">Manhã (06h–12h)</option>
+                    <option value="tarde">Tarde (12h–18h)</option>
+                    <option value="noite">Noite (18h–22h)</option>
+                    <option value="variável">Variável / sem preferência</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Local de treino</label>
+                  <select id="a-local" onchange="onAnamneseChange()">
+                    <option value="">Selecionar</option>
+                    <!-- Buckets genericos (academia/casa/ar livre/hibrido) removidos em 2026-09-02:
+                         classificacao desnecessaria. As opcoes reais vem dos locais do personal
+                         (LIBS.locais), preenchidas por JS. -->
+                  </select>
+                </div>
+                <div class="field" style="grid-column:1/-1">
+                  <label style="margin-bottom:8px;display:block">Exercícios preferidos e a evitar <span style="color:var(--text3);font-size:12px;font-variant-numeric:tabular-nums;">(influenciam a prescrição)</span></label>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                    <!-- Preferidos -->
+                    <div>
+                      <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:6px"><i class=ph-check-circle></i> Exercícios preferidos</div>
+                      <div style="display:flex;gap:6px;margin-bottom:6px">
+                        <input id="ex-pref-busca" type="text" placeholder="Buscar exercício..." oninput="_exPickerBusca('pref')"
+                          style="flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:6px 8px;font-size:12px">
+
+                      </div>
+                      <div id="ex-pref-sugestoes" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);max-height:140px;overflow-y:auto;margin-bottom:6px;font-size:12px"></div>
+                      <div id="ex-pref-tags" style="display:flex;flex-wrap:wrap;gap:4px;min-height:28px"></div>
+                      <input type="hidden" id="a-gosta-ex">
+                      <!-- legado -->
+                      <input type="hidden" id="a-gosta">
+                    </div>
+                    <!-- A evitar -->
+                    <div>
+                      <div style="font-size:12px;font-weight:600;color:var(--red);margin-bottom:6px"><i class=ph-prohibit></i> Exercícios a evitar</div>
+                      <div style="display:flex;gap:6px;margin-bottom:6px">
+                        <input id="ex-evit-busca" type="text" placeholder="Buscar exercício..." oninput="_exPickerBusca('evit')"
+                          style="flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:6px 8px;font-size:12px">
+
+                      </div>
+                      <div id="ex-evit-sugestoes" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);max-height:140px;overflow-y:auto;margin-bottom:6px;font-size:12px"></div>
+                      <div id="ex-evit-tags" style="display:flex;flex-wrap:wrap;gap:4px;min-height:28px"></div>
+                      <input type="hidden" id="a-evitar-ex">
+                      <!-- legado -->
+                      <input type="hidden" id="a-preferencias">
+                    </div>
+                  </div>
+                  <div id="a-aluno-texto-exercicios" style="display:none;margin-top:10px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px"></div>
+                </div>
+              </div>
+            </div>
+          <div class="btn-row" style="margin:0 28px 20px">
+            <button class="btn btn-primary btn-save" onclick="salvarAnamnese()" style="min-width:130px;gap:6px"><span><i class=ph-check></i></span> Salvar</button>
+          </div>
+          </div>
+          <div id="subpanel-anamnese-antro" class="content hidden" style="padding:0">
+
+            <div class="card">
+              <div class="card-title">Avaliação Antropométrica <i class=ph-lock></i></div>
+
+              <!-- ── LISTA DE AVALIAÇÕES SALVAS ── -->
+              <div id="antro-lista-view">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                  <div style="font-size:12px;color:var(--text3)">Todas as avaliações antropométricas salvas deste aluno.</div>
+                  <button type="button" class="btn btn-primary" onclick="antroNovaAvaliacao()" >+ Adicionar Avaliação</button>
+                </div>
+                <div id="antro-lista-tabela"></div>
+              </div>
+
+              <!-- ── FORMULÁRIO DE AVALIAÇÃO (nova ou edição) ── -->
+              <div id="antro-form-view" style="display:none">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+                  <button type="button" class="btn btn-ghost" onclick="antroVoltarLista()" ><i class=ph-arrow-left></i>Voltar para lista</button>
+                  <div id="antro-form-titulo" style="font-size:12px;color:var(--text3);font-weight:500">Nova avaliação</div>
+                </div>
+
+              <!-- Medidas básicas -->
+              <div class="section-label">Medidas Básicas</div>
+              <div class="field" style="width:200px;margin-bottom:12px">
+                <label style="font-size:12px">Data desta avaliação</label>
+                <input type="date" id="a-data-avaliacao" oninput="onAnamneseChange()">
+              </div>
+              <div class="grid-4" style="gap:12px">
+                <div class="field">
+                  <label>Altura (cm) <span style="color:var(--red)">*</span></label>
+                  <input type="number" id="a-altura" oninput="onAnamneseChange();calcIMC();calcComp()" placeholder="—" required>
+                </div>
+                <div class="field">
+                  <label>Peso (kg) <span style="color:var(--red)">*</span></label>
+                  <input type="number" step="0.1" id="a-peso" oninput="onAnamneseChange();calcIMC();calcComp()" placeholder="—" required>
+                </div>
+                <div class="field">
+                  <label>IMC (calculado)</label>
+                  <input type="text" id="a-imc" readonly style="color:var(--text2);background:var(--bg4)">
+                </div>
+                <div class="field">
+                  <label>Classificação IMC (OMS)</label>
+                  <input type="text" id="a-imc-class" readonly style="color:var(--text2);background:var(--bg4);font-size:12px">
+                </div>
+              </div>
+
+              <!-- Composição corporal -->
+              <div class="section-label">Composição Corporal <span style="font-size:12px;color:var(--text3);font-weight:400">(kg ou % - preencha um, o outro calcula sozinho)</span></div>
+
+              <!-- Linha 1: Gordura | Muscular | Óssea -->
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+
+                <!-- Col 1: Gordura (obrigatório) -->
+                <div style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
+                  <div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--text3);margin-bottom:8px">Massa Gorda <span style="color:var(--red)">*</span></div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <div class="field" style="margin:0">
+                      <label style="font-size:12px">kg</label>
+                      <input type="number" step="0.1" id="a-mgorda" oninput="onAnamneseChange()" onblur="onMassaInput('mgorda','kg')" onkeydown="if(event.key==='Enter'){this.blur()}" placeholder="—" style="font-size:15px;font-weight:600" required disabled>
+                    </div>
+                    <div class="field" style="margin:0">
+                      <label style="font-size:12px">%</label>
+                      <input type="number" step="0.1" id="a-gordura" oninput="onAnamneseChange()" onblur="onMassaInput('mgorda','pct')" onkeydown="if(event.key==='Enter'){this.blur()}" placeholder="—" style="font-size:15px;font-weight:600" disabled>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Col 2: Muscular (obrigatório) -->
+                <div style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
+                  <div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--text3);margin-bottom:8px">Massa Muscular <span style="font-size:12px;opacity:.7">esquelética </span><span style="color:var(--red)">*</span></div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <div class="field" style="margin:0">
+                      <label style="font-size:12px">kg</label>
+                      <input type="number" step="0.1" id="a-mmuscular" oninput="onAnamneseChange()" onblur="onMassaInput('mmuscular','kg')" onkeydown="if(event.key==='Enter'){this.blur()}" placeholder="—" style="font-size:15px;font-weight:600" required disabled>
+                    </div>
+                    <div class="field" style="margin:0">
+                      <label style="font-size:12px">%</label>
+                      <input type="number" step="0.1" id="a-mmuscular-pct" oninput="onAnamneseChange()" onblur="onMassaInput('mmuscular','pct')" onkeydown="if(event.key==='Enter'){this.blur()}" placeholder="—" style="font-size:15px;font-weight:600" disabled>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Col 3: Óssea (opcional) -->
+                <div style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
+                  <div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--text3);margin-bottom:8px">Massa Óssea <span style="font-size:12px;opacity:.7">opcional - bioimpedância</span></div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <div class="field" style="margin:0">
+                      <label style="font-size:12px">kg</label>
+                      <input type="number" step="0.1" id="a-osso" oninput="onAnamneseChange()" onblur="onMassaInput('osso','kg')" onkeydown="if(event.key==='Enter'){this.blur()}" placeholder="—" style="font-size:15px;font-weight:600" disabled>
+                    </div>
+                    <div class="field" style="margin:0">
+                      <label style="font-size:12px">%</label>
+                      <input type="number" step="0.1" id="a-osso-pct" oninput="onAnamneseChange()" onblur="onMassaInput('osso','pct')" onkeydown="if(event.key==='Enter'){this.blur()}" placeholder="—" style="font-size:15px;font-weight:600" disabled>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+              <div id="antro-comp-bloqueio" style="display:none;margin-top:6px;padding:6px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text3)"><i class=ph-lock></i> Informe o Peso em Medidas Básicas para liberar estes campos.</div>
+              <div id="antro-comp-alerta" style="display:none;margin-top:6px;padding:6px 12px;background:var(--amber-dim);border:1px solid var(--amber-line);border-radius:var(--radius);font-size:12px;color:var(--amber)"></div>
+
+              <!-- Linha 2: Magra | Residual (calculados, aparecem depois dos anteriores) -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+                <div style="background:var(--bg4);border:1px solid rgba(0,229,160,.15);border-radius:var(--radius);padding:10px 12px">
+                  <div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--text3);margin-bottom:8px">Massa Magra <span style="font-size:12px;opacity:.7">auto: peso−gordura</span></div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <div class="field" style="margin:0">
+                      <label style="font-size:12px">kg</label>
+                      <input type="text" id="a-magra" readonly style="color:var(--accent);background:var(--bg3);font-variant-numeric:tabular-nums;font-size:15px;font-weight:600" placeholder="—">
+                    </div>
+                    <div class="field" style="margin:0">
+                      <label style="font-size:12px">%</label>
+                      <input type="text" id="a-magra-pct" readonly style="color:var(--text2);background:var(--bg3);font-variant-numeric:tabular-nums;font-size:14px" placeholder="—">
+                    </div>
+                  </div>
+                </div>
+                <div style="background:var(--bg4);border:1px solid rgba(0,229,160,.15);border-radius:var(--radius);padding:10px 12px">
+                  <div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--text3);margin-bottom:8px"><span id="a-residual-label">Massa Residual </span><span style="font-size:12px;opacity:.7">auto: depende da Óssea informada</span></div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <div class="field" style="margin:0">
+                      <label style="font-size:12px">kg</label>
+                      <input type="text" id="a-residual" readonly style="color:var(--accent);background:var(--bg3);font-variant-numeric:tabular-nums;font-size:15px;font-weight:600" placeholder="—">
+                    </div>
+                    <div class="field" style="margin:0">
+                      <label style="font-size:12px">%</label>
+                      <input type="text" id="a-residual-pct" readonly style="color:var(--text2);background:var(--bg3);font-variant-numeric:tabular-nums;font-size:14px" placeholder="—">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Circunferências — layout 3 colunas -->
+              <div class="section-label" style="margin-top:16px">Circunferências (cm)</div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+
+                <!-- COLUNA ESQUERDA: TRONCO -->
+                <div>
+                  <div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--text3);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Tronco (cm)</div>
+                  <div class="field"><label>Ombros</label>
+                    <input type="number" step="0.1" id="a-ombro" oninput="onAnamneseChange()" placeholder="—"></div>
+                  <div class="field"><label>Cintura</label>
+                    <input type="number" step="0.1" id="a-cintura" oninput="onAnamneseChange();calcRCQ()" placeholder="—"></div>
+                  <div class="field"><label>Abdômen / umbigo</label>
+                    <input type="number" step="0.1" id="a-abdomen" oninput="onAnamneseChange()" placeholder="—"></div>
+                  <div class="field"><label>Quadril</label>
+                    <input type="number" step="0.1" id="a-quadril" oninput="onAnamneseChange();calcRCQ()" placeholder="—"></div>
+                  <div class="field"><label>RCQ (calculado)</label>
+                    <input type="text" id="a-rcq" readonly style="color:var(--text2);background:var(--bg4);font-variant-numeric:tabular-nums;" placeholder="—"></div>
+                  <div class="field"><label>Classificação RCQ</label>
+                    <input type="text" id="a-rcq-class" readonly style="color:var(--text2);background:var(--bg4);font-variant-numeric:tabular-nums;font-size:12px" placeholder="—"></div>
+                </div>
+
+                <!-- COLUNA DIREITA: MEMBROS D / Δ / E -->
+                <div>
+                  <div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--text3);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">
+                    Membros (cm) <span style="font-size:12px;font-weight:400;opacity:.7">Δ > 1 cm = priorizar unilateral</span>
+                  </div>
+
+                  <!-- Cabeçalho colunas -->
+                  <div style="display:grid;grid-template-columns:1fr 70px 1fr;gap:4px;margin-bottom:4px;text-align:center">
+                    <div style="font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums;">Direito</div>
+                    <div style="font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums;">Δ</div>
+                    <div style="font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums;">Esquerdo</div>
+                  </div>
+
+                  <!-- Braço relaxado -->
+                  <div style="font-size:13px;color:var(--text);font-weight:500;margin-bottom:4px">Braço relaxado</div>
+                  <div style="display:grid;grid-template-columns:1fr 70px 1fr;gap:4px;margin-bottom:8px;align-items:center">
+                    <input type="number" step="0.1" id="a-braco-d" oninput="calcAssimetria('braco-rel')" placeholder="—" style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:8px 10px;font-family:var(--sans);font-size:13px">
+                    <div id="delta-braco-rel" style="font-variant-numeric:tabular-nums;font-size:12px;color:var(--text3);text-align:center;padding:8px 2px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius)">—</div>
+                    <input type="number" step="0.1" id="a-braco-e" oninput="calcAssimetria('braco-rel')" placeholder="—" style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:8px 10px;font-family:var(--sans);font-size:13px">
+                  </div>
+
+                  <!-- Braço contraído -->
+                  <div style="font-size:13px;color:var(--text);font-weight:500;margin-bottom:4px">Braço contraído</div>
+                  <div style="display:grid;grid-template-columns:1fr 70px 1fr;gap:4px;margin-bottom:8px;align-items:center">
+                    <input type="number" step="0.1" id="a-braco-d-cont" oninput="calcAssimetria('braco-cont')" placeholder="—" style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:8px 10px;font-family:var(--sans);font-size:13px">
+                    <div id="delta-braco-cont" style="font-variant-numeric:tabular-nums;font-size:12px;color:var(--text3);text-align:center;padding:8px 2px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius)">—</div>
+                    <input type="number" step="0.1" id="a-braco-e-cont" oninput="calcAssimetria('braco-cont')" placeholder="—" style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:8px 10px;font-family:var(--sans);font-size:13px">
+                  </div>
+
+                  <!-- Coxa -->
+                  <div style="font-size:13px;color:var(--text);font-weight:500;margin-bottom:4px">Coxa (medial)</div>
+                  <div style="display:grid;grid-template-columns:1fr 70px 1fr;gap:4px;margin-bottom:8px;align-items:center">
+                    <input type="number" step="0.1" id="a-coxa-d" oninput="calcAssimetria('coxa')" placeholder="—" style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:8px 10px;font-family:var(--sans);font-size:13px">
+                    <div id="delta-coxa" style="font-variant-numeric:tabular-nums;font-size:12px;color:var(--text3);text-align:center;padding:8px 2px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius)">—</div>
+                    <input type="number" step="0.1" id="a-coxa-e" oninput="calcAssimetria('coxa')" placeholder="—" style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:8px 10px;font-family:var(--sans);font-size:13px">
+                  </div>
+
+                  <!-- Panturrilha -->
+                  <div style="font-size:13px;color:var(--text);font-weight:500;margin-bottom:4px">Panturrilha</div>
+                  <div style="display:grid;grid-template-columns:1fr 70px 1fr;gap:4px;margin-bottom:8px;align-items:center">
+                    <input type="number" step="0.1" id="a-pant-d" oninput="calcAssimetria('pant')" placeholder="—" style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:8px 10px;font-family:var(--sans);font-size:13px">
+                    <div id="delta-pant" style="font-variant-numeric:tabular-nums;font-size:12px;color:var(--text3);text-align:center;padding:8px 2px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius)">—</div>
+                    <input type="number" step="0.1" id="a-pant-e" oninput="calcAssimetria('pant')" placeholder="—" style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:8px 10px;font-family:var(--sans);font-size:13px">
+                  </div>
+                </div>
+
+              </div><!-- /grid 2 colunas -->
+
+              <!-- Flag de assimetrias -->
+              <div id="antro-flag-assim" style="display:none;margin-top:12px;padding:10px 14px;background:var(--amber-dim);border:1px solid var(--amber-line);border-radius:var(--radius);font-size:12px;color:var(--amber);line-height:1.7">
+                <strong><i class=ph-warning></i> Assimetria detectada:</strong>
+                <div id="antro-flag-assim-texto" style="margin-top:4px"></div>
+                <div style="margin-top:6px;color:var(--text3)">→ Priorizar exercícios unilaterais ou com cargas independentes por membro.</div>
+              </div>
+
+              <!-- Observações -->
+              <div class="section-label" style="margin-top:16px">Observações</div>
+              <div class="field">
+                <textarea id="a-obs-antro" oninput="onAnamneseChange()" placeholder="Registros adicionais relevantes para prescrição..." style="min-height:55px"></textarea>
+              </div>
+              <div class="btn-row" style="margin-top:20px;padding:0 4px">
+                <button type="button" class="btn btn-primary btn-save" onclick="antroSalvarAvaliacao()" style="min-width:130px;gap:6px"><span><i class=ph-check></i></span> Salvar</button>
+              </div>
+              </div><!-- /antro-form-view -->
+            </div>
+          </div>
+
+          <!-- ── SUBPAINEL: META ── -->
+          <div id="subpanel-anamnese-meta" class="content hidden" style="padding:0">
+          <div class="card">
+            <div class="card-title">Meta - Composição Corporal</div>
+
+            <div class="section-label">Fonte dos dados base (Altura, Peso, Músculo, Gordura)</div>
+            <div style="display:flex;gap:16px;margin-bottom:12px">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                <input type="radio" name="meta-fonte" value="anterior" id="meta-fonte-anterior" checked onchange="onMetaFonteChange()">
+                Puxar da última avaliação
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                <input type="radio" name="meta-fonte" value="manual" id="meta-fonte-manual" onchange="onMetaFonteChange()">
+                Inserir manualmente (bioimpedância)
+              </label>
+            </div>
+
+            <!-- Bloco manual — só aparece se fonte = manual -->
+            <div id="meta-manual-bloco" class="hidden" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:16px">
+              <div style="display:flex;gap:16px;margin-bottom:10px">
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+                  <input type="radio" name="meta-unidade" value="pct" id="meta-unidade-pct" checked onchange="onMetaManualChange()">
+                  Músculo/Gordura em %
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+                  <input type="radio" name="meta-unidade" value="kg" id="meta-unidade-kg" onchange="onMetaManualChange()">
+                  Músculo/Gordura em kg
+                </label>
+              </div>
+              <div class="grid-4" style="gap:12px">
+                <div class="field">
+                  <label><b>Altura (cm) *</b></label>
+                  <input type="number" step="0.1" id="meta-manual-altura" oninput="onMetaManualChange()" placeholder="—">
+                </div>
+                <div class="field">
+                  <label><b>Peso da bioimpedância (kg) *</b></label>
+                  <input type="number" step="0.1" id="meta-manual-peso" oninput="onMetaManualChange()" placeholder="—">
+                </div>
+                <div class="field">
+                  <label id="meta-manual-musculo-label">Músculo (%) - opcional</label>
+                  <input type="number" step="0.1" id="meta-manual-musculo" oninput="onMetaManualChange()" placeholder="—">
+                </div>
+                <div class="field">
+                  <label id="meta-manual-gordura-label"><b>Gordura (%) *</b></label>
+                  <input type="number" step="0.1" id="meta-manual-gordura" oninput="onMetaManualChange()" placeholder="—">
+                </div>
+              </div>
+              <div style="font-size:12px;color:var(--text3);margin-top:8px">* obrigatório. Se Músculo não for informado, o sistema estima a partir da fórmula preditiva (menos preciso - ver aviso ao calcular). Óssea e Residual não são digitados - sempre calculados.</div>
+            </div>
+
+            <div id="meta-fonte-badge" style="font-size:12px;color:var(--text3);margin-bottom:16px"></div>
+
+            <div class="section-label">Nível de meta</div>
+            <div class="field" style="max-width:320px;margin-bottom:16px">
+              <select id="meta-nivel" onchange="onMetaNivelChange()">
+                <option value="">Selecionar</option>
+                <option value="saude-1">Saúde Leve</option>
+                <option value="saude0">Saúde Padrão</option>
+                <option value="saude+1">Saúde Robusto</option>
+                <option value="magro">Magro</option>
+                <option value="atletico">Atlético</option>
+                <option value="musculoso">Musculoso</option>
+                <option value="personalizado">Personalizado</option>
+              </select>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:8px">
+              <div class="field">
+                <label>IMC alvo</label>
+                <input type="number" step="0.1" id="meta-imc" oninput="onMetaImcChange()" placeholder="—">
+              </div>
+              <div class="field">
+                <label>Peso alvo (kg)</label>
+                <input type="number" step="0.1" id="meta-peso" oninput="onMetaPesoChange()" placeholder="—">
+              </div>
+              <div class="field">
+                <label>% Gordura alvo</label>
+                <input type="number" step="0.1" id="meta-gordura-pct" oninput="onMetaGorduraChange()" placeholder="—">
+              </div>
+            </div>
+            <div id="meta-personalizado-badge" style="display:none;font-size:12px;color:var(--amber);margin-bottom:12px"><i class=ph-warning></i> Valores ajustados manualmente - meta marcada como Personalizado</div>
+
+            <div id="meta-erro" style="display:none;margin-bottom:12px;padding:8px 12px;background:rgba(255,60,60,.08);border:1px solid rgba(255,60,60,.3);border-radius:var(--radius);font-size:13px;color:var(--red)"></div>
+
+            <div class="btn-row" style="justify-content:flex-start;margin:0 0 16px">
+              <button class="btn btn-primary" onclick="calcularMeta()">Calcular</button>
+            </div>
+
+            <div class="section-label" style="margin-top:0">Comparativo - Atual vs. Meta</div>
+            <table class="treino-table">
+              <thead>
+                <tr><th>Métrica</th><th>Atual</th><th>Meta</th><th>Diferença</th></tr>
+              </thead>
+              <tbody id="meta-tabela-body">
+                <tr><td colspan="4" style="color:var(--text3);text-align:center">Preencha os dados e clique em Calcular</td></tr>
+              </tbody>
+            </table>
+
+            <div id="meta-card-divergencia" style="display:none;margin-top:14px;padding:10px 14px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);font-size:13px"></div>
+
+            <div class="btn-row" style="margin-top:16px">
+              <button class="btn btn-primary btn-save" onclick="salvarMeta()" style="min-width:130px;gap:6px"><span><i class=ph-check></i></span> Salvar</button>
+            </div>
+          </div>
+          </div>
+
+        </div>
+
+        <!-- ══════════════ PRESCRIÇÃO ══════════════ -->
+        <div id="panel-prescricao" class="content hidden">
+          <div class="card">
+            <div class="card-title">Prescrição</div>
+
+            <!-- ── LISTA DE TREINOS SALVOS ── -->
+            <div id="treinos-lista-view">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                <div style="font-size:12px;color:var(--text3)">Todos os treinos criados para este aluno.</div>
+                <button type="button" class="btn btn-primary" onclick="treinosAdicionar()" >+ Adicionar Treino</button>
+              </div>
+              <div id="treinos-lista-tabela"></div>
+            </div>
+
+            <!-- ── FORMULÁRIO / FLUXO GUIADO (novo treino ou edição) ── -->
+            <div id="treinos-form-view" style="display:none">
+            <div style="display:flex;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+              <button type="button" class="btn btn-ghost" onclick="confirmarSairEdicaoDivisao(treinosVoltarLista)" ><i class=ph-arrow-left></i>Voltar para lista</button>
+            </div>
+
+            <div id="presc-warning" class="alert alert-amber hidden">
+              <span><i class=ph-warning></i></span><div>Preencha o Perfil e a Avaliação antes de gerar a prescrição.</div>
+            </div>
+
+            <!-- STEPS -->
+            <div class="steps">
+              <div class="step active" id="step-1"><div class="step-num">1</div>Configurações Gerais</div>
+              <div class="step-line"></div>
+              <div class="step" id="step-2"><div class="step-num">2</div>Distribuição</div>
+              <div class="step-line"></div>
+              <div class="step" id="step-3"><div class="step-num">3</div>Exercícios</div>
+              <div class="step-line"></div>
+              <div class="step" id="step-4"><div class="step-num">4</div>Aprovação</div>
+            </div>
+
+            <!-- STEP 1 — BASE DO TREINO -->
+            <div id="presc-step1">
+              <div style="font-variant-numeric:tabular-nums;font-size:13px;color:var(--text3);margin-bottom:10px">Base do Treino</div>
+              <div class="alert alert-blue" style="margin-bottom:12px;font-size:13px">
+                <span><i class=ph-info></i></span>
+                <div id="step1-info">Nível e frequência são importados automaticamente da Avaliação. Confirme ou ajuste abaixo se necessário.</div>
+              </div>
+              <div id="analise-avaliacao" class="alert alert-amber hidden" style="margin-bottom:12px;flex-direction:column;align-items:flex-start"></div>
+
+              <!-- ── GRUPO 1: OBJETIVO ── -->
+              <div class="section-label">Objetivo</div>
+              <div class="flex-row" style="margin-bottom:4px">
+                <div class="field flex-1">
+                  <label>Objetivo principal</label>
+                  <select id="pr-objetivo-principal" onchange="onObjetivoPrincipalChange(this.value)">
+                    <option value="">Selecionar</option>
+                  </select>
+                </div>
+                <div class="field flex-1">
+                  <label>Objetivo secundário <span style="color:var(--text3);font-size:12px">(opcional)</span></label>
+                  <select id="pr-objetivo-sec">
+                    <option value="">Nenhum</option>
+                    <option value="Recomposição corporal">Recompor o corpo (ganhar músculo e perder gordura)</option>
+                    <option value="Mobilidade">Ganho de mobilidade e flexibilidade</option>
+                    <option value="Resistência muscular">Aumentar resistência muscular</option>
+                    <option value="Resistência cardiorrespiratória">Melhorar resistência cardiorrespiratória (cardio)</option>
+                    <option value="Performance esportiva">Performance esportiva</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- ── GRUPO 2: PERFIL DE TREINO ── -->
+              <div class="section-label" style="margin-top:16px">Perfil de Treino <span style="color:var(--text3);font-size:12px;font-weight:400">importado da Avaliação - ajustar aqui não altera a Avaliação do aluno</span></div>
+              <div class="flex-row" style="margin-bottom:4px">
+                <div class="field flex-1">
+                  <label>Nível <span id="nivel-origem" style="font-size:12px;color:var(--accent)"></span></label>
+                  <select id="pr-nivel" onchange="onNivelOuFrequenciaChange()">
+                    <option value="">Selecionar</option>
+                    <option value="Inic">Iniciante</option>
+                    <option value="Inte">Intermediário</option>
+                    <option value="Avan">Avançado</option>
+                  </select>
+                </div>
+                <div class="field flex-1">
+                  <label>Frequência <span id="freq-origem" style="font-size:12px;color:var(--accent)"></span></label>
+                  <select id="pr-frequencia" onchange="onNivelOuFrequenciaChange()">
+                    <option value="">Selecionar</option>
+                    <option value="2x">2x por semana</option>
+                    <option value="3x">3x por semana</option>
+                    <option value="4x">4x por semana</option>
+                    <option value="5x">5x por semana</option>
+                    <option value="6x">6x por semana</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- ── GRUPO 3: ROTINA DE TREINO ── -->
+              <div class="section-label" style="margin-top:16px">Rotina de Treino <span style="color:var(--text3);font-size:12px;font-weight:400">importado da Anamnese - ajustar aqui não altera a Anamnese do aluno</span></div>
+              <div class="grid-3" style="gap:12px;margin-bottom:4px">
+                <div class="field">
+                  <label>Duração por sessão</label>
+                  <select id="pr-duracao">
+                    <option value="">Selecionar</option>
+                    <option value="30">Até 30 minutos</option>
+                    <option value="45">30–45 minutos</option>
+                    <option value="60">45–60 minutos</option>
+                    <option value="75">60–75 minutos</option>
+                    <option value="90">75–90 minutos</option>
+                    <option value="90+">Mais de 90 minutos</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Melhor horário</label>
+                  <select id="pr-horario">
+                    <option value="">Selecionar</option>
+                    <option value="manhã">Manhã (06h–12h)</option>
+                    <option value="tarde">Tarde (12h–18h)</option>
+                    <option value="noite">Noite (18h–22h)</option>
+                    <option value="variável">Variável / sem preferência</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Local de treino</label>
+                  <select id="pr-local">
+                    <option value="">Selecionar</option>
+                    <!-- Buckets genericos (academia/casa/ar livre/hibrido) removidos em 2026-09-02:
+                         classificacao desnecessaria. As opcoes reais vem dos locais do personal
+                         (LIBS.locais), preenchidas por JS. -->
+                  </select>
+                </div>
+              </div>
+
+              <!-- ── GRUPO 4: PREFERÊNCIAS E RESTRIÇÕES ── -->
+              <div class="section-label" style="margin-top:16px">Preferências e Restrições</div>
+              <div class="grid-2" style="gap:12px;margin-bottom:4px">
+                <div class="field">
+                  <label>Preferência de exercícios</label>
+                  <select id="pr-gosta">
+                    <option value="">Sem preferência definida</option>
+                    <option value="Pernas e glúteos">Foco em pernas e glúteos</option>
+                    <option value="Superior (peito e costas)">Foco em superior (peito/costas)</option>
+                    <option value="Braços e ombros">Foco em braços e ombros</option>
+                    <option value="Core e abdômen">Foco em core e abdômen</option>
+                    <option value="Corpo inteiro">Treino corpo inteiro</option>
+                    <option value="Exercícios funcionais">Prefere exercícios funcionais</option>
+                    <option value="Exercícios com máquinas">Prefere máquinas</option>
+                    <option value="Exercícios com peso livre">Prefere peso livre</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Exercícios ou movimentos a evitar</label>
+                  <select id="pr-evitar">
+                    <option value="">Nenhum a evitar</option>
+                    <option value="Dores nos Joelhos">Agachamentos profundos (dor no joelho)</option>
+                    <option value="Dores nos Ombros">Desenvolvimentos acima da cabeça (dor no ombro)</option>
+                    <option value="Dores Lombares">Terra / stiff (dor lombar)</option>
+                    <option value="Dores nos Cotovelos">Extensões de cotovelo (dor no cotovelo)</option>
+                    <option value="Impacto">Exercícios de alto impacto (corrida, saltos)</option>
+                    <option value="Barra livre">Não se sente seguro com barra livre</option>
+                    <option value="Exercícios complexos">Exercícios técnicos/complexos</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- ── GRUPO 5: VIGÊNCIA ── -->
+              <div class="section-label" style="margin-top:16px">Vigência</div>
+              <div class="grid-2" style="gap:12px;margin-bottom:16px">
+                <div class="field">
+                  <label>Validade do treino <span style="color:var(--text3);font-size:12px">(vencimento - só informativo)</span></label>
+                  <select id="pr-validade">
+                    <option value="8sem">8 semanas</option>
+                    <option value="12sem" selected>12 semanas (padrão)</option>
+                    <option value="16sem">16 semanas</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Observações para a prescrição</label>
+                  <textarea id="pr-obs" placeholder="Focar em MMII, incluir cardio, evitar alto impacto..." style="min-height:36px"></textarea>
+                </div>
+              </div>
+
+              <!-- ── RESUMO / SUGESTÃO DO SISTEMA ── -->
+              <div id="resumo-config-geral" style="display:none;margin-bottom:16px">
+                <div class="alert alert-green" id="modelo-recomendado"></div>
+                <div class="param-block">
+                  <div class="param-grid">
+                    <div><div class="param-key">Objetivo</div><div class="param-val" id="info-objetivo">—</div></div>
+                    <div><div class="param-key">Modelo</div><div id="info-modelo" class="badge badge-green">—</div></div>
+                    <div><div class="param-key">Frequência</div><div class="param-val" id="info-freq">—</div></div>
+                    <div><div class="param-key">Nível</div><div class="param-val" id="info-nivel">—</div></div>
+                    <div><div class="param-key">Sexo</div><div class="param-val" id="info-sexo">—</div></div>
+                    <div><div class="param-key">Duração/sessão</div><div class="param-val" id="info-duracao">—</div></div>
+                  </div>
+                </div>
+                <div class="alert alert-blue mt-12">
+                  <span><i class=ph-info></i></span>
+                  <div id="ref-variaveis" style="font-size:13px;line-height:1.7"></div>
+                </div>
+              </div>
+
+              <!-- ══ RELATÓRIO DA BASE — diagnóstico do sistema (bloqueios/alertas/contexto: dores, lesões, assimetrias) ══ -->
+              <div class="section-label" style="margin-top:4px">Relatório da Base <span style="color:var(--text3);font-size:12px;font-weight:400">identificado automaticamente a partir do Perfil e da Avaliação</span></div>
+              <div id="triagem-painel" style="display:none;margin-bottom:16px">
+
+                <!-- Resumo de uma linha -->
+                <div id="triagem-resumo" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg4);border-radius:var(--radius);border:1px solid var(--border);margin-bottom:10px;flex-wrap:wrap">
+                  <span id="triagem-icone" style="font-size:16px"><i class=ph-magnifying-glass></i></span>
+                  <span id="triagem-texto" style="font-size:13px;color:var(--text);flex:1"></span>
+                  <button class="btn btn-ghost btn-xs" onclick="toggleTriagemDetalhe()" id="triagem-toggle-btn">ver detalhes <i class=ph-caret-down></i></button>
+                </div>
+
+                <!-- Detalhe expansível -->
+                <div id="triagem-detalhe" style="display:none;display:flex;flex-direction:column;gap:6px">
+
+                  <!-- Bloqueios -->
+                  <div id="triagem-bloqueios" style="display:none">
+                    <div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--red);margin-bottom:4px;"><i class=sd-red></i> Bloqueios - resolver antes de prescrever</div>
+                    <div id="triagem-bloqueios-lista" style="display:flex;flex-direction:column;gap:4px"></div>
+                  </div>
+
+                  <!-- Alertas -->
+                  <div id="triagem-alertas" style="display:none">
+                    <div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--amber);margin-bottom:4px;"><i class=sd-amber></i> Alertas clínicos - ajustes obrigatórios</div>
+                    <div id="triagem-alertas-lista" style="display:flex;flex-direction:column;gap:4px"></div>
+                  </div>
+
+                  <!-- Contexto (assimetrias, condições que orientam sem bloquear) -->
+                  <div id="triagem-contexto" style="display:none">
+                    <div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--text3);margin-bottom:4px;"><i class=sd-blue></i> Contexto - orienta sem bloquear</div>
+                    <div id="triagem-contexto-lista" style="display:flex;flex-direction:column;gap:4px"></div>
+                  </div>
+
+                </div>
+              </div>
+              <!-- /RELATÓRIO DA BASE -->
+
+              <div class="btn-row">
+                <button class="btn btn-primary" id="btn-step1-next" disabled onclick="goStep(2)">Próximo →</button>
+              </div>
+            </div>
+
+            <!-- STEP 2: distribuição (volume + divisão, lado a lado, sempre em sincronia) → Exercícios -->
+            <div id="presc-step2" class="hidden">
+              <div class="btn-row" style="margin-bottom:14px">
+                <button class="btn btn-ghost" onclick="confirmarSairEdicaoDivisao(() => goStep(1))"><i class=ph-arrow-left></i>Configurações gerais</button>
+              </div>
+
+              <div class="alert alert-blue" style="margin-bottom:14px;font-size:13px">
+                <span><i class=ph-info></i></span>
+                <div>Defina o volume por grupo muscular e escolha o modelo de divisão - os dois se ajustam ao vivo: mudar o volume recalcula o encaixe de cada modelo; trocar de modelo mostra quanto do volume definido cada sessão realmente comporta. Só são exibidos modelos compatíveis com o objetivo escolhido na tela anterior.</div>
+              </div>
+
+              <!-- ── CAIXA 1: VOLUME POR GRUPO MUSCULAR ───────────────────────── -->
+              <div id="s3-volume" style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);margin-bottom:14px;overflow:hidden">
+                <div id="step2-perfil-ctx-anchor"></div>
+                <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer" onclick="toggleVolumeCaixa()">
+                  <span id="vol-collapse-icone" style="font-size:12px;color:var(--text3);transition:transform .15s;flex-shrink:0;display:inline-flex"><i class=ph-caret-down></i></span>
+                  <div style="flex:1;min-width:0">
+                    <div class="section-label" style="margin-bottom:2px">Volume por Grupo Muscular</div>
+                    <div style="font-size:13px;color:var(--text3)">Já calculado pelo sistema a partir do objetivo, nível e sexo - ajuste se necessário.</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;flex-shrink:0" onclick="event.stopPropagation()">
+                    <span style="font-size:13px;color:var(--text3);white-space:nowrap">Sér/exercício (padrão):</span>
+                    <div style="display:flex;align-items:center">
+                      <button id="btn-series-menos" style="width:22px;height:28px;background:var(--bg2);border:1px solid var(--border);border-radius:6px 0 0 6px;color:var(--text2);font-size:13px;cursor:pointer;line-height:1;padding:0">−</button>
+                      <input type="number" id="vol-series" min="1" max="8" style="width:3.2em;background:var(--bg3);border-top:1px solid var(--border);border-bottom:1px solid var(--border);border-left:none;border-right:none;padding:4px 6px;color:var(--text);font-variant-numeric:tabular-nums;font-size:13px;outline:none;text-align:center" oninput="resetSeriesGlobal()">
+                      <button id="btn-series-mais" style="width:22px;height:28px;background:var(--bg2);border:1px solid var(--border);border-radius:0 6px 6px 0;color:var(--text2);font-size:13px;cursor:pointer;line-height:1;padding:0">+</button>
+                    </div>
+                    <button class="tbtn" onclick="resetarVolumes()" title="Restaurar volumes para MEV–MRV do perfil"><i class=ph-arrow-counter-clockwise></i>Reset</button>
+                  </div>
+                </div>
+
+                <div id="vol-collapse-body" style="padding:0 14px 14px">
+                  <table class="treino-table" id="vol-tabela" style="font-size:13px">
+                    <thead>
+                      <tr>
+                        <th style="width:40px;text-align:center">On/Off</th>
+                        <th>Grupo Muscular</th>
+                        <th style="text-align:center">Sér/sem mín</th>
+                        <th style="text-align:center">Sér/sem máx</th>
+                        <th style="text-align:center">Sér/exercício</th>
+                        <th style="text-align:center;color:var(--accent)">Exercícios</th>
+                        <th style="text-align:center">MEV–MRV</th>
+                        <th style="text-align:center">Status</th>
+                        <th style="text-align:center;font-size:12px;color:var(--text3)" title="Exercícios disponíveis após filtros clínicos"><i class=ph-magnifying-glass></i> Filtro</th>
+                        <th style="width:28px"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="vol-tbody"></tbody>
+                  </table>
+
+                  <!-- Legenda de cores inline -->
+                  <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap;padding:8px 10px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border)">
+                    <span style="font-variant-numeric:tabular-nums;font-size:12px;color:var(--text3);">STATUS DO VOLUME:</span>
+                    <div style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:6px;background:#333;border:1px solid #444"></div>OFF</div>
+                    <div style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:6px;background:var(--red)"></div>Crítico - fora da faixa recuperável</div>
+                    <div style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:6px;background:var(--orange)"></div>Aceitável - próximo ao limite</div>
+                    <div style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:6px;background:var(--accent)"></div>Ideal - dentro da faixa ótima</div>
+                    <div style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:6px;background:var(--red)"></div>Acima MRV - risco de overtraining</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ── CAIXA 2: MODELOS DE DIVISÃO (filtrados pelo objetivo, ajustados ao volume acima) ─────────── -->
+              <div id="s3-divisao" style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);margin-bottom:16px;overflow:hidden">
+                <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer" onclick="toggleDivisaoCaixa()">
+                  <span id="div-collapse-icone" style="font-size:12px;color:var(--text3);transition:transform .15s;flex-shrink:0;display:inline-flex"><i class=ph-caret-down></i></span>
+                  <div class="section-label" style="margin-bottom:0;flex:1;min-width:0">Modelo de Divisão</div>
+                  <!-- Limite de séries por sessão -->
+                  <div style="display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;flex-shrink:0" onclick="event.stopPropagation()">
+                    <span style="font-size:13px;color:var(--text3);white-space:nowrap">Limite séries/sessão:</span>
+                    <button id="btn-lim-menos" style="width:20px;height:22px;background:var(--bg2);border:1px solid var(--border);border-radius:6px 0 0 6px;color:var(--text2);font-size:13px;cursor:pointer;padding:0;line-height:1">−</button>
+                    <input type="number" id="lim-sessao" min="4" max="60"
+                      style="width:3.2em;background:var(--bg4);border-top:1px solid var(--border);border-bottom:1px solid var(--border);border-left:none;border-right:none;padding:3px 4px;color:var(--text);font-variant-numeric:tabular-nums;font-size:13px;outline:none;text-align:center"
+                      oninput="onLimSessaoChange()">
+                    <button id="btn-lim-mais" style="width:20px;height:22px;background:var(--bg2);border:1px solid var(--border);border-radius:0 6px 6px 0;color:var(--text2);font-size:13px;cursor:pointer;padding:0;line-height:1">+</button>
+                    <span style="font-size:13px;color:var(--text3);margin-left:2px">séries</span>
+                    <span id="lim-badge" style="font-size:13px;font-variant-numeric:tabular-nums;padding:1px 5px;border-radius:6px;margin-left:4px;display:inline-block;min-width:8.5em;text-align:center;white-space:nowrap;flex-shrink:0"></span>
+                  </div>
+                </div>
+
+                <div id="div-collapse-body" style="padding:0 14px 14px">
+                  <div class="alert alert-blue" style="margin-bottom:10px;font-size:13px">
+                    <span><i class=ph-info></i></span>
+                    <div id="s3-div-info">Modelos compatíveis com o objetivo escolhido, ordenados pelo que melhor equilibra o volume definido acima entre as sessões.</div>
+                  </div>
+
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:6px">
+                      <div style="font-size:12px;font-weight:600;color:var(--text3);">Modelos disponíveis</div>
+                      <div style="display:flex;gap:6px">
+                        <button class="btn btn-ghost btn-sm" onclick="abrirNovaDivisaoRapida()"  title="Cria uma divisão com sessões vazias pra você distribuir os grupos manualmente - não salva nada por padrão"><i class=ph-lightning></i> Divisão Rápida</button>
+                        <button class="btn btn-ghost btn-sm" onclick="abrirNovaDivisaoCompleta()"  title="Formulário completo pra catalogar um modelo reutilizável (com objetivos compatíveis), pré-preenchido com o perfil atual">+ Nova Divisão (modelo)</button>
+                      </div>
+                    </div>
+                    <div id="divisao-opcoes" style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px"></div>
+                </div>
+              </div>
+
+              <div class="btn-row" id="s3-vd-btnrow">
+                <button class="btn btn-ghost" onclick="confirmarSairEdicaoDivisao(() => goStep(1))"><i class=ph-arrow-left></i>Configurações gerais</button>
+                <button class="btn btn-primary" onclick="montarFichaModelo()">Avançar para Exercícios →</button>
+              </div>
+            </div>
+
+            <!-- STEP 3: seleção de exercícios -->
+            <div id="presc-step3" class="hidden">
+              <div id="s3-ficha">
+
+                <!-- Painel de assimetrias ativas — Camada 4 -->
+                <div id="ficha-assimetrias" style="display:none;margin-bottom:12px"></div>
+
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+                  <div style="flex:1;min-width:120px">
+                    <div class="param-key">Divisão</div>
+                    <div id="ficha-divisao-label" style="font-size:13px;color:var(--accent);font-variant-numeric:tabular-nums;"></div>
+                  </div>
+                  <div>
+                    <div class="param-key">Volume</div>
+                    <div id="ficha-vol-label" style="font-size:13px;font-variant-numeric:tabular-nums;color:var(--text2)"></div>
+                  </div>
+                  <!-- Seletor de divisão inline -->
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span style="font-size:13px;color:var(--text3)">Mudar:</span>
+                    <select id="ficha-divisao-select" style="font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:3px 8px;color:var(--text);outline:none" onchange="mudarDivisaoFicha(this.value)"></select>
+                  </div>
+                  <button class="tbtn" onclick="voltarDivisao()"><i class=ph-arrow-left></i>Distribuição</button>
+                </div>
+
+                <div style="margin-bottom:12px">
+                  <div class="param-key">Nome do treino</div>
+                  <input id="ficha-nome-treino" type="text" oninput="editarNomeTreinoFicha(this.value)"
+                    style="width:100%;box-sizing:border-box;font-size:15px;font-weight:600;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;color:var(--text);outline:none">
+                </div>
+
+                <div id="ficha-tabs" style="display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:0;flex-wrap:wrap"></div>
+                <div id="ficha-treinos-content"></div>
+
+                <!-- Preview volume semanal MEV/MAV/MRV -->
+                <div id="preview-vol-semanal" style="margin-top:14px"></div>
+
+                <div class="btn-row">
+                  <button class="btn btn-ghost" onclick="voltarDivisao()"><i class=ph-arrow-left></i>Distribuição</button>
+                  <button class="btn btn-ghost" onclick="regerarFicha()"><i class=ph-arrows-clockwise></i>Regerar</button>
+                  <button class="btn btn-primary" onclick="aprovarTreinoMotor()"><i class=ph-check></i> Aprovar</button>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- STEP 4: APROVADO -->
+            <div id="presc-step4" class="hidden">
+              <div class="alert alert-green">
+                <span><i class=ph-check></i></span>
+                <div><strong>Prescrição aprovada.</strong> Salva no perfil do aluno em <span id="aprovado-data">—.</span></div>
+              </div>
+              <div class="ficha-editor" style="margin-top:12px">
+                <div class="ficha-toolbar">
+                  <span class="ficha-toolbar-label">Ficha aprovada</span>
+                  <div class="ficha-toolbar-spacer"></div>
+                  <button class="tbtn" onclick="editarFicha()"><i class=ph-pencil-simple></i> Editar</button>
+                </div>
+                <div class="ficha-body">
+                  <div id="ficha-aprovada" style="max-height:600px;overflow-y:auto"></div>
+                  <div id="ficha-aprovada-vol" style="margin-top:14px"></div>
+                </div>
+              </div>
+              <div id="ciclo-comparacao" style="display:none"></div>
+              <div class="btn-row" style="justify-content:space-between">
+                <button class="btn btn-ghost" onclick="novaPrescricao()">Nova prescrição</button>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn-ghost" onclick="exportarTreinoParaFitCpx()" style="gap:6px">
+                    <i class=ph-upload-simple></i> Enviar ao FitCpx
+                  </button>
+                  <button class="btn btn-primary" onclick="abrirSalvarBiblioteca()" style="gap:6px">
+                    <i class=ph-books></i> Salvar na Biblioteca
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            </div><!-- /treinos-form-view -->
+          </div>
+        </div>
+
+        <!-- ══════════════ EVOLUÇÃO ══════════════ -->
+        <!-- Placeholder — comparação de ciclos com gráficos, vault + treinos-store.js.
+             Fica vazio de propósito até a próxima fase de desenvolvimento. -->
+        <div id="panel-evolucao" class="content hidden">
+          <div class="card">
+            <div class="empty"><i class=ph-chart-line-up></i><div class="empty-title">Evolução em desenvolvimento</div><div class="empty-text">Aqui entra a comparação entre ciclos: composição corporal e cargas lado a lado, com gráficos.</div></div>
+          </div>
+        </div>
+
+      </div><!-- /tab-content -->
+    </div><!-- /student-view -->
+  </div><!-- /main-area -->
+</div><!-- /app -->
+
+<!-- MODAL -->
+<div class="modal-overlay hidden" id="modal-overlay" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">Novo Aluno</div>
+    <div class="field">
+      <label>Nome completo</label>
+      <input type="text" id="modal-nome" placeholder="Nome do aluno"
+        onkeydown="if(event.key==='Enter')confirmNewStudent()">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmNewStudent()">Criar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     MODAIS DO CRM DE PRAZOS — extraído do FitCPX Flow.
+     Todos os ids prefixados "m-crm-" para não colidir com os modais do Auto
+     (ex: m-task do Flow virou m-crm-task). Fecham via crmCloseModal(id)
+     (js/crm-store.js) — closeModal() sem parâmetro já é do Auto (fecha o
+     modal "Novo Aluno" acima) e não deve ser reaproveitado aqui.
+══════════════════════════════════════════════════════════════════════ -->
+
+<!-- Cliente (CRM) -->
+<div class="modal-overlay hidden" id="m-crm-aluno" onclick="crmCloseModal('m-crm-aluno')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title" id="m-crm-aluno-ttl">Novo Cliente</div>
+    <div class="field"><label>Nome completo *</label><input type="text" id="f-nome"></div>
+    <div class="field"><label>WhatsApp *</label><input type="text" id="f-tel" placeholder="(11) 99999-0000"></div>
+    <div class="field"><label>Apelido <span style="font-weight:400;color:var(--text3)">(opcional, usado nas mensagens)</span></label><input type="text" id="f-apelido"></div>
+    <div class="field"><label>Observações</label><textarea id="f-obs"></textarea></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="crmCloseModal('m-crm-aluno')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveAluno()"><i class=ph-check-circle></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tarefa -->
+<div class="modal-overlay hidden" id="m-crm-task" onclick="crmCloseModal('m-crm-task')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title" id="m-crm-task-ttl">Nova Tarefa</div>
+    <div class="field" id="t-aluno-wrap"><label>Cliente</label><select id="t-aluno"></select></div>
+    <div class="field"><label>Título <span style="font-weight:400;color:var(--text3)">(opcional)</span></label><input type="text" id="t-titulo"></div>
+    <div class="field"><label>Categoria</label><select id="t-cat"></select></div>
+    <div class="field"><label>Tipo</label>
+      <select id="t-tipo"><option value="notif">Notificação</option><option value="prazo">Com Prazo</option></select>
+    </div>
+    <div class="field"><label>Data *</label><input type="date" id="t-data"></div>
+    <div class="field"><label>Horário <span style="font-weight:400;color:var(--text3)">(opcional)</span></label><input type="time" id="t-hora"></div>
+    <div class="field"><label>Urgência personalizada <span style="font-weight:400;color:var(--text3)">(dias, opcional)</span></label><input type="number" id="t-urgdays" min="0" max="90"></div>
+    <div class="field"><label>Observações</label><textarea id="t-obs"></textarea></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="crmCloseModal('m-crm-task')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveTask()"><i class=ph-check-circle></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reagendar -->
+<div class="modal-overlay hidden" id="m-crm-resched" onclick="crmCloseModal('m-crm-resched')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">Reagendar</div>
+    <div id="resched-sub" style="font-size:13px;color:var(--text2);font-weight:600;margin-bottom:10px"></div>
+    <div class="field"><label>Nova data *</label><input type="date" id="resched-data"></div>
+    <div class="field"><label>Horário</label><input type="time" id="resched-hora"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="crmCloseModal('m-crm-resched')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveReschedule()"><i class=ph-check-circle></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Categoria -->
+<div class="modal-overlay hidden" id="m-crm-cat" onclick="crmCloseModal('m-crm-cat')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title" id="m-crm-cat-ttl">Nova Categoria</div>
+    <input type="hidden" id="cat-id">
+    <div class="field"><label>Nome *</label><input type="text" id="cat-label"></div>
+    <div class="field"><label>Ícone</label><input type="hidden" id="cat-icon"><div class="icon-picker"></div></div>
+    <div class="field"><label>Cor</label><input type="color" id="cat-color" style="max-width:80px;padding:2px"></div>
+    <div class="field"><label>Antecedência de urgência <span style="font-weight:400;color:var(--text3)">(dias, opcional)</span></label><input type="number" id="cat-urgdays" min="0" max="90"></div>
+    <div class="field"><label>Duração da tarefa <span style="font-weight:400;color:var(--text3)">(minutos, opcional)</span></label><input type="number" id="cat-duracao" min="0" max="600"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="crmCloseModal('m-crm-cat')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveCat()"><i class=ph-check-circle></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Fluxo -->
+<div class="modal-overlay hidden" id="m-crm-fluxo" onclick="crmCloseModal('m-crm-fluxo')">
+  <div class="modal" onclick="event.stopPropagation()" style="width:640px">
+    <div class="modal-title" id="m-crm-fluxo-ttl">Novo Fluxo</div>
+    <div class="field"><label>Nome do Fluxo *</label><input type="text" id="fl-nome"></div>
+    <div class="field"><label>Ícone</label><input type="hidden" id="fl-icon"><div class="icon-picker"></div></div>
+    <div class="field"><label>Descrição</label><input type="text" id="fl-desc"></div>
+    <div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:14px;background:var(--bg4)">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px"><i class=ph-target></i> Gatilho - ponto de partida do fluxo</div>
+      <div class="field"><label>Nome do evento inicial</label><input type="text" id="fl-trigger-nome" oninput="renderStepsList()" placeholder="Nome personalizado (opcional)"></div>
+      <div class="field" style="margin-bottom:0"><label>Categoria do gatilho</label><select id="fl-trigger-cat"></select></div>
+    </div>
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px">Etapas do Fluxo</div>
+    <div id="fl-steps-list" style="max-height:320px;overflow-y:auto"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="crmCloseModal('m-crm-fluxo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveFluxo()"><i class=ph-check-circle></i> Salvar Fluxo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modalidade -->
+<div class="modal-overlay hidden" id="m-crm-mod" onclick="crmCloseModal('m-crm-mod')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title" id="m-crm-mod-ttl">Nova Modalidade</div>
+    <div class="field"><label>Nome *</label><input type="text" id="mod-nome"></div>
+    <div class="field"><label>Ícone</label><input type="hidden" id="mod-icon"><div class="icon-picker"></div></div>
+    <div class="field"><label>Descrição</label><textarea id="mod-desc"></textarea></div>
+    <div style="font-weight:700;font-size:13px;margin:10px 0 8px"><i class=ph-gear></i> Fluxos Vinculados</div>
+    <div id="mod-fluxos-list"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="crmCloseModal('m-crm-mod')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveModalidade()"><i class=ph-check-circle></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Enviar WhatsApp -->
+<div class="modal-overlay hidden" id="m-crm-wa" onclick="crmCloseModal('m-crm-wa')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">Enviar WhatsApp</div>
+    <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg4);border-radius:var(--radius);margin-bottom:12px">
+      <div style="width:34px;height:34px;background:#25D366;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;color:#052e14;flex-shrink:0"><i class=ph-chat-circle-text></i></div>
+      <div style="flex:1;min-width:0">
+        <div id="wa-name" style="font-size:13px;font-weight:700"></div>
+        <div id="wa-phone" style="font-size:12px;color:var(--text2)"></div>
+      </div>
+      <select id="wa-ddi" style="width:auto">
+        <option value="55">🇧🇷 +55</option>
+        <option value="351">🇵🇹 +351</option>
+        <option value="1">🇺🇸 +1</option>
+        <option value="34">🇪🇸 +34</option>
+        <option value="54">🇦🇷 +54</option>
+        <option value="598">🇺🇾 +598</option>
+      </select>
+    </div>
+    <div class="field"><label>Template</label><select id="wa-tpl-sel" onchange="selectWATpl()"></select></div>
+    <div class="field"><label>Mensagem</label><textarea id="wa-msg" style="min-height:110px"></textarea></div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">
+      <button class="btn btn-ghost btn-sm" onclick="insertWAVarSend('{nome}')">{nome}</button>
+      <button class="btn btn-ghost btn-sm" onclick="insertWAVarSend('{nomeCompleto}')">{nomeCompleto}</button>
+      <button class="btn btn-ghost btn-sm" onclick="insertWAVarSend('{modalidade}')">{modalidade}</button>
+      <button class="btn btn-ghost btn-sm" onclick="insertWAVarSend('{studio}')">{studio}</button>
+      <button class="btn btn-ghost btn-sm" onclick="insertWAVarSend('{dias}')">{dias}</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="crmCloseModal('m-crm-wa')">Cancelar</button>
+      <button class="btn btn-primary" onclick="doSendWA()" style="background:#25D366;border-color:#25D366;color:#052e14"><i class=ph-chat-circle-text></i> Abrir WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ordem da Pipeline global -->
+<div class="modal-overlay hidden" id="m-crm-pipe-order" onclick="crmCloseModal('m-crm-pipe-order')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">Ordem da pipeline</div>
+    <div id="global-pipe-order-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="resetGlobalPipeOrder()"><i class=ph-arrow-u-up-left></i> Padrão</button>
+      <button class="btn btn-ghost" onclick="crmCloseModal('m-crm-pipe-order')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveGlobalPipeOrder()"><i class=ph-check-circle></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ordem da Pipeline do aluno -->
+<div class="modal-overlay hidden" id="m-crm-pipe-order-aluno" onclick="crmCloseModal('m-crm-pipe-order-aluno')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">Ordem da pipeline deste cliente</div>
+    <div id="pipe-order-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="crmCloseModal('m-crm-pipe-order-aluno')">Cancelar</button>
+      <button class="btn btn-primary" onclick="savePipeOrder()"><i class=ph-check-circle></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/ids.js"></script>
+
+<!-- CRM de Prazos — extraído do FitCPX Flow (ver ESTRATEGIA-MERGE.md).
+     crm-store.js primeiro (define DB + novoId já existe via ids.js), depois
+     os módulos que dependem dele. Nenhum roda código no carregamento (só
+     declara funções), então a ordem relativa aos demais scripts do Auto não
+     importa — mas ficam agrupados aqui por clareza. -->
+<script src="js/crm-store.js"></script>
+<script src="js/crm-categorias.js"></script>
+<script src="js/crm-fluxos.js"></script>
+<script src="js/crm-tarefas.js"></script>
+<script src="js/crm-pipeline.js"></script>
+<script src="js/crm-alunos.js"></script>
+<script src="js/crm-whatsapp.js"></script>
+<script src="js/crm-config.js"></script>
+
+<script src="js/arquivo-store.js"></script>
+<script src="js/avaliacao.js"></script>
+<script src="js/exercicios-db.js"></script>
+<script src="js/treinos-store.js"></script>
+<script src="js/prescricao-motor.js"></script>
+  <script src="js/dashboard.js"></script>
+<script src="js/integracao-google.js"></script>
+<script src="js/biblioteca-exercicios.js"></script>
+<script src="js/init-app.js"></script>
+<script src="js/arquivo-ui.js"></script>
+
+<script src="js/supabase-auth.js"></script>
+
+<!-- Portal do Aluno (Fase 4) — cadastro/anamnese/avaliação/equipamentos enviados
+     pelo próprio aluno via app separado (pasta aluno/). Tabelas e RLS próprias,
+     fora do blob app_data do trainer — ver supabase/sql/onboarding-aluno.sql. -->
+<script src="js/locais-alunos.js"></script>
+<script src="js/onboarding-personal.js"></script>
+
+
+
+<!-- Modal: Rascunho não salvo -->
+<div id="modal-draft-recovery-overlay" class="modal-overlay hidden" style="z-index:10000">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-title">Dados não salvos encontrados</div>
+    <p style="margin:12px 0 8px;color:var(--text2);font-size:14px">
+      Você tem alterações que <strong>não foram salvas</strong> da última sessão para este aluno.
+    </p>
+    <p style="margin:0 0 20px;color:var(--text2);font-size:13px;opacity:.8">
+      Clique em <strong>Ver alterações</strong> para ir até a página com as informações preenchidas,
+      ou <strong>Ignorar</strong> para descartar e usar a versão salva.
+    </p>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="_draftRecoveryIgnorar()">Ignorar</button>
+      <button class="btn btn-primary" onclick="_draftRecoveryVer()"><i class=ph-eye></i> Ver alterações</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Alterações não salvas -->
+<div id="modal-vinculo-overlay" class="modal-overlay hidden" style="z-index:9998">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-title" id="vinculo-titulo"></div>
+    <div id="vinculo-corpo" style="margin:0 0 20px;color:var(--text2);font-size:14px;line-height:1.55"></div>
+    <div id="vinculo-acoes" style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap"></div>
+  </div>
+</div>
+
+<div id="modal-unsaved-overlay" class="modal-overlay hidden" style="z-index:9999">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">Alterações não salvas</div>
+    <p style="margin:12px 0 20px;color:var(--text2);font-size:14px">
+      Você tem alterações que ainda não foram salvas. O que deseja fazer?
+    </p>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="_unsavedSair()">Sair sem salvar</button>
+      <button class="btn btn-primary" onclick="_unsavedSalvar()"><i class=ph-floppy-disk></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Global dirty-mark listener for all data-entry areas
+(function(){
+  const DIRTY_CONTAINERS = [
+    'panel-perfil','panel-anamnese','panel-meta','antro-form-view',
+    'panel-prescricao'
+  ];
+  document.addEventListener('input', function(e){
+    if(typeof _markDirty!=='function') return;
+    for(const id of DIRTY_CONTAINERS){
+      const el=document.getElementById(id);
+      if(el && el.contains(e.target)){ _markDirty(); return; }
+    }
+  });
+  document.addEventListener('change', function(e){
+    if(typeof _markDirty!=='function') return;
+    for(const id of DIRTY_CONTAINERS){
+      const el=document.getElementById(id);
+      if(el && el.contains(e.target)){ _markDirty(); return; }
+    }
+  });
+})();
+</script>
+</body>
+</html>

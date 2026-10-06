@@ -1,0 +1,185 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   FitCPX Lite — tokens de design (compartilhado: painel do personal + portal do aluno)
+   Direção: ferramenta de trabalho calma. Neutros frios com leve tom de verde,
+   UM acento (verde profundo), status semânticos separados do acento.
+   Elevação: borda no conteúdo, sombra só em camadas flutuantes (menu, modal).
+   Tema escuro: classe .dark no <html> (toggleTema()).
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Superfícies */
+  --bg:#f5f6f5;            /* tela de trabalho */
+  --bg-sidebar:#eff1ef;    /* menu lateral */
+  --bg2:#ffffff;           /* card / painel / campo */
+  --bg3:#ffffff;
+  --bg4:#eceeec;           /* hover, fundo mudo, trilha */
+
+  /* Linhas */
+  --border:#dfe3e0;
+  --border2:#c6cdc8;       /* contorno de campos e botões */
+  --border-subtle:#e8ebe9;
+
+  /* Acento (verde profundo): ação primária, seleção, foco */
+  --accent:#0b7a43;
+  --accent2:#08653a;       /* hover / pressionado */
+  --accent-dim:#e6f3ec;
+  --accent-dim2:#cde6d8;
+  --accent-text:#ffffff;   /* texto sobre fundo accent */
+
+  /* Texto */
+  --text:#121714;
+  --text2:#46504a;
+  --text3:#5e6862;
+
+  /* Status (semântica, nunca decoração) */
+  --red:#c42b2b;    --red-dim:#fdeceb;    --red-line:#f3c4c1;
+  --amber:#a24604;  --amber-dim:#fbf1de;  --amber-line:#efd7a8;
+  --blue:#1d4ed8;   --blue-dim:#e8eefc;   --blue-line:#c3d2f6;
+  --green:#0b7a43;
+  --yellow:#a24604;
+  --purple:#6d28d9;
+  --orange:#c2410c;
+
+  /* Forma: controles 8px, cartões 12px, camadas flutuantes 14px */
+  --radius:8px;
+  --radius2:12px;
+  --radius3:14px;
+
+  /* Elevação (só camadas flutuantes) */
+  --shadow:0 1px 2px rgba(18,23,20,.04);
+  --shadow2:0 0 0 1px rgba(18,23,20,.07), 0 10px 30px -8px rgba(18,23,20,.22), 0 2px 8px rgba(18,23,20,.08);
+
+  /* Tipografia */
+  --sans:'Geist','Segoe UI',system-ui,-apple-system,sans-serif;
+  --mono:'Geist Mono',ui-monospace,'Cascadia Mono',Consolas,monospace;
+  --fs-base:14px;--fs-sm:13px;--fs-xs:12px;--fs-xxs:11px;
+
+  /* Movimento */
+  --ease-out:cubic-bezier(.23,1,.32,1);
+  --ease-in-out:cubic-bezier(.77,0,.175,1);
+  --t-fast:120ms;
+  --t-base:180ms;
+
+  color-scheme:light;
+}
+
+:root.dark {
+  --bg:#0d110f;
+  --bg-sidebar:#0a0d0b;
+  --bg2:#151a17;
+  --bg3:#1a201c;
+  --bg4:#212823;
+
+  --border:#28302b;
+  --border2:#37423a;
+  --border-subtle:#202722;
+
+  --accent:#34c47a;
+  --accent2:#4fd490;
+  --accent-dim:rgba(52,196,122,.12);
+  --accent-dim2:rgba(52,196,122,.24);
+  --accent-text:#04140a;
+
+  --text:#e7ece9;
+  --text2:#a3ada7;
+  --text3:#7e8983;
+
+  --red:#f0706b;    --red-dim:rgba(240,112,107,.12);   --red-line:rgba(240,112,107,.3);
+  --amber:#e3a443;  --amber-dim:rgba(227,164,67,.12);  --amber-line:rgba(227,164,67,.3);
+  --blue:#7da2ff;   --blue-dim:rgba(125,162,255,.12);  --blue-line:rgba(125,162,255,.3);
+  --green:#34c47a;
+  --yellow:#e3a443;
+  --purple:#a78bfa;
+  --orange:#fb923c;
+
+  --shadow:none;
+  --shadow2:0 0 0 1px rgba(255,255,255,.08), 0 12px 32px -8px rgba(0,0,0,.6), 0 2px 8px rgba(0,0,0,.35);
+
+  color-scheme:dark;
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:var(--sans);font-size:var(--fs-base);line-height:1.5;
+  font-feature-settings:'tnum' 1,'cv11' 1;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+h1,h2,h3,h4{text-wrap:balance;font-weight:600;letter-spacing:-.01em}
+p{text-wrap:pretty}
+
+/* Partes do navegador que também carregam o design */
+::selection{background:var(--accent-dim2);color:var(--text)}
+input,textarea{caret-color:var(--accent)}
+input[type=checkbox],input[type=radio],input[type=range]{accent-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+::placeholder{color:var(--text3);opacity:1}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px;border:3px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:var(--text3);background-clip:content-box;border:3px solid transparent}
+*{scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+
+/* Remove o spinner nativo dos inputs numéricos (os botões +/− já cobrem) e
+   reserva largura pra até 4 dígitos sem o layout se mover. */
+input[type=number]{-moz-appearance:textfield;min-width:3.2em;text-align:center}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+/* ── Ícones (Phosphor Icons via CDN) ────────────────────────────────────────
+   Uso no markup e nas strings do JS:  <i class=ph-barbell></i>
+   (sem aspas no atributo de propósito: funciona dentro de qualquer string JS). */
+i[class^="ph-"],i[class*=" ph-"]{
+  font-family:'Phosphor'!important;font-style:normal;font-weight:400;
+  font-variant:normal;text-transform:none;speak:none;
+  display:inline-block;flex-shrink:0;
+  font-size:1.2em;line-height:1;vertical-align:-.2em;
+  -webkit-font-smoothing:antialiased;
+}
+i.ph-fill-on,i[class*="-fill"]{font-family:'Phosphor-Fill'!important}
+i[class*="-bold"]{font-family:'Phosphor-Bold'!important}
+
+/* Marcador de status (substitui as bolinhas de emoji): <i class=sd-red></i> */
+i[class^="sd-"]{
+  display:inline-block;width:.6em;height:.6em;border-radius:50%;flex-shrink:0;
+  vertical-align:.02em;background:currentColor;
+}
+i.sd-red{background:var(--red)}
+i.sd-green{background:var(--accent)}
+i.sd-amber{background:var(--amber)}
+i.sd-blue{background:var(--blue)}
+i.sd-gray{background:var(--text3)}
+i.sd-orange{background:var(--orange)}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
+
+/* ── Controles de formulário soltos (fora de .field): mesmo vocabulário ──── */
+:where(input,select,textarea):not([type=checkbox],[type=radio],[type=range],[type=color],[type=file],[type=hidden]){
+  background-color:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);
+  font-family:var(--sans);font-size:14px;outline:none;
+  transition:border-color var(--t-fast) var(--ease-out),box-shadow var(--t-fast) var(--ease-out)}
+:where(input,select):not([type=checkbox],[type=radio],[type=range],[type=color],[type=file],[type=hidden]){height:34px;padding:0 10px}
+:where(textarea){padding:8px 10px;line-height:1.5}
+:where(input,select,textarea):not([type=checkbox],[type=radio],[type=range],[type=color],[type=file],[type=hidden]):focus{
+  border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+select:not([multiple]){
+  -webkit-appearance:none;appearance:none;cursor:pointer;padding-right:30px!important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%238a948e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center}
+select:disabled,input:disabled,textarea:disabled{opacity:.55;cursor:not-allowed}
+
+a{color:var(--accent);text-underline-offset:2px}
+:root:not(.dark) a{color:var(--accent2)}
+code,kbd,samp{font-family:var(--mono);font-size:.92em;background:var(--bg4);border-radius:5px;padding:1px 5px}
+pre{font-family:var(--mono)}
+hr{border:0;border-top:1px solid var(--border)}
+details>summary{cursor:pointer}
+progress{accent-color:var(--accent)}
