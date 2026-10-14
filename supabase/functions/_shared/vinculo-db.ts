@@ -167,8 +167,10 @@ export async function registrarPendente(admin: any, p: {
 // passou tempo desde o pedido: se algo mudou devolve 'mudou' e não toca em nada.
 export async function resolverPendente(admin: any, p: Pendente, aprovar: boolean): Promise<{ status: 'ok' | 'mudou' }> {
   const agora = new Date().toISOString();
-  const fechar = async (status: 'aprovado' | 'recusado') => {
-    const { error } = await admin.from('vinculos_pendentes').update({ status, resolvido_em: agora }).eq('id', p.id);
+  // Resolvido o pedido, o CPF digitado não precisa mais ficar guardado (só o mascarado, para o histórico).
+  const fechar = async (status: 'aprovado' | 'recusado', linha: Pendente = p) => {
+    const { error } = await admin.from('vinculos_pendentes')
+      .update({ status, resolvido_em: agora, perfil: { ...(linha.perfil || {}), cpf: '' } }).eq('id', linha.id);
     if (error) throw error;
   };
   if (!aprovar) { await fechar('recusado'); return { status: 'ok' }; }
@@ -207,8 +209,9 @@ export async function resolverPendente(admin: any, p: Pendente, aprovar: boolean
 
   await fechar('aprovado');
   // Outras contas que pediram o mesmo registro ficam recusadas: só uma conta por aluno.
-  await admin.from('vinculos_pendentes').update({ status: 'recusado', resolvido_em: agora })
+  const { data: outros } = await admin.from('vinculos_pendentes').select('*')
     .eq('trainer_user_id', p.trainer_user_id).eq('student_id', p.student_id).eq('status', 'pendente');
+  for (const o of (outros || []) as Pendente[]) await fechar('recusado', o);
   return { status: 'ok' };
 }
 

@@ -422,6 +422,7 @@ test('legado: personal vê o pedido (CPF mascarado), aprova, e só então a cont
   assert.equal(blob(A)[0].perfil.cpf, CPF); assert.ok(blob(A)[0].perfil.alunoUserId);
   assert.equal(tabela('alunos_identidade').length, 1); assert.equal(tabela('alunos_acesso').length, 1);
   assert.equal(tabela('vinculos_pendentes')[0].status, 'aprovado');
+  assert.equal(tabela('vinculos_pendentes')[0].perfil.cpf, '', 'CPF digitado sai da tabela de pedidos depois da decisão');
   assert.equal((await aluno('carla@x.com', { acao: 'resolver-vinculo', codigo: null })).status, 'ok');
   assert.equal((await personal('a@x.com', { acao: 'listar' })).pendentes.length, 0);
   // responder duas vezes não vale
@@ -470,6 +471,7 @@ test('legado: duas contas pedindo o mesmo registro; aprovar uma recusa a outra',
   const legit = tabela('vinculos_pendentes').find((p) => p.aluno_user_id === idLegit)!;
   assert.equal((await personal('a@x.com', { acao: 'responder-pendente', id: legit.id, aprovar: true })).status, 'ok');
   assert.equal(tabela('vinculos_pendentes').find((p) => p.aluno_user_id === idOutra)!.status, 'recusado');
+  assert.equal(tabela('vinculos_pendentes').find((p) => p.aluno_user_id === idOutra)!.perfil.cpf, '');
   assert.equal(blob(A)[0].perfil.alunoUserId, idLegit);
 });
 
