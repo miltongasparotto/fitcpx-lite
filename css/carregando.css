@@ -1,0 +1,20 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Aviso de "processando" (painel e portal do aluno). Ver js/carregando.js e
+   documentos/DESIGN-SYSTEM.md. Usa só tokens de css/tokens.css.
+   O fundo bloqueia o clique na hora; o cartão aparece com um pequeno atraso
+   (80ms) para não piscar em ações rápidas.
+   ══════════════════════════════════════════════════════════════════════════ */
+.carregando{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;padding:24px;
+  background:color-mix(in srgb,var(--bg) 62%,transparent);cursor:progress}
+.carregando.on{display:flex}
+.carregando-card{display:flex;flex-direction:column;align-items:center;gap:14px;min-width:200px;max-width:min(320px,100%);padding:22px 26px;
+  background:var(--bg2);border:1px solid var(--border2);border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.16);text-align:center;
+  opacity:0;transform:scale(.96);transition:opacity 160ms var(--ease-out) 80ms,transform 160ms var(--ease-out) 80ms}
+.carregando.on .carregando-card{opacity:1;transform:none}
+.carregando-anel{width:36px;height:36px;border-radius:50%;border:3px solid var(--border2);border-top-color:var(--accent);animation:carregando-gira .8s linear infinite}
+.carregando-msg{font-size:15px;font-weight:500;line-height:1.4;color:var(--text)}
+@keyframes carregando-gira{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){
+  .carregando-anel{animation-duration:1.8s}
+  .carregando-card{transition:none;transform:none}
+}

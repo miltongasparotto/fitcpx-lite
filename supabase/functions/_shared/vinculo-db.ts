@@ -109,8 +109,9 @@ export function aplicarCadastro(s: any, c: {
   s.perfil = s.perfil || {};
   s.perfil.nome = c.nome || s.perfil.nome || '';
   s.perfil.cpf = c.cpf;
-  s.perfil.nascimento = c.nascimento; s.perfil.sexo = c.sexo;
-  s.perfil.whatsapp = c.whatsapp; s.perfil.profissao = c.profissao;
+  // Cadastro mínimo (nome + CPF) não apaga dados pessoais que já existem.
+  s.perfil.nascimento = c.nascimento || s.perfil.nascimento || ''; s.perfil.sexo = c.sexo || s.perfil.sexo || '';
+  s.perfil.whatsapp = c.whatsapp || s.perfil.whatsapp || ''; s.perfil.profissao = c.profissao || s.perfil.profissao || '';
   s.perfil.email = c.email; s.perfil.alunoUserId = c.alunoUserId; s.perfil.identidadeId = c.identidadeId;
   s.perfil.portalStatus = s.perfil.portalStatus || 'ativo';
   return s;

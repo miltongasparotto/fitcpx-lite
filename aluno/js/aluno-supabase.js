@@ -25,12 +25,11 @@ const val = id => $(id) ? $(id).value : '';
 const setVal = (id, v) => { if($(id)) $(id).value = v || ''; };
 const toggle = (id, cond) => cond ? show(id) : hide(id);
 
-const TELAS = [
-  'tela-carregando','tela-entrada','tela-login-email','tela-login-senha',
-  'tela-cadastro','tela-cadastro-basico','tela-conflito','tela-conta',
-  'tela-aviso','tela-bloqueado','tela-app',
-];
-function irPara(tela){ TELAS.forEach(t => t===tela ? show(t) : hide(t)); }
+// Esconde toda tela (.tela e o shell do app) e mostra só a pedida: não depende de lista, então
+// uma tela nova nunca fica "invisível" se o navegador guardou uma versão antiga deste arquivo.
+function irPara(tela){
+  document.querySelectorAll('.tela, .app-shell').forEach(el => el.classList.toggle('hidden', el.id !== tela));
+}
 
 function escHTML(str){
   return String(str==null?'':str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

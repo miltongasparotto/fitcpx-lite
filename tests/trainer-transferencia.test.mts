@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url';
 // ── Supabase falso ──────────────────────────────────────────────────────────
 type Row = Record<string, any>;
 const db: Record<string, Row[]> = {};
-const users: Record<string, { id: string; email: string; password?: string }> = {};
+const users: Record<string, { id: string; email: string; password?: string; app_metadata?: any; user_metadata?: any }> = {};
 const tokens: Record<string, string> = {};
 const tabela = (n: string) => (db[n] ||= []);
 const resetar = () => { for (const k of Object.keys(db)) delete db[k]; for (const k of Object.keys(users)) delete users[k]; for (const k of Object.keys(tokens)) delete tokens[k]; };
@@ -64,16 +64,18 @@ class Q {
 const admin = {
   from: (t: string) => new Q(t),
   auth: {
+    signInWithPassword: async ({ email, password }: any) => { const u = Object.values(users).find((x) => x.email === email && x.password === password); return u ? { data: { user: u }, error: null } : { data: null, error: { message: 'Invalid login credentials' } }; },
     getUser: async (jwt: string) => { const u = users[tokens[jwt]]; return u ? { data: { user: u }, error: null } : { data: null, error: { message: 'jwt' } }; },
     admin: {
+      getUserById: async (id: string) => (users[id] ? { data: { user: users[id] }, error: null } : { data: null, error: { message: 'not found' } }),
       listUsers: async () => ({ data: { users: Object.values(users) }, error: null }),
-      createUser: async ({ email, password }: any) => {
+      createUser: async ({ email, password, app_metadata, user_metadata }: any) => {
         if (Object.values(users).some((u) => u.email === email)) return { data: null, error: { message: 'already registered' } };
-        const id = randomUUID(); users[id] = { id, email, password }; return { data: { user: users[id] }, error: null };
+        const id = randomUUID(); users[id] = { id, email, password, app_metadata: app_metadata || {}, user_metadata: user_metadata || {} }; return { data: { user: users[id] }, error: null };
       },
       updateUserById: async (id: string, p: any) => {
         if (p.email && Object.values(users).some((u) => u.email === p.email && u.id !== id)) return { error: { message: 'already registered' } };
-        Object.assign(users[id], p.email ? { email: p.email } : {}, p.password ? { password: p.password } : {}); return { error: null };
+        Object.assign(users[id], p.email ? { email: p.email } : {}, p.password ? { password: p.password } : {}, p.app_metadata ? { app_metadata: { ...(users[id].app_metadata || {}), ...p.app_metadata } } : {}, p.user_metadata ? { user_metadata: { ...(users[id].user_metadata || {}), ...p.user_metadata } } : {}); return { error: null };
       },
     },
   },
@@ -82,12 +84,14 @@ const admin = {
 const stub = pathToFileURL(new URL('./_stub-supabase.mjs', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')).href;
 registerHooks({ resolve(spec, ctx, next) { return spec.startsWith('https://esm.sh/') ? { url: stub, shortCircuit: true } : next(spec, ctx); } });
 (globalThis as any).__admin = admin;
-let handler: (r: Request) => Promise<Response>, handlerCron: (r: Request) => Promise<Response>, handlerAluno: (r: Request) => Promise<Response>;
+let handler: (r: Request) => Promise<Response>, handlerCron: (r: Request) => Promise<Response>, handlerAluno: (r: Request) => Promise<Response>, handlerEsqueci: (r: Request) => Promise<Response>, handlerLink: (r: Request) => Promise<Response>;
 const envs: Record<string, string> = { CPF_PEPPER: 'pepper-de-teste-com-mais-de-16-chars', CRON_SECRET: 'cron-secret-de-teste-0123456789', SUPABASE_URL: 'http://x', SUPABASE_SERVICE_ROLE_KEY: 'k' };
 (globalThis as any).Deno = { env: { get: (k: string) => envs[k] }, serve: (h: any) => { (globalThis as any).__ultimo = h; } };
 await import('../supabase/functions/trainer-transferencia/index.ts'); handler = (globalThis as any).__ultimo;
 await import('../supabase/functions/transferencia-cron/index.ts'); handlerCron = (globalThis as any).__ultimo;
 await import('../supabase/functions/aluno-api/index.ts'); handlerAluno = (globalThis as any).__ultimo;
+await import('../supabase/functions/esqueci-senha/index.ts'); handlerEsqueci = (globalThis as any).__ultimo;
+await import('../supabase/functions/redefinir-senha-link/index.ts'); handlerLink = (globalThis as any).__ultimo;
 
 // ── Utilidades ──────────────────────────────────────────────────────────────
 const CPF = '52998224725';
@@ -384,4 +388,200 @@ test('aluno-api: aluno antigo sem CPF completa o cadastro pelo link (legado), se
   assert.equal(r.status, 'ok'); assert.equal(r.tipo, 'atualizado');
   assert.equal(blob(A).length, 1); assert.equal(blob(A)[0].perfil.cpf, CPF);
   assert.equal(tabela('alunos_identidade').length, 1);
+});
+
+// ── Esqueci a senha, redefinição pelo personal, troca de senha e e-mail pelo aluno ──────────
+const esqueci = async (email: any, ip = '1.1.1.1') => {
+  const r = await handlerEsqueci(new Request('http://x', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': ip }, body: JSON.stringify({ email }) }));
+  return { http: r.status, ...(await r.json()) } as any;
+};
+function semeiaAlunoComConta(A: string, email: string, senha: string, extra: any = {}) {
+  const id = usuario(email); users[id].password = senha; users[id].app_metadata = {}; users[id].user_metadata = {};
+  tabela('alunos_acesso').push({ trainer_user_id: A, aluno_user_id: id, status: extra.status || 'ativo' });
+  return id;
+}
+
+test('esqueci-senha: cria UM pedido para o personal do aluno; repetir não duplica; e-mail desconhecido e bloqueado respondem claro', async () => {
+  resetar();
+  const A = semeiaPersonal('a@x.com', 'Ana', [novoAluno(10, { nome: 'Carla', email: 'carla@x.com' })]);
+  const carla = semeiaAlunoComConta(A, 'carla@x.com', 'senhaantiga');
+  const r = await esqueci(' Carla@X.com ');
+  assert.equal(r.status, 'ok');
+  assert.deepEqual(tabela('senha_pedidos').map((p) => [p.trainer_user_id, p.aluno_user_id, p.status]), [[A, carla, 'aberto']]);
+  assert.equal((await esqueci('carla@x.com')).status, 'ok');
+  assert.equal(tabela('senha_pedidos').length, 1, 'não duplica pedido aberto');
+  assert.equal(users[carla].password, 'senhaantiga', 'esqueci-senha NÃO troca senha');
+
+  assert.equal((await esqueci('ninguem@x.com')).status, 'nao-encontrado');
+  assert.equal((await esqueci('a@x.com')).status, 'nao-encontrado', 'conta de personal não gera pedido');
+  assert.equal((await esqueci('texto-sem-arroba')).status, 'email-invalido');
+  semeiaAlunoComConta(A, 'bloq@x.com', 'x12345', { status: 'bloqueado' });
+  assert.equal((await esqueci('bloq@x.com')).status, 'bloqueado');
+  assert.equal(tabela('senha_pedidos').length, 1);
+});
+
+test('esqueci-senha: freio por origem depois de várias tentativas', async () => {
+  resetar();
+  let ultimo = '';
+  for (let i = 0; i < 12; i++) ultimo = (await esqueci('nao' + i + '@x.com', '9.9.9.9')).status;
+  assert.equal(ultimo, 'muitas-tentativas');
+  assert.equal((await esqueci('nao@x.com', '8.8.8.8')).status, 'nao-encontrado', 'outra origem não é afetada');
+});
+
+test('definir-senha: sem senha digitada o servidor gera uma forte, marca troca obrigatória e atende o pedido', async () => {
+  resetar();
+  const A = semeiaPersonal('a@x.com', 'Ana', [novoAluno(10, { nome: 'Carla', email: 'carla@x.com' })]);
+  const carla = semeiaAlunoComConta(A, 'carla@x.com', 'senhaantiga');
+  blob(A)[0].perfil.alunoUserId = carla;
+  await esqueci('carla@x.com');
+  const r = await personal('a@x.com', { acao: 'definir-senha', email: 'carla@x.com' });
+  assert.equal(r.status, 'ok');
+  assert.match(r.senhaGerada, /^[A-HJ-NP-Za-km-z2-9]{10}$/, 'sem 0 O 1 l I');
+  assert.match(r.senhaGerada, /[A-Z]/); assert.match(r.senhaGerada, /[a-z]/); assert.match(r.senhaGerada, /[0-9]/);
+  assert.equal(users[carla].password, r.senhaGerada);
+  assert.equal(users[carla].app_metadata.trocar_senha, true);
+  assert.equal(tabela('senha_pedidos')[0].status, 'atendido');
+  assert.ok(tabela('senha_pedidos')[0].atendido_em);
+  const outra = await personal('a@x.com', { acao: 'definir-senha', email: 'carla@x.com', novaSenha: '  Escolhida9 ' });
+  assert.equal(outra.status, 'ok'); assert.equal(outra.senhaGerada, undefined, 'senha digitada não volta como gerada');
+  assert.equal(users[carla].password, 'Escolhida9');
+  assert.equal(users[carla].app_metadata.trocar_senha, false, 'senha escolhida pelo personal (aluno presente) não obriga a troca e limpa a marca anterior');
+  assert.notEqual(r.senhaGerada, (await personal('a@x.com', { acao: 'definir-senha', email: 'carla@x.com' })).senhaGerada, 'cada geração é diferente');
+});
+
+test('aluno alterar-senha: exige a senha atual certa e senha nova válida e diferente', async () => {
+  resetar();
+  const A = semeiaPersonal('a@x.com', 'Ana', [novoAluno(10, { nome: 'Carla', email: 'carla@x.com' })]);
+  const carla = semeiaAlunoComConta(A, 'carla@x.com', 'senhaantiga');
+  assert.equal((await aluno('carla@x.com', { acao: 'alterar-senha', senhaAtual: 'errada', novaSenha: 'novasenha1' })).status, 'senha-incorreta');
+  assert.equal(users[carla].password, 'senhaantiga');
+  assert.equal((await aluno('carla@x.com', { acao: 'alterar-senha', senhaAtual: 'senhaantiga', novaSenha: '123' })).http, 400, 'curta');
+  assert.equal((await aluno('carla@x.com', { acao: 'alterar-senha', senhaAtual: 'senhaantiga', novaSenha: 'senhaantiga' })).http, 400, 'igual à atual');
+  assert.equal((await aluno('carla@x.com', { acao: 'alterar-senha', senhaAtual: 'senhaantiga', novaSenha: 'novasenha1' })).status, 'ok');
+  assert.equal(users[carla].password, 'novasenha1');
+});
+
+test('aluno trocar-senha-obrigatoria: só vale com a marca do servidor e a limpa', async () => {
+  resetar();
+  const A = semeiaPersonal('a@x.com', 'Ana', [novoAluno(10, { nome: 'Carla', email: 'carla@x.com' })]);
+  const carla = semeiaAlunoComConta(A, 'carla@x.com', 'temporaria1');
+  assert.equal((await aluno('carla@x.com', { acao: 'trocar-senha-obrigatoria', novaSenha: 'minhasenha1' })).http, 400, 'sem marca não troca sem a senha atual');
+  assert.equal(users[carla].password, 'temporaria1');
+  users[carla].app_metadata = { trocar_senha: true };
+  assert.equal((await aluno('carla@x.com', { acao: 'trocar-senha-obrigatoria', novaSenha: '123' })).http, 400, 'curta');
+  assert.equal((await aluno('carla@x.com', { acao: 'trocar-senha-obrigatoria', novaSenha: 'minhasenha1' })).status, 'ok');
+  assert.equal(users[carla].password, 'minhasenha1');
+  assert.equal(users[carla].app_metadata.trocar_senha, false);
+  assert.equal((await aluno('carla@x.com', { acao: 'trocar-senha-obrigatoria', novaSenha: 'outrasenha1' })).http, 400, 'marca já limpa');
+});
+
+test('aluno alterar-email: exige e-mail atual e senha atual certos; atualiza login, índice e blob', async () => {
+  resetar();
+  const A = semeiaPersonal('a@x.com', 'Ana', [novoAluno(10, { nome: 'Carla', email: 'carla@x.com' })]);
+  const carla = semeiaAlunoComConta(A, 'carla@x.com', 'senhaantiga'); blob(A)[0].perfil.alunoUserId = carla;
+  tabela('alunos_identidade').push({ id: randomUUID(), cpf_hash: 'h', nome_norm: 'carla', email_norm: 'carla@x.com', trainer_user_id: A, aluno_user_id: carla, student_id: 10 });
+  usuario('ocupado@x.com');
+  const base = { acao: 'alterar-email', emailAtual: 'carla@x.com', senhaAtual: 'senhaantiga' };
+  assert.equal((await aluno('carla@x.com', { ...base, emailAtual: 'outro@x.com', novoEmail: 'n@x.com' })).status, 'email-atual-nao-confere');
+  assert.equal((await aluno('carla@x.com', { ...base, senhaAtual: 'errada', novoEmail: 'n@x.com' })).status, 'senha-incorreta');
+  assert.equal((await aluno('carla@x.com', { ...base, novoEmail: 'invalido' })).http, 400);
+  assert.equal((await aluno('carla@x.com', { ...base, novoEmail: 'ocupado@x.com' })).status, 'email-em-uso');
+  assert.equal((await aluno('carla@x.com', { acao: 'alterar-email', novoEmail: 'n@x.com' })).status, 'email-atual-nao-confere', 'chamada antiga sem os dois dados é recusada');
+  assert.equal(users[carla].email, 'carla@x.com');
+  assert.equal((await aluno('carla@x.com', { ...base, emailAtual: ' CARLA@x.com ', novoEmail: 'Novo@X.com' })).status, 'ok');
+  assert.equal(users[carla].email, 'novo@x.com');
+  assert.equal(tabela('alunos_identidade')[0].email_norm, 'novo@x.com');
+  assert.equal(blob(A)[0].perfil.email, 'novo@x.com');
+});
+
+// ── Link de redefinição de senha (o personal gera, o aluno cria a nova senha sozinho) ───────
+const link = async (corpo: any, ip = '3.3.3.3') => {
+  const r = await handlerLink(new Request('http://x', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': ip }, body: JSON.stringify(corpo) }));
+  return { http: r.status, ...(await r.json()) } as any;
+};
+
+test('gerar-link-senha: só aluno do próprio personal com conta; guarda só o hash; novo link cancela o anterior; atende o pedido', async () => {
+  resetar();
+  const A = semeiaPersonal('a@x.com', 'Ana', [novoAluno(10, { nome: 'Carla', email: 'carla@x.com' }), novoAluno(11, { nome: 'Sem Conta', email: 's@x.com' }), novoAluno(12, { nome: 'Dani', email: 'dani@x.com' })]);
+  const carla = semeiaAlunoComConta(A, 'carla@x.com', 'senhaantiga');
+  const outro = usuario('dani@x.com'); tabela('alunos_acesso').push({ trainer_user_id: 'outro-trainer', aluno_user_id: outro, status: 'ativo' });
+  await esqueci('carla@x.com');
+  const r = await personal('a@x.com', { acao: 'gerar-link-senha', email: 'carla@x.com' });
+  assert.equal(r.status, 'ok');
+  assert.match(r.token, /^[A-Za-z0-9_-]{43}$/);
+  const linhas = tabela('senha_links');
+  assert.equal(linhas.length, 1);
+  assert.ok(!JSON.stringify(linhas).includes(r.token), 'o token nunca fica no banco, só o hash');
+  assert.match(linhas[0].token_hash, /^[0-9a-f]{64}$/);
+  const horas = (new Date(linhas[0].expira_em).getTime() - Date.now()) / 3600000;
+  assert.ok(horas > 23.9 && horas <= 24.01, 'vale 24 horas: ' + horas);
+  assert.equal(users[carla].password, 'senhaantiga', 'gerar o link não troca a senha');
+  assert.equal(tabela('senha_pedidos')[0].status, 'atendido');
+
+  const r2 = await personal('a@x.com', { acao: 'gerar-link-senha', email: 'carla@x.com' });
+  assert.notEqual(r2.token, r.token);
+  assert.equal(tabela('senha_links').filter((l) => !l.usado_em).length, 1, 'só o link novo continua valendo');
+  assert.equal((await link({ acao: 'verificar', token: r.token })).status, 'usado', 'o link antigo foi cancelado');
+  assert.equal((await link({ acao: 'verificar', token: r2.token })).status, 'ok');
+
+  assert.equal((await personal('a@x.com', { acao: 'gerar-link-senha', email: 's@x.com' })).http, 400, 'sem conta no portal');
+  assert.equal((await personal('a@x.com', { acao: 'gerar-link-senha', email: 'dani@x.com' })).http, 400, 'aluno de outro personal');
+  assert.equal((await personal('a@x.com', { acao: 'gerar-link-senha', email: 'ninguem@x.com' })).http, 400, 'e-mail fora do cadastro');
+  assert.equal((await personal('a@x.com', { acao: 'gerar-link-senha', email: 'invalido' })).http, 400);
+  const sem = await handler(new Request('http://x', { method: 'POST', body: JSON.stringify({ acao: 'gerar-link-senha', email: 'carla@x.com' }) }));
+  assert.equal(sem.status, 401, 'só personal logado gera link');
+});
+
+test('redefinir-senha-link: verificar não gasta; definir troca a senha uma única vez e devolve o e-mail; trata inválido, expirado e bloqueado', async () => {
+  resetar();
+  const A = semeiaPersonal('a@x.com', 'Ana', [novoAluno(10, { nome: 'Carla', email: 'carla@x.com' })]);
+  const carla = semeiaAlunoComConta(A, 'carla@x.com', 'senhaantiga'); users[carla].app_metadata = { trocar_senha: true };
+  const { token } = await personal('a@x.com', { acao: 'gerar-link-senha', email: 'carla@x.com' });
+
+  assert.equal((await link({ acao: 'verificar', token })).status, 'ok');
+  assert.equal((await link({ acao: 'verificar', token })).status, 'ok', 'abrir de novo (ou pré-visualização do WhatsApp) não gasta o link');
+  assert.equal((await link({ acao: 'definir', token, novaSenha: '123' })).status, 'senha-invalida');
+  assert.equal(users[carla].password, 'senhaantiga');
+  assert.equal((await link({ acao: 'verificar', token })).status, 'ok', 'senha inválida não gasta o link');
+
+  const r = await link({ acao: 'definir', token, novaSenha: 'NovaSenha9' });
+  assert.equal(r.status, 'ok'); assert.equal(r.email, 'carla@x.com');
+  assert.equal(users[carla].password, 'NovaSenha9');
+  assert.equal(users[carla].app_metadata.trocar_senha, false);
+  assert.equal((await link({ acao: 'definir', token, novaSenha: 'OutraSenha8' })).status, 'usado', 'uso único');
+  assert.equal(users[carla].password, 'NovaSenha9');
+  assert.equal((await link({ acao: 'verificar', token })).status, 'usado');
+
+  assert.equal((await link({ acao: 'verificar', token: 'curto' })).status, 'invalido');
+  assert.equal((await link({ acao: 'verificar', token: 'A'.repeat(43) })).status, 'invalido', 'formato certo, mas não existe');
+  assert.equal((await link({ acao: 'verificar' })).status, 'invalido');
+  assert.equal((await link({ acao: 'apagar', token })).http, 400, 'ação desconhecida');
+
+  const t2 = (await personal('a@x.com', { acao: 'gerar-link-senha', email: 'carla@x.com' })).token;
+  tabela('senha_links').find((l) => !l.usado_em)!.expira_em = new Date(Date.now() - 1000).toISOString();
+  assert.equal((await link({ acao: 'verificar', token: t2 })).status, 'expirado');
+  assert.equal((await link({ acao: 'definir', token: t2, novaSenha: 'QualquerSenha1' })).status, 'expirado');
+  assert.equal(users[carla].password, 'NovaSenha9');
+
+  const t3 = (await personal('a@x.com', { acao: 'gerar-link-senha', email: 'carla@x.com' })).token;
+  tabela('alunos_acesso').find((r) => r.aluno_user_id === carla)!.status = 'bloqueado';
+  assert.equal((await link({ acao: 'definir', token: t3, novaSenha: 'QualquerSenha1' })).status, 'bloqueado');
+  assert.equal(users[carla].password, 'NovaSenha9');
+});
+
+test('redefinir-senha-link: dois envios ao mesmo tempo com o mesmo link, só um vale', async () => {
+  resetar();
+  const A = semeiaPersonal('a@x.com', 'Ana', [novoAluno(10, { nome: 'Carla', email: 'carla@x.com' })]);
+  semeiaAlunoComConta(A, 'carla@x.com', 'senhaantiga');
+  const { token } = await personal('a@x.com', { acao: 'gerar-link-senha', email: 'carla@x.com' });
+  const [x, y] = await Promise.all([link({ acao: 'definir', token, novaSenha: 'SenhaDoPrimeiro1' }), link({ acao: 'definir', token, novaSenha: 'SenhaDoSegundo2' })]);
+  assert.deepEqual([x.status, y.status].sort(), ['ok', 'usado']);
+});
+
+test('redefinir-senha-link: freio por origem contra chute de token', async () => {
+  resetar();
+  let ultimo = '';
+  for (let i = 0; i < 25; i++) ultimo = (await link({ acao: 'verificar', token: 'B'.repeat(43) }, '7.7.7.7')).status;
+  assert.equal(ultimo, 'muitas-tentativas');
+  assert.equal((await link({ acao: 'verificar', token: 'B'.repeat(43) }, '6.6.6.6')).status, 'invalido', 'outra origem não é afetada');
 });

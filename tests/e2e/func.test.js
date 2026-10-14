@@ -135,7 +135,7 @@ const results=[];const ok=(n,c,info)=>results.push((c?'PASS ':'FAIL ')+n+(info?'
   await page.click('button:has-text("Salvar mensagem")');await page.waitForTimeout(250);
   ok('whatsapp: salvar template', await ev(()=>DB.waTpls.some(t=>t.nome==='Lembrete')));
   ok('whatsapp: lista mostra o template', (await ev(()=>document.getElementById('screen-whatsapp-body').innerText)).includes('Lembrete'));
-  await page.click('.lrow button[title="Remover"]');await page.waitForTimeout(250);
+  await page.click('.lrow:has-text("Lembrete") button[title="Remover"]');await page.waitForTimeout(250);
   ok('whatsapp: remover template', !(await ev(()=>DB.waTpls.some(t=>t.nome==='Lembrete'))));
 
   // 10) tema claro/escuro persiste
@@ -156,7 +156,7 @@ const results=[];const ok=(n,c,info)=>results.push((c?'PASS ':'FAIL ')+n+(info?'
   await page.setViewportSize({width:390,height:844});await page.waitForTimeout(600);
   const sidebarFora=await ev(()=>document.querySelector('.sidebar').getBoundingClientRect().right<=0);
   ok('mobile: menu começa fechado', sidebarFora);
-  await page.click('.mobile-bar .icon-btn');await page.waitForTimeout(300);
+  await page.click('.mobile-bar .icon-btn');await page.waitForTimeout(550);
   ok('mobile: botão abre a gaveta', await ev(()=>document.querySelector('.sidebar').getBoundingClientRect().left>=0));
   await page.click('#nav-pipeline');await page.waitForTimeout(300);
   ok('mobile: navegar fecha a gaveta', await ev(()=>document.querySelector('.sidebar').getBoundingClientRect().right<=0));

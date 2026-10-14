@@ -20,22 +20,14 @@
 //   - Todo id novo (task, fluxo, modalidade, template WhatsApp, categoria)
 //     usa novoId() — nunca os *IdSeq do Flow.
 
-let DB = {
-  tasks: [],
-  fluxos: [],
-  modalidades: [],
-  waTpls: [],
-  customCats: [],
-  deletedCats: [],
-  pipeOrder: [],
-  dashPipeOrder: [],
-  historico: {},
-  config: { studioName:'FitCPX Lite', personalName:'', whatsapp:'', urgencyDays:3 },
-};
+let DB = _crmDefaults();
 
 // ── Datas ────────────────────────────────────────────────────────────────
-function todayStr(){ return new Date().toISOString().split('T')[0]; }
-function addDays(s,n){ const d=new Date(s+'T12:00:00'); d.setDate(d.getDate()+n); return d.toISOString().split('T')[0]; }
+// Datas locais (AAAA-MM-DD). Antes usavam toISOString() (UTC): depois das 21h em Brasília o "hoje"
+// já virava o dia seguinte. O dia agora vira à meia-noite do horário local.
+function _isoLocal(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function todayStr(){ return _isoLocal(new Date()); }
+function addDays(s,n){ const d=new Date(s+'T12:00:00'); d.setDate(d.getDate()+n); return _isoLocal(d); }
 function diffDays(a,b){ return Math.round((new Date(a+'T12:00:00')-new Date(b+'T12:00:00'))/86400000); }
 function fmtDate(s){ if(!s) return ''; const d=new Date(s+'T12:00:00'); return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}); }
 function fmtDateShort(s){ if(!s) return ''; const d=new Date(s+'T12:00:00'); return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}); }
@@ -75,12 +67,36 @@ function crmSave(){
   if(typeof supaAutoSave==='function') supaAutoSave();
 }
 
+// Configurações do personal (aba Configurações). Cada chave tem um motor que a lê:
+//   perfil  -> variáveis {studio} {personal} {cref} {whatsappStudio} das mensagens; saudação do Painel
+//   regras  -> urgencyDays (tarefas), janelaProximo/janelaAgendar/validadeSemanas (treino),
+//              diasRevisao (pausado/inativo), diasAlunoNovo (Painel e fila de mensagens)
+//   marca   -> cor do sistema (css/tokens.css via js/marca.js) e nome/cor/ícone do portal do aluno
+function _cfgPadrao(){
+  return {
+    studioName:'FitCPX Lite', personalName:'', cref:'', whatsapp:'',
+    waCountryCode:'55', waCountryFlag:'🇧🇷', waCountryName:'Brasil',
+    email:'', instagram:'', cidade:'', endereco:'', bio:'',
+    urgencyDays:3, janelaProximo:7, janelaAgendar:14, validadeSemanas:12, diasRevisao:30, diasAlunoNovo:14,
+    marca:{ nomeApp:'', cor:'#3dbb6e', icone:'ph-barbell', logoUrl:'' }, fotoUrl:'',
+  };
+}
 function _crmDefaults(){
   return {
     tasks:[], fluxos:[], modalidades:[], waTpls:[], customCats:[], deletedCats:[],
     pipeOrder:[], dashPipeOrder:[], historico:{},
-    config:{ studioName:'FitCPX Lite', personalName:'', whatsapp:'', urgencyDays:3 },
+    waFeitas:{}, waBase:null,   // fila "a enviar" (js/wa-regras.js): só guarda o que já foi tratado
+    config:_cfgPadrao(),
   };
+}
+// Número positivo da configuração, ou o padrão. Seguro de chamar antes do DB existir.
+function cfgNum(chave, padrao){
+  try{ const v = Number(DB.config[chave]); return v > 0 ? v : padrao; }catch(e){ return padrao; }
+}
+// Validade padrão do treino no formato do seletor da prescrição ('8sem' | '12sem' | '16sem').
+function cfgValidadePadrao(){
+  const n = cfgNum('validadeSemanas', 12);
+  return [8,12,16].includes(n) ? n+'sem' : '12sem';
 }
 // Normaliza DB depois de qualquer carga (local ou nuvem): garante chaves
 // default, semeia o contador de ids com o que veio carregado (nunca reaproveita
@@ -93,12 +109,24 @@ function corSegura(c, padrao){
 }
 
 function _crmNormalizar(){
-  if(!DB.config) DB.config = _crmDefaults().config;
-  if(!DB.config.urgencyDays) DB.config.urgencyDays = 3;
+  const cfgBase = _cfgPadrao();
+  DB.config = Object.assign(cfgBase, DB.config || {});
+  DB.config.marca = Object.assign(cfgBase.marca, (DB.config.marca && typeof DB.config.marca==='object') ? DB.config.marca : {});
+  ['urgencyDays','janelaProximo','janelaAgendar','validadeSemanas','diasRevisao','diasAlunoNovo'].forEach(k=>{
+    if(!(Number(DB.config[k]) > 0)) DB.config[k] = _cfgPadrao()[k];
+  });
+  if(typeof marcaEhPadrao === 'function' && marcaEhPadrao(DB.config.marca.cor)) DB.config.marca.cor = MARCA_COR_PADRAO;   // quem salvou "Verde" antes de 14/10 (#22c55e) passa ao novo padrão
+  // URL de imagem vinda de dado salvo entra em <img src>: só vale a do bucket de marca deste projeto.
+  if(typeof marcaUrlImagemOk === 'function'){
+    if(!marcaUrlImagemOk(DB.config.marca.logoUrl)) DB.config.marca.logoUrl = '';
+    if(!marcaUrlImagemOk(DB.config.fotoUrl)) DB.config.fotoUrl = '';
+  }
+  if(!DB.waFeitas || typeof DB.waFeitas !== 'object') DB.waFeitas = {};
   (DB.customCats||[]).forEach(c=>{ c.color = corSegura(c.color); });
   semearIds(DB.tasks, DB.fluxos, DB.modalidades, DB.waTpls, DB.customCats);
   DB.fluxos.forEach(f=>semearIds(f.steps||[]));
   lsSet('crm', DB);
+  if(typeof marcaAplicarConfig==='function') marcaAplicarConfig();   // cor e nome do studio da conta que acabou de carregar
 }
 
 function crmLoad(){

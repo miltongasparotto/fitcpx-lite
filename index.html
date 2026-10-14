@@ -4,14 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FitCPX Lite</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f5f5f5">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FitCPX">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 <!-- Supabase (banco online + login) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap">
-<link rel="stylesheet" href="css/tokens.css">
-<link rel="stylesheet" href="css/icons.css">
-<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="css/tokens.css?v=20261014c">
+<link rel="stylesheet" href="css/icons.css?v=20261014c">
+<link rel="stylesheet" href="css/app.css?v=20261014c">
+<link rel="stylesheet" href="css/painel.css?v=20261014c">
+<link rel="stylesheet" href="css/carregando.css?v=20261014c">
 <script>try{if(localStorage.getItem('acm-tema')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 </head>
 <body>
@@ -47,22 +56,25 @@
 
 <div class="app" id="app-root" style="display:none">
 
-  <!-- Barra do celular (a sidebar vira gaveta abaixo de 860px) -->
+  <!-- Barra do celular (<768px): menu, marca, sino e avatar; o menu lateral vira gaveta -->
   <div class="mobile-bar">
     <button class="icon-btn" onclick="toggleNavMobile()" aria-label="Abrir menu"><i class=ph-list></i></button>
-    <div class="sb-mark" style="width:26px;height:26px;border-radius:8px"><i class=ph-barbell style="font-size:15px"></i></div>
-    <span class="sb-name">FitCPX Lite</span>
+    <div class="mb-brand"><div class="sb-mark"><i class=ph-barbell></i></div><span class="sb-name">FitCPX Lite</span></div>
+    <button class="icon-btn sino-btn" type="button" onclick="shellToggleSino(event)" aria-label="Notificações"><i class=ph-bell></i><span class="sino-dot"></span></button>
+    <div class="mb-avatar" id="mb-avatar" aria-hidden="true"></div>
   </div>
   <div class="nav-scrim" onclick="toggleNavMobile()"></div>
 
   <!-- SIDEBAR -->
   <aside class="sidebar">
+    <button class="icon-btn rail-menu" type="button" onclick="toggleNavMobile()" aria-label="Abrir ou fechar o menu"><i class=ph-list></i></button>
     <div class="sb-brand">
       <div class="sb-mark"><i class=ph-barbell></i></div>
       <div>
         <div class="sb-name">FitCPX Lite</div>
         <div class="sb-role">Personal Trainer</div>
       </div>
+      <button class="icon-btn drawer-x" type="button" onclick="toggleNavMobile(false)" aria-label="Fechar menu"><i class=ph-x></i></button>
     </div>
 
     <nav class="sb-nav">
@@ -76,12 +88,14 @@
         <div class="sidebar-item" id="nav-alunos" role="button" tabindex="0" onclick="navGo('alunos')"><i class=ph-users></i><span>Alunos</span><span id="nav-count-alunos" class="sb-count">0</span></div>
         <div class="sidebar-item" id="nav-pipeline" role="button" tabindex="0" onclick="navGo('pipeline')"><i class=ph-kanban></i><span>Pipeline</span></div>
         <div class="sidebar-item" id="nav-agenda" role="button" tabindex="0" onclick="navGo('agenda')"><i class=ph-calendar-blank></i><span>Agenda</span><span id="nav-agenda-badge" class="sb-count" style="display:none"></span></div>
-        <div class="sidebar-item" id="nav-whatsapp" role="button" tabindex="0" onclick="navGo('whatsapp')"><i class=ph-whatsapp-logo></i><span>WhatsApp</span></div>
+        <div class="sidebar-item" id="nav-financeiro" role="button" tabindex="0" onclick="navGo('financeiro')"><i class=ph-money></i><span>Financeiro</span><span id="nav-financeiro-badge" class="sb-alert" style="display:none"></span></div>
+        <div class="sidebar-item" id="nav-whatsapp" role="button" tabindex="0" onclick="navGo('whatsapp')"><i class=ph-whatsapp-logo></i><span>WhatsApp</span><span id="nav-whatsapp-badge" class="sb-count" style="display:none"></span></div>
       </div>
 
       <!-- Treino (expansível) -->
       <div class="sb-group">
         <div class="sb-label">Prescrição</div>
+        <div class="sidebar-item" id="nav-treinar" role="button" tabindex="0" onclick="navGo('treinar')"><i class=ph-person-simple-run></i><span>Treinar aluno</span></div>
         <div class="sidebar-item" id="nav-treino-hdr" role="button" tabindex="0" onclick="toggleNavTreino()"><i class=ph-folders></i><span>Treino</span><i class="ph-caret-right sb-caret" id="nav-treino-arrow"></i></div>
         <div class="sb-sub" id="nav-treino-sub">
           <div class="sidebar-item" id="nav-locais" role="button" tabindex="0" onclick="navGo('locais')"><i class=ph-map-pin></i><span>Locais de Treino</span></div>
@@ -132,6 +146,7 @@
       </div>
 
       <div class="sb-actions">
+        <button class="sb-btn" id="btn-instalar" data-instalar onclick="instalarApp()" hidden><i class=ph-download-simple></i><span>Instalar aplicativo</span></button>
         <button class="sb-btn" id="btn-tema" onclick="toggleTema()"><i id="tema-icon" class=ph-moon></i><span id="tema-label">Modo escuro</span></button>
       </div>
       <div class="sb-version">v1.6.3 · Módulo EF</div>
@@ -154,16 +169,29 @@
     <!-- ══ TELA: ALUNOS ══ -->
     <!-- ═══ PAINEL (tela de abertura) ═══ -->
     <div id="screen-dashboard" class="main-scroll hidden">
-      <div class="page-head">
+      <div id="dash-conteudo"></div>
+    </div>
+
+    <!-- ═══ TREINAR ALUNO (reservada: ver js/adapters.js) ═══ -->
+    <div id="screen-treinar" class="main-scroll hidden">
+      <div class="page-header">
         <div>
-          <h2>Painel</h2>
-          <div class="page-sub"><span id="dash-data"></span></div>
+          <div class="page-title">Treinar aluno</div>
+          <div class="page-subtitle">Acompanhar o treino junto com o aluno</div>
         </div>
       </div>
-      <div class="dash">
-        <div class="card" id="dash-portal-links" style="max-width:640px"></div>
-        <div id="dash-conteudo"></div>
+      <div class="screen-pad" id="screen-treinar-body"></div>
+    </div>
+
+    <!-- ═══ FINANCEIRO (reservada: ver js/adapters.js) ═══ -->
+    <div id="screen-financeiro" class="main-scroll hidden">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Financeiro</div>
+          <div class="page-subtitle">Pagamentos e contratos dos alunos</div>
+        </div>
       </div>
+      <div class="screen-pad" id="screen-financeiro-body"></div>
     </div>
 
     <div id="screen-alunos" class="hidden" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
@@ -1384,7 +1412,7 @@
                 <label>Acesso ao Portal do Aluno</label>
                 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                   <span id="p-portal-status-badge" class="badge badge-gray">— preencha o e-mail</span>
-                  <button class="btn btn-ghost btn-sm" id="p-portal-reset-btn" style="display:none" onclick="alunoResetarSenha()"><i class=ph-key></i> Resetar senha</button>
+                  <button class="btn btn-ghost btn-sm" id="p-portal-reset-btn" style="display:none" onclick="alunoResetarSenha()"><i class=ph-key></i> Redefinir senha</button>
                   <button class="btn btn-ghost btn-sm" id="p-portal-status-btn" style="display:none" onclick="alunoTogglePortalStatus()">Bloquear acesso</button>
                 </div>
               </div>
@@ -2156,10 +2184,10 @@
               <div class="section-label" style="margin-top:16px">Vigência</div>
               <div class="grid-2" style="gap:12px;margin-bottom:16px">
                 <div class="field">
-                  <label>Validade do treino <span style="color:var(--text3);font-size:12px">(vencimento - só informativo)</span></label>
+                  <label>Validade do treino <span style="color:var(--text3);font-size:12px">(vencimento - só informativo; o padrão está em Configurações)</span></label>
                   <select id="pr-validade">
                     <option value="8sem">8 semanas</option>
-                    <option value="12sem" selected>12 semanas (padrão)</option>
+                    <option value="12sem" selected>12 semanas</option>
                     <option value="16sem">16 semanas</option>
                   </select>
                 </div>
@@ -2486,6 +2514,61 @@
   </div>
 </div>
 
+<!-- Redefinir senha do aluno (Perfil ou tarefa urgente do CRM) -->
+<div class="modal-overlay hidden" id="m-reset-senha" onclick="crmCloseModal('m-reset-senha')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">Redefinir senha</div>
+    <div id="rs-aluno" style="font-size:13px;color:var(--text2);margin-bottom:14px"></div>
+
+    <div id="rs-passo1">
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer"><input type="radio" name="rs-modo" value="link" checked onchange="rsModo()" style="width:auto;min-height:0"> Enviar link para o aluno criar a nova senha</label>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;margin-top:8px"><input type="radio" name="rs-modo" value="manual" onchange="rsModo()" style="width:auto;min-height:0"> Escolher a senha para o aluno</label>
+      </div>
+      <div id="rs-dica-link" class="field-sub" style="margin-bottom:14px">A mensagem abre no WhatsApp do aluno com um link pessoal. Ele toca no link, escolhe a nova senha e já entra. O link vale 24 horas e só funciona uma vez. A senha atual continua valendo até ele usar o link.</div>
+      <div id="rs-dica-manual" class="field-sub hidden" style="margin-bottom:14px">A senha é só alterada. Nenhuma mensagem é enviada e o aluno não precisa trocá-la. Use quando ele estiver com você.</div>
+      <div class="field hidden" id="rs-manual-wrap">
+        <label for="rs-senha">Nova senha do aluno</label>
+        <input type="text" id="rs-senha" autocomplete="off" placeholder="Mínimo 6 caracteres" onkeydown="if(event.key==='Enter'){rsRedefinir()}">
+      </div>
+      <div id="rs-erro" class="alert alert-red hidden"></div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="crmCloseModal('m-reset-senha')">Cancelar</button>
+        <button class="btn btn-primary" id="rs-btn" onclick="rsRedefinir()"></button>
+      </div>
+    </div>
+
+    <div id="rs-passo2" class="hidden">
+      <div class="alert alert-green">Link gerado. A mensagem foi aberta no WhatsApp do aluno. Quando ele criar a nova senha, a tarefa já está concluída.</div>
+      <div class="field">
+        <label for="rs-link">Link do aluno (24 horas, uso único)</label>
+        <div style="display:flex;gap:8px"><input type="text" id="rs-link" readonly style="font-size:12px"><button class="btn btn-ghost btn-sm" onclick="rsCopiar(this,'rs-link')">Copiar</button></div>
+      </div>
+      <div class="field">
+        <label for="rs-msg">Mensagem enviada ao aluno</label>
+        <textarea id="rs-msg" rows="7"></textarea>
+        <div class="field-sub hidden" id="rs-sem-zap">Este aluno não tem WhatsApp cadastrado. Copie a mensagem e envie por onde preferir.</div>
+      </div>
+      <div class="btn-row" style="flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="crmCloseModal('m-reset-senha')">Fechar</button>
+        <button class="btn btn-ghost" onclick="rsCopiarMensagem(this)">Copiar mensagem</button>
+        <button class="btn btn-ghost" id="rs-enviar" onclick="rsEnviarWhatsApp()"><i class=ph-chat-circle-text></i> Abrir WhatsApp</button>
+      </div>
+    </div>
+
+    <div id="rs-passo3" class="hidden">
+      <div class="alert alert-green">Senha alterada. Nenhuma mensagem foi enviada ao aluno.</div>
+      <div class="field">
+        <label for="rs-novasenha">Nova senha</label>
+        <div style="display:flex;gap:8px"><input type="text" id="rs-novasenha" readonly style="font-family:var(--mono);font-size:15px;letter-spacing:.04em"><button class="btn btn-ghost btn-sm" onclick="rsCopiar(this,'rs-novasenha')">Copiar</button></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="crmCloseModal('m-reset-senha')">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Reagendar -->
 <div class="modal-overlay hidden" id="m-crm-resched" onclick="crmCloseModal('m-crm-resched')">
   <div class="modal" onclick="event.stopPropagation()">
@@ -2614,40 +2697,47 @@
   </div>
 </div>
 
-<script src="js/ids.js"></script>
+<script src="js/ids.js?v=20261014c"></script>
+<script src="js/marca.js?v=20261014c"></script>
+<script src="js/instalar.js?v=20261014c"></script>
 
 <!-- CRM de Prazos — extraído do FitCPX Flow (ver ESTRATEGIA-MERGE.md).
      crm-store.js primeiro (define DB + novoId já existe via ids.js), depois
      os módulos que dependem dele. Nenhum roda código no carregamento (só
      declara funções), então a ordem relativa aos demais scripts do Auto não
      importa — mas ficam agrupados aqui por clareza. -->
-<script src="js/crm-store.js"></script>
-<script src="js/crm-categorias.js"></script>
-<script src="js/crm-fluxos.js"></script>
-<script src="js/crm-tarefas.js"></script>
-<script src="js/crm-pipeline.js"></script>
-<script src="js/crm-alunos.js"></script>
-<script src="js/crm-whatsapp.js"></script>
-<script src="js/crm-config.js"></script>
+<script src="js/crm-store.js?v=20261014c"></script>
+<script src="js/crm-categorias.js?v=20261014c"></script>
+<script src="js/crm-fluxos.js?v=20261014c"></script>
+<script src="js/crm-tarefas.js?v=20261014c"></script>
+<script src="js/crm-pipeline.js?v=20261014c"></script>
+<script src="js/crm-alunos.js?v=20261014c"></script>
+<script src="js/crm-whatsapp.js?v=20261014c"></script>
+<script src="js/crm-config.js?v=20261014c"></script>
+<script src="js/adapters.js?v=20261014c"></script>
+<script src="js/mensagens-wa.js?v=20261014c"></script>
 
-<script src="js/arquivo-store.js"></script>
-<script src="js/avaliacao.js"></script>
-<script src="js/exercicios-db.js"></script>
-<script src="js/treinos-store.js"></script>
-<script src="js/prescricao-motor.js"></script>
-  <script src="js/dashboard.js"></script>
-<script src="js/integracao-google.js"></script>
-<script src="js/biblioteca-exercicios.js"></script>
-<script src="js/init-app.js"></script>
-<script src="js/arquivo-ui.js"></script>
+<script src="js/arquivo-store.js?v=20261014c"></script>
+<script src="js/avaliacao.js?v=20261014c"></script>
+<script src="js/exercicios-db.js?v=20261014c"></script>
+<script src="js/treinos-store.js?v=20261014c"></script>
+<script src="js/prescricao-motor.js?v=20261014c"></script>
+  <script src="js/dashboard.js?v=20261014c"></script>
+<script src="js/wa-regras.js?v=20261014c"></script>
+<script src="js/integracao-google.js?v=20261014c"></script>
+<script src="js/shell.js?v=20261014c"></script>
+<script src="js/biblioteca-exercicios.js?v=20261014c"></script>
+<script src="js/init-app.js?v=20261014c"></script>
+<script src="js/arquivo-ui.js?v=20261014c"></script>
 
-<script src="js/supabase-auth.js"></script>
+<script src="js/carregando.js?v=20261014c"></script>
+<script src="js/supabase-auth.js?v=20261014c"></script>
 
 <!-- Portal do Aluno (Fase 4) — cadastro/anamnese/avaliação/equipamentos enviados
      pelo próprio aluno via app separado (pasta aluno/). Tabelas e RLS próprias,
      fora do blob app_data do trainer — ver supabase/sql/onboarding-aluno.sql. -->
-<script src="js/locais-alunos.js"></script>
-<script src="js/onboarding-personal.js"></script>
+<script src="js/locais-alunos.js?v=20261014c"></script>
+<script src="js/onboarding-personal.js?v=20261014c"></script>
 
 
 

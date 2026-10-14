@@ -12,8 +12,18 @@ echo.
 echo  FitCPX Lite rodando em http://localhost:%PORT%
 echo  Para desligar: feche esta janela.
 echo.
+rem Abre no Chrome (se estiver instalado); senao, no navegador padrao do Windows.
+set CHROME=
+if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" set "CHROME=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
+if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" set "CHROME=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
+if exist "%LocalAppData%\Google\Chrome\Application\chrome.exe" set "CHROME=%LocalAppData%\Google\Chrome\Application\chrome.exe"
+if defined CHROME goto abrirChrome
 start "" cmd /c "timeout /t 2 >nul & start http://localhost:%PORT%"
-%PY% -m http.server %PORT%
+goto servir
+:abrirChrome
+start "" cmd /c "timeout /t 2 >nul & "%CHROME%" http://localhost:%PORT%"
+:servir
+%PY% servidor-local.py %PORT%
 goto :eof
 
 :semPython

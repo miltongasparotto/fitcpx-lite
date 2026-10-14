@@ -100,68 +100,103 @@ const EQUIP_LISTA = [
 // ── Estado ──────────────────────────────────────────────────────────────────
 let _alunoTrainerId = null;    // trainer_user_id resolvido do ?c= (via RPC resolver_codigo)
 let _alunoNomeCadastro = '';   // nome digitado no cadastro (não vem de auth.users)
-let _alunoCadastroBasico = {}; // último dados.perfil enviado (nascimento/sexo/whatsapp/profissao)
+let _alunoCadastroBasico = {}; // nome/CPF do cadastro mínimo
+let _dadosPessoais = {};       // nascimento (ISO)/sexo/whatsapp/profissao já gravados no cadastro do aluno
+let _dadosCompletos = false;   // false => Anamnese, Avaliações e Treinos ficam bloqueados
 
 let _localEscolha = null; // {modo:'existente', localId, nome, cidade, estado, pais}
 let _localModo = null;    // 'academia' | 'casa' — quando o aluno está criando um local novo
 
 let _avalFotos = {}; // { frente:{blob}, lado:{blob}, costas:{blob} } — da avaliação em edição
 
-const TABS_APP = ['inicio','anamnese','avaliacoes','treinos'];
+const TABS_APP = ['inicio','anamnese','avaliacoes','treinos','agenda','pagamentos'];
 
 // ── AUTENTICAÇÃO ─────────────────────────────────────────────────────────────
-// Fluxo: tela-entrada (já é aluno? / sou novo) → login por e-mail+senha OU
-// cadastro por nome+e-mail+senha. Sem e-mail de verificação em nenhum ponto —
-// senha nasce no cadastro; reset é o personal definindo uma nova pelo painel
-// (Edge Function trainer-transferencia, ação 'definir-senha') e repassando
-// por fora (WhatsApp etc.); depois disso o aluno pode trocar a própria senha
-// em "Minhas informações" (aba Conta, dentro do app).
+// Duas portas, sem tela compartilhada:
+//   • tela-login    — só e-mail + senha (abre sempre que NÃO há ?c= do personal).
+//   • tela-cadastro — só com ?c=: mostra o nome do personal que enviou o link, pede
+//                     nome, CPF, e-mail e senha, cria a conta e já faz o vínculo.
+// Sem e-mail de verificação em nenhum ponto. Reset de senha: o personal define uma
+// nova pelo painel (Edge Function trainer-transferencia, ação 'definir-senha') e
+// repassa por fora (WhatsApp etc.); depois o aluno troca a própria senha em
+// "Minhas informações" (aba Conta, dentro do app).
 
-let _emailAtual = ''; // e-mail em uso nesta tentativa de login
+let _conviteNome = '';        // nome público do personal dono do ?c= (RPC nome_do_link)
+let _linkInvalido = false;    // veio ?c= mas o código não existe
 
 function traduzErroAuth(msg){
-  if(/already registered/i.test(msg)) return 'Esse e-mail já tem conta. Tente entrar.';
+  if(/already registered/i.test(msg)) return 'Esse e-mail já tem conta. Toque em "Entrar" aqui embaixo.';
   if(/Password should be/i.test(msg)) return 'Senha muito curta (mínimo 6 caracteres).';
   if(/Invalid login credentials/i.test(msg)) return 'E-mail ou senha incorretos.';
   return msg;
 }
-function _erroCadastro(msg){ show('cadastro-erro'); $('cadastro-erro').textContent = msg; }
+function _erroCadastro(msg){ show('cadastro-erro'); $('cadastro-erro').textContent = msg; $('cadastro-erro').scrollIntoView({block:'nearest'}); }
 function _erro(id, msg){ show(id); $(id).textContent = msg; }
 
-function mostrarTelaNovo(){
-  if(!_alunoTrainerId){ show('entrada-sem-codigo'); return; }
-  hide('entrada-sem-codigo');
+function verSenha(idInput, btn){
+  const el = $(idInput); const ver = el.type === 'password';
+  el.type = ver ? 'text' : 'password';
+  btn.setAttribute('aria-label', ver ? 'Ocultar senha' : 'Mostrar senha');
+  btn.innerHTML = ver ? '<i class=ph-eye-slash></i>' : '<i class=ph-eye></i>';
+}
+
+function cpfValido(c){
+  c = String(c || '').replace(/\D/g,'');
+  if(c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false;
+  for(let t = 9; t < 11; t++){
+    let s = 0; for(let i = 0; i < t; i++) s += +c[i] * (t + 1 - i);
+    if(((s * 10) % 11) % 10 !== +c[t]) return false;
+  }
+  return true;
+}
+
+function abrirLogin(){
+  hide('login-erro');
+  setVal('login-senha','');
+  toggle('login-aviso', _linkInvalido);
+  if(_linkInvalido) $('login-aviso').textContent = 'Esse link de cadastro não é válido. Peça um novo ao seu personal.';
+  toggle('login-criar', !!_alunoTrainerId);   // só quem veio por um link válido vê "Criar minha conta"
+  toggle('login-nota', !_alunoTrainerId);
+  irPara('tela-login');
+}
+
+function abrirCadastro(){
   hide('cadastro-erro');
-  setVal('cad-nome',''); setVal('cad-email',''); setVal('cad-senha','');
+  const nome = _conviteNome || 'seu personal';
+  $('cad-personal').textContent = nome;
+  if(!$('cad-av').querySelector('img')) $('cad-av').textContent = (_conviteNome || 'P').trim().charAt(0).toUpperCase() || 'P';   // com foto do personal (marca-portal.js), mantém a foto
   irPara('tela-cadastro');
 }
 
-function irParaSenha(){
-  hide('login-email-erro');
-  const email = val('login-email').trim();
-  if(!email){ _erro('login-email-erro', 'Digite seu e-mail.'); return; }
-  _emailAtual = email;
-  $('login-senha-email').textContent = email;
-  setVal('login-senha','');
-  hide('login-senha-erro');
-  irPara('tela-login-senha');
+async function alunoEntrar(){
+  hide('login-erro');
+  const email = val('login-email').trim(), senha = val('login-senha');
+  if(!email || !senha){ _erro('login-erro', 'Digite seu e-mail e sua senha.'); return; }
+  const btn = $('login-btn'); btn.disabled = true;
+  const { data, error } = await supa.auth.signInWithPassword({ email, password: senha });
+  btn.disabled = false;
+  if(error){ _erro('login-erro', 'E-mail ou senha incorretos.'); return; }
+  await aoAutenticar(data.user);
 }
 
-async function alunoEntrar(){
-  hide('login-senha-erro');
-  const senha = val('login-senha');
-  if(!senha){ _erro('login-senha-erro', 'Digite sua senha.'); return; }
-  const { data, error } = await supa.auth.signInWithPassword({ email: _emailAtual, password: senha });
-  if(error){ _erro('login-senha-erro', 'E-mail ou senha incorretos.'); return; }
-  await aoAutenticar(data.user);
+// Conta nova que não passou na validação do vínculo: apaga a conta recém-criada para o
+// formulário poder ser corrigido e reenviado do zero (sem "e-mail já existe").
+async function _desfazerConta(){
+  try{ await chamarApi({ acao: 'cancelar-cadastro' }); }catch(e){}
+  try{ await supa.auth.signOut({ scope: 'local' }); }catch(e){}
+  _alunoUser = null;
 }
 
 async function alunoCadastrar(){
   hide('cadastro-erro');
-  const nome = val('cad-nome').trim(), email = val('cad-email').trim(), senha = val('cad-senha');
-  if(!nome || !email || !senha) return _erroCadastro('Preencha nome, e-mail e senha.');
+  const nome = val('cad-nome').trim().replace(/\s+/g,' '), cpf = val('cad-cpf').replace(/\D/g,'');
+  const email = val('cad-email').trim(), senha = val('cad-senha');
+  if(!_alunoTrainerId) return _erroCadastro('Link inválido ou expirado. Peça um novo link ao seu personal.');
+  if(!nome || !cpf || !email || !senha) return _erroCadastro('Preencha nome, CPF, e-mail e senha.');
+  if(nome.split(' ').length < 2) return _erroCadastro('Informe nome e sobrenome.');
+  if(!cpfValido(cpf)) return _erroCadastro(_MSG_CADASTRO['cpf-invalido']);
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return _erroCadastro('Digite um e-mail válido.');
   if(senha.length < 6) return _erroCadastro('Senha precisa de pelo menos 6 caracteres.');
-  if(!_alunoTrainerId) return _erroCadastro('Link inválido ou expirado. Peça um novo link pro seu personal.');
 
   _alunoNomeCadastro = nome;
   const btn = $('cad-btn'); btn.disabled = true;
@@ -173,47 +208,202 @@ async function alunoCadastrar(){
     const r = await supa.auth.signInWithPassword({ email, password: senha });
     user = r.data?.user || user;
   }
+  if(!user){ btn.disabled = false; return _erroCadastro('Conta criada, mas não consegui abrir o acesso. Toque em "Entrar" aqui embaixo.'); }
+  _alunoUser = user;
+
+  const perfil = { nome, cpf };
+  let r;
+  try{ r = await chamarApi({ acao: 'cadastro', perfil, codigo: _alunoCodigo || null }); }
+  catch(e){ btn.disabled = false; await _desfazerConta(); return _erroCadastro(e.message || 'Não foi possível concluir o cadastro. Tente de novo.'); }
   btn.disabled = false;
-  if(!user) return _erroCadastro('Conta criada. Tente entrar na tela de login.');
-  await aoAutenticar(user);
+  _alunoCadastroBasico = perfil;
+
+  if(r.status === 'ok'){ await aoAutenticarSemCadastro(); return; }
+  if(r.status === 'conflito'){
+    // CPF já tem vínculo com outro personal: segue para a tela de conflito (voltar, desistir ou pedir transferência).
+    _alunoCadastroNovo = true;
+    _alunoPersonalLink = _conviteNome;
+    setVal('cb-nome', nome); setVal('cb-cpf', $('cad-cpf').value);
+    if(r.jaHaPedido && !r.pedidoParaOutro){ await aoAutenticarSemCadastro(); return; }
+    _alunoConflito = r; abrirConflito(r); return;
+  }
+  await _desfazerConta();
+  if(r.status === 'email-diferente'){
+    return _erroCadastro('Esse CPF já está cadastrado com o e-mail ' + (r.emailMascarado || '') + '. Toque em "Entrar" e use esse e-mail, ou peça ao seu personal para corrigir.');
+  }
+  _erroCadastro(_MSG_CADASTRO[r.status] || 'Não foi possível concluir o cadastro.');
 }
 
 // ── MINHAS INFORMAÇÕES (troca de senha pelo próprio aluno) ──────────────────
 
+const _EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function abrirTelaConta(){
-  hide('conta-erro'); hide('conta-sucesso'); setVal('conta-senha','');
-  $('conta-email').textContent = _alunoUser?.email || '';
+  ['conta-erro','conta-sucesso','conta-email-erro','conta-email-sucesso'].forEach(hide);
+  ['conta-senha-atual','conta-senha-nova','conta-senha-nova2','conta-email-atual','conta-email-senha','conta-email-novo','conta-email-novo2'].forEach(id => setVal(id, ''));
+  $('conta-email').textContent = 'Login atual: ' + (_alunoUser?.email || '');
   irPara('tela-conta');
 }
 function fecharTelaConta(){ irPara('tela-app'); }
 
+// Trocar senha: senha atual + nova digitada duas vezes. A senha atual é conferida no servidor.
 async function alunoTrocarSenha(){
   hide('conta-erro'); hide('conta-sucesso');
-  const senha = val('conta-senha');
-  if(!senha || senha.length < 6){ _erro('conta-erro', 'Senha precisa de pelo menos 6 caracteres.'); return; }
+  const atual = val('conta-senha-atual'), nova = val('conta-senha-nova'), nova2 = val('conta-senha-nova2');
+  if(!atual) return _erro('conta-erro', 'Digite sua senha atual.');
+  if(nova.length < 6) return _erro('conta-erro', 'A nova senha precisa de pelo menos 6 caracteres.');
+  if(nova !== nova2) return _erro('conta-erro', 'As duas novas senhas não são iguais. Digite de novo.');
+  if(nova === atual) return _erro('conta-erro', 'A nova senha precisa ser diferente da atual.');
   const btn = $('conta-btn'); btn.disabled = true;
-  const { error } = await supa.auth.updateUser({ password: senha });
+  let r;
+  try{ r = await chamarApi({ acao: 'alterar-senha', senhaAtual: atual, novaSenha: nova }); }
+  catch(e){ btn.disabled = false; return _erro('conta-erro', e.message || 'Não foi possível trocar a senha. Tente de novo.'); }
   btn.disabled = false;
-  if(error){ _erro('conta-erro', error.message); return; }
-  setVal('conta-senha','');
+  if(r.status === 'senha-incorreta') return _erro('conta-erro', 'A senha atual está incorreta.');
+  if(r.status !== 'ok') return _erro('conta-erro', 'Não foi possível trocar a senha. Tente de novo.');
+  ['conta-senha-atual','conta-senha-nova','conta-senha-nova2'].forEach(id => setVal(id, ''));
   show('conta-sucesso');
 }
 
+// Trocar e-mail: e-mail atual + senha atual + novo e-mail digitado duas vezes.
 async function alunoTrocarEmail(){
   hide('conta-email-erro'); hide('conta-email-sucesso');
-  const novo = val('conta-novo-email').trim();
-  if(!novo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(novo)){ _erro('conta-email-erro', 'Digite um e-mail válido.'); return; }
+  const atual = val('conta-email-atual').trim(), senha = val('conta-email-senha');
+  const novo = val('conta-email-novo').trim(), novo2 = val('conta-email-novo2').trim();
+  if(!atual) return _erro('conta-email-erro', 'Digite seu e-mail atual.');
+  if(!senha) return _erro('conta-email-erro', 'Digite sua senha atual.');
+  if(!_EMAIL_RE.test(novo)) return _erro('conta-email-erro', 'Digite um novo e-mail válido.');
+  if(novo.toLowerCase() !== novo2.toLowerCase()) return _erro('conta-email-erro', 'Os dois novos e-mails não são iguais. Digite de novo.');
+  if(novo.toLowerCase() === atual.toLowerCase()) return _erro('conta-email-erro', 'O novo e-mail é igual ao atual.');
   const btn = $('conta-email-btn'); btn.disabled = true;
   let r;
-  try{ r = await chamarApi({ acao: 'alterar-email', novoEmail: novo }); }
-  catch(e){ btn.disabled = false; _erro('conta-email-erro', e.message); return; }
+  try{ r = await chamarApi({ acao: 'alterar-email', emailAtual: atual, senhaAtual: senha, novoEmail: novo }); }
+  catch(e){ btn.disabled = false; return _erro('conta-email-erro', e.message || 'Não foi possível trocar o e-mail. Tente de novo.'); }
   btn.disabled = false;
-  if(r.status === 'email-em-uso'){ _erro('conta-email-erro', 'Esse e-mail já é usado por outra conta.'); return; }
-  setVal('conta-novo-email', '');
+  if(r.status === 'email-atual-nao-confere') return _erro('conta-email-erro', 'O e-mail atual não confere com o do seu login.');
+  if(r.status === 'senha-incorreta') return _erro('conta-email-erro', 'A senha atual está incorreta.');
+  if(r.status === 'email-em-uso') return _erro('conta-email-erro', 'Esse e-mail já é usado por outra conta.');
+  if(r.status !== 'ok') return _erro('conta-email-erro', 'Não foi possível trocar o e-mail. Tente de novo.');
+  ['conta-email-atual','conta-email-senha','conta-email-novo','conta-email-novo2'].forEach(id => setVal(id, ''));
   const { data } = await supa.auth.refreshSession();
   if(data?.user) _alunoUser = data.user;
-  $('conta-email').textContent = _alunoUser?.email || novo;
+  $('conta-email').textContent = 'Login atual: ' + (_alunoUser?.email || novo);
   show('conta-email-sucesso');
+}
+
+// ── ESQUECI MINHA SENHA (avisa o personal; ele redefine pelo painel) ────────
+
+function abrirEsqueci(){
+  hide('esqueci-erro'); hide('esqueci-ok');
+  setVal('esqueci-email', val('login-email').trim());
+  irPara('tela-esqueci');
+}
+
+async function esqueciSenha(){
+  hide('esqueci-erro'); hide('esqueci-ok');
+  const email = val('esqueci-email').trim();
+  if(!_EMAIL_RE.test(email)) return _erro('esqueci-erro', 'Digite o e-mail do seu cadastro.');
+  const btn = $('esqueci-btn'); btn.disabled = true;
+  let r, falhou = false;
+  try{
+    const resp = await supa.functions.invoke('esqueci-senha', { body: { email } });
+    if(resp.error) falhou = true; else r = resp.data || {};
+  }catch(e){ falhou = true; }
+  btn.disabled = false;
+  if(falhou) return _erro('esqueci-erro', 'Não foi possível enviar o aviso agora. Tente de novo em instantes.');
+  const msg = {
+    'nao-encontrado': 'E-mail não encontrado. Confira se digitou igual ao do seu cadastro ou fale com seu personal.',
+    'bloqueado': 'Seu acesso está bloqueado. Fale com seu personal.',
+    'muitas-tentativas': 'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.',
+    'email-invalido': 'Digite o e-mail do seu cadastro.',
+  }[r.status];
+  if(msg) return _erro('esqueci-erro', msg);
+  if(r.status !== 'ok') return _erro('esqueci-erro', 'Não foi possível enviar o aviso agora. Tente de novo em instantes.');
+  $('esqueci-ok').textContent = 'Notificamos seu personal para redefinir sua senha. Quando ele enviar a nova senha, use-a para entrar.';
+  show('esqueci-ok');
+}
+
+// ── CRIAR NOVA SENHA PELO LINK que o personal enviou (aluno/?r=<token>) ─────
+// O aluno abre o link (sem estar logado), escolhe a nova senha e já entra. O token só é gasto no envio da
+// nova senha: abrir o link (ou a pré-visualização do WhatsApp) não gasta. O token sai da barra de endereço.
+
+let _linkSenhaToken = '';
+
+const _MSG_LINK_SENHA = {
+  'invalido': 'Este link não é válido. Peça um novo link ao seu personal.',
+  'usado': 'Este link já foi usado ou foi trocado por um mais novo. Se você ainda precisa trocar a senha, peça um novo link ao seu personal.',
+  'expirado': 'Este link expirou (ele vale 24 horas). Peça um novo link ao seu personal.',
+  'bloqueado': 'Seu acesso está bloqueado. Fale com seu personal.',
+  'muitas-tentativas': 'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.',
+};
+
+function _linkSenhaMostrarErro(msg, definitivo){
+  _erro('ls-erro', msg);
+  toggle('ls-form', !definitivo);
+  toggle('ls-sair', !!definitivo);
+}
+
+async function iniciarRedefinicaoPorLink(token){
+  history.replaceState(null, '', location.pathname);   // tira o token da barra e do histórico
+  _linkSenhaToken = token;
+  hide('ls-erro'); hide('ls-sair'); show('ls-form');
+  setVal('ls-nova', ''); setVal('ls-nova2', '');
+  let r = null, falhou = false;
+  try{
+    const resp = await supa.functions.invoke('redefinir-senha-link', { body: { acao: 'verificar', token } });
+    if(resp.error) falhou = true; else r = resp.data || {};
+  }catch(e){ falhou = true; }
+  irPara('tela-link-senha');
+  if(falhou) return _linkSenhaMostrarErro('Não foi possível abrir o link agora. Tente de novo em instantes.', true);
+  if(r.status !== 'ok') return _linkSenhaMostrarErro(_MSG_LINK_SENHA[r.status] || _MSG_LINK_SENHA.invalido, true);
+}
+
+async function salvarSenhaPorLink(){
+  hide('ls-erro');
+  const nova = val('ls-nova'), nova2 = val('ls-nova2');
+  if(nova.length < 6) return _erro('ls-erro', 'A nova senha precisa de pelo menos 6 caracteres.');
+  if(nova !== nova2) return _erro('ls-erro', 'As duas senhas não são iguais. Digite de novo.');
+  const btn = $('ls-btn'); btn.disabled = true;
+  let r = null, falhou = false;
+  try{
+    const resp = await supa.functions.invoke('redefinir-senha-link', { body: { acao: 'definir', token: _linkSenhaToken, novaSenha: nova } });
+    if(resp.error) falhou = true; else r = resp.data || {};
+  }catch(e){ falhou = true; }
+  btn.disabled = false;
+  if(falhou) return _erro('ls-erro', 'Não foi possível salvar a senha agora. Tente de novo em instantes.');
+  if(r.status === 'senha-invalida') return _erro('ls-erro', 'A nova senha precisa de pelo menos 6 caracteres.');
+  if(r.status !== 'ok') return _linkSenhaMostrarErro(_MSG_LINK_SENHA[r.status] || _MSG_LINK_SENHA.invalido, true);
+  // Senha trocada: entra direto com ela.
+  const { data, error } = await supa.auth.signInWithPassword({ email: r.email, password: nova });
+  if(error || !data?.user){
+    abrirLogin(); setVal('login-email', r.email || '');
+    _erro('login-erro', 'Senha criada. Entre com o seu e-mail e a nova senha.');
+    return;
+  }
+  _linkSenhaToken = '';
+  await aoAutenticar(data.user);
+}
+
+// ── TROCA OBRIGATÓRIA: depois que o personal redefine, o aluno cria a própria senha ──
+
+function abrirTrocaObrigatoria(){
+  hide('tp-erro'); setVal('tp-nova', ''); setVal('tp-nova2', '');
+  irPara('tela-trocar-senha');
+}
+
+async function alunoTrocarSenhaObrigatoria(){
+  hide('tp-erro');
+  const nova = val('tp-nova'), nova2 = val('tp-nova2');
+  if(nova.length < 6) return _erro('tp-erro', 'A nova senha precisa de pelo menos 6 caracteres.');
+  if(nova !== nova2) return _erro('tp-erro', 'As duas senhas não são iguais. Digite de novo.');
+  const btn = $('tp-btn'); btn.disabled = true;
+  let r;
+  try{ r = await chamarApi({ acao: 'trocar-senha-obrigatoria', novaSenha: nova }); }
+  catch(e){ btn.disabled = false; return _erro('tp-erro', e.message || 'Não foi possível salvar a senha. Tente de novo.'); }
+  btn.disabled = false;
+  if(r.status !== 'ok') return _erro('tp-erro', 'Não foi possível salvar a senha. Tente de novo.');
+  const { data } = await supa.auth.refreshSession();
+  await aoAutenticar(data?.user || _alunoUser, { trocaFeita: true });
 }
 
 async function alunoSair(){
@@ -244,8 +434,11 @@ function mascararCpf(el){
   el.value = d.replace(/^(\d{3})(\d)/,'$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/,'$1.$2.$3').replace(/\.(\d{3})(\d)/,'.$1-$2');
 }
 
-async function aoAutenticar(user){
+async function aoAutenticar(user, opcoes){
   _alunoUser = user;
+  if(!_alunoCodigo && !new URLSearchParams(location.search).get('p')) marcaPortalDoAluno();   // link sem código: marca pelo vínculo (sem travar a entrada)
+  // Senha temporária definida pelo personal (marca só o servidor escreve): o aluno cria a própria antes de qualquer coisa.
+  if(user?.app_metadata?.trocar_senha === true && !opcoes?.trocaFeita){ abrirTrocaObrigatoria(); return; }
   let data;
   try{ data = await chamarApi({ acao: 'resolver-vinculo', codigo: _alunoCodigo || null }); }
   catch(e){ mostrarAviso('Erro ao entrar: ' + e.message); return; }
@@ -258,6 +451,8 @@ async function aoAutenticar(user){
   _alunoPersonalLink = _alunoCadastroNovo ? (data.personalNome || '') : (data.outroPersonalNome || '');
   _alunoAcesso = _alunoCadastroNovo ? null : { trainer_user_id: data.trainerId };
   _alunoCadastroBasico = { nome: data.nome || user.user_metadata?.nome || '' };
+  _dadosPessoais = data.dadosPessoais || {};
+  _dadosCompletos = !!data.dadosCompletos;
 
   // Pede (ou reconfere) nome + CPF quando: conta nova pelo link; aluno antigo sem CPF;
   // ou entrou pelo link de outro personal (pode virar pedido de transferência).
@@ -279,19 +474,15 @@ function abrirCadastroBasico(data){
   $('cb-titulo').textContent = outro ? 'Cadastro com ' + data.outroPersonalNome : (_alunoCadastroNovo ? 'Só mais um passo' : 'Complete seu cadastro');
   $('cb-hint').textContent = outro
     ? 'Você já é aluno de ' + (data.personalNome || 'outro personal') + '. Confirme seus dados: se o cadastro for reconhecido, você pode pedir a transferência.'
-    : (_alunoCadastroNovo ? 'Dados básicos pra começar. Saúde, objetivo e medidas você preenche direto no app, quando quiser.'
-      : 'Seu personal pede nome, CPF e data de nascimento pra manter seu cadastro atualizado.');
+    : (_alunoCadastroNovo ? 'Só nome e CPF pra começar. Dados pessoais, saúde, objetivo e medidas você preenche direto no app.'
+      : 'Seu personal pede nome e CPF pra manter seu cadastro atualizado.');
   setVal('cb-nome', _alunoCadastroBasico.nome || '');
   toggle('cb-desistir', _alunoCadastroNovo);
   irPara('tela-cadastro-basico');
 }
 
 function _perfilDoForm(){
-  return {
-    nome: val('cb-nome').trim(), cpf: val('cb-cpf').replace(/\D/g,''),
-    nascimento: val('cb-nascimento'), sexo: val('cb-sexo'),
-    whatsapp: val('cb-whatsapp'), profissao: val('cb-profissao'),
-  };
+  return { nome: val('cb-nome').trim(), cpf: val('cb-cpf').replace(/\D/g,'') };
 }
 
 const _MSG_CADASTRO = {
@@ -336,6 +527,8 @@ async function aoAutenticarSemCadastro(){
   _alunoCadastroNovo = false;
   _alunoAcesso = { trainer_user_id: data.trainerId };
   _alunoPersonalAtual = data.personalNome || '';
+  _dadosPessoais = data.dadosPessoais || {};
+  _dadosCompletos = !!data.dadosCompletos;
   entrarNoApp();
 }
 
@@ -370,36 +563,123 @@ async function desistirDoCadastro(){
   try{ await chamarApi({ acao: 'cancelar-cadastro' }); }
   catch(e){ mostrarAviso(e.message || 'Não foi possível cancelar.'); return; }
   await supa.auth.signOut();
-  location.href = location.pathname;   // sem o ?c= na barra
+  location.href = location.pathname + (_alunoCodigo ? '?c=' + encodeURIComponent(_alunoCodigo) : '');   // volta ao cadastro do mesmo link
 }
 
 function entrarNoApp(){
   irPara('tela-app');
+  aplicarBloqueioAbas();
+  mostrarTab('inicio');
+}
+
+// ── DADOS PESSOAIS (liberam Anamnese, Avaliações e Treinos) ─────────────────
+
+const ABAS_BLOQUEAVEIS = ['anamnese','avaliacoes','treinos'];
+
+function aplicarBloqueioAbas(){
+  ABAS_BLOQUEAVEIS.forEach(t=>{
+    const b = $('tab-'+t); if(!b) return;
+    b.classList.toggle('bloqueada', !_dadosCompletos);
+  });
+}
+
+let _toastTimer = null;
+function avisarBloqueio(){
+  const t = $('toast-bloqueio'); if(!t) return;
+  t.textContent = 'Preencha seus dados pessoais para liberar esta área. Toque aqui para preencher.';
+  t.onclick = () => { t.classList.add('hidden'); abrirDados(); };
+  t.classList.remove('hidden');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(()=>t.classList.add('hidden'), 4500);
+}
+
+function mascararData(el){
+  const d = el.value.replace(/\D/g,'').slice(0,8);
+  el.value = d.replace(/^(\d{2})(\d)/,'$1/$2').replace(/^(\d{2})\/(\d{2})(\d)/,'$1/$2/$3');
+}
+function dataBRparaISO(txt){
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec((txt||'').trim());
+  if(!m) return '';
+  const d = +m[1], mes = +m[2], a = +m[3];
+  const dt = new Date(a, mes-1, d);
+  if(dt.getFullYear() !== a || dt.getMonth() !== mes-1 || dt.getDate() !== d) return '';
+  if(a < 1900 || dt > new Date()) return '';
+  return m[3] + '-' + m[2] + '-' + m[1];
+}
+function dataISOparaBR(iso){
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso||'');
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : '';
+}
+
+function abrirDados(){
+  hide('dp-erro');
+  setVal('dp-nascimento', dataISOparaBR(_dadosPessoais.nascimento));
+  setVal('dp-sexo', _dadosPessoais.sexo || '');
+  setVal('dp-whatsapp', _dadosPessoais.whatsapp || '');
+  setVal('dp-profissao', _dadosPessoais.profissao || '');
+  irPara('tela-dados');
+}
+function fecharTelaDados(){ irPara('tela-app'); }
+
+async function salvarDadosPessoais(){
+  hide('dp-erro');
+  const nascimento = dataBRparaISO(val('dp-nascimento'));
+  if(!nascimento) return _erro('dp-erro', 'Data de nascimento inválida. Escreva no formato dd/mm/aaaa.');
+  const sexo = val('dp-sexo');
+  if(!sexo) return _erro('dp-erro', 'Selecione o sexo.');
+  const whatsapp = val('dp-whatsapp').trim();
+  if(whatsapp.replace(/\D/g,'').length < 10) return _erro('dp-erro', 'Informe o WhatsApp com DDD.');
+  const btn = $('dp-btn'); btn.disabled = true;
+  let r;
+  try{ r = await chamarApi({ acao: 'dados-pessoais', dados: { nascimento, sexo, whatsapp, profissao: val('dp-profissao').trim() } }); }
+  catch(e){ btn.disabled = false; return _erro('dp-erro', e.message || 'Não foi possível salvar. Tente de novo.'); }
+  btn.disabled = false;
+  if(r.status !== 'ok') return _erro('dp-erro', 'Não foi possível salvar. Tente de novo.');
+  _dadosPessoais = r.dadosPessoais || {};
+  _dadosCompletos = !!r.dadosCompletos;
+  irPara('tela-app');
+  aplicarBloqueioAbas();
   mostrarTab('inicio');
 }
 
 // ── BOOT ─────────────────────────────────────────────────────────────────────
 (async function boot(){
   const params = new URLSearchParams(location.search);
+  const tokenSenha = params.get('r');   // link de redefinição de senha enviado pelo personal
+  if(tokenSenha){ await iniciarRedefinicaoPorLink(tokenSenha); return; }
   const codigo = params.get('c');
+  const codigoMarca = codigo || params.get('p');   // ?c= cadastro por link · ?p= login com a marca do personal
+  if(!codigoMarca) marcaPortalDoCache();            // sem código: última marca vista neste aparelho, até o servidor confirmar
+  if(codigoMarca) await marcaPortalDoLink(codigoMarca);
   if(codigo){
     // RPC security definer: resolve só o código exato (a tabela personal_links não é mais legível pelo público).
     const { data } = await supa.rpc('resolver_codigo', { p_codigo: codigo });
-    if(data){ _alunoCodigo = codigo; _alunoTrainerId = data; }
+    if(data){
+      _alunoCodigo = codigo; _alunoTrainerId = data;
+      // Nome que o personal escolheu mostrar aos alunos (RPC pública nome_do_link; sem ela, segue sem o nome).
+      try{ const r = await supa.rpc('nome_do_link', { p_codigo: codigo }); if(typeof r.data === 'string') _conviteNome = r.data; }catch(e){}
+    } else {
+      _linkInvalido = true;
+    }
   }
   const { data: sess } = await supa.auth.getSession();
   if(sess?.session?.user){ await aoAutenticar(sess.session.user); return; }
-  irPara('tela-entrada');
+  if(_alunoTrainerId) abrirCadastro(); else abrirLogin();
 })();
 
 // ── NAVEGAÇÃO POR ABAS ───────────────────────────────────────────────────────
 
 function mostrarTab(nome){
+  if(ABAS_BLOQUEAVEIS.includes(nome) && !_dadosCompletos){ avisarBloqueio(); return; }
   TABS_APP.forEach(t=>{
     toggle('painel-'+t, t===nome);
-    const b = $('tab-'+t); if(b) b.classList.toggle('active', t===nome);
+    const b = $('tab-'+t); if(b) b.classList.toggle('active', t===nome || (nome==='pagamentos' && t==='inicio'));
   });
+  const ac = document.querySelector('.app-content'); if(ac) ac.scrollTop = 0;
   if(nome === 'inicio') renderInicio();
+  if(nome === 'treinos') renderTreinos();
+  if(nome === 'agenda') renderAgenda();
+  if(nome === 'pagamentos') renderPagamentos();
   if(nome === 'anamnese') carregarAnamnese();
   if(nome === 'avaliacoes') avalMostrarLista();
 }
@@ -447,25 +727,44 @@ async function renderInicio(){
   ]);
   const temAnamnese = !!(anam && anam.length);
   const ultimaAval = avals && avals[0];
+  const bloq = _dadosCompletos ? '' : ' bloqueado';
+  const lock = _dadosCompletos ? '' : '<i class=ph-lock></i> ';
+  $('inicio-dados').innerHTML = _dadosCompletos ? '' : `
+    <div class="card" style="border-color:var(--amber-line);background:var(--amber-dim)">
+      <strong><i class=ph-user-circle></i> Preencha seus dados pessoais</strong>
+      <p style="margin:8px 0 12px;font-size:13px;color:var(--text2);line-height:1.5">Complete seu cadastro para liberar o acesso completo ao portal.</p>
+      <button class="btn btn-primary btn-sm" onclick="abrirDados()">Preencher agora</button>
+    </div>`;
   $('inicio-status').innerHTML = `
-    <div class="card">
-      <strong>Anamnese</strong>
+    ${_dadosCompletos ? `<div class="card">
+      <strong>Dados pessoais</strong>
       <div class="status-row">
-        <span style="color:var(--text2);font-size:13px">${temAnamnese ? 'Preenchida' : 'Ainda não preenchida'}</span>
+        <span style="color:var(--text2);font-size:13px">Completos</span>
+        <button class="btn btn-ghost btn-sm" onclick="abrirDados()">Editar</button>
+      </div>
+    </div>` : ''}
+    <div class="card${bloq}">
+      <strong>${lock}Anamnese</strong>
+      <div class="status-row">
+        <span style="color:var(--text2);font-size:13px">${_dadosCompletos ? (temAnamnese ? 'Preenchida' : 'Ainda não preenchida') : 'Bloqueada'}</span>
         <button class="btn btn-ghost btn-sm" onclick="mostrarTab('anamnese')">${temAnamnese ? 'Editar' : 'Preencher'}</button>
       </div>
     </div>
-    <div class="card">
-      <strong>Última avaliação</strong>
+    <div class="card${bloq}">
+      <strong>${lock}Última avaliação</strong>
       <div class="status-row">
-        <span style="color:var(--text2);font-size:13px">${ultimaAval ? new Date(ultimaAval.created_at).toLocaleDateString('pt-BR') : 'Nenhuma ainda'}</span>
+        <span style="color:var(--text2);font-size:13px">${_dadosCompletos ? (ultimaAval ? new Date(ultimaAval.created_at).toLocaleDateString('pt-BR') : 'Nenhuma ainda') : 'Bloqueada'}</span>
         <button class="btn btn-ghost btn-sm" onclick="mostrarTab('avaliacoes')">${ultimaAval ? 'Ver' : 'Registrar'}</button>
       </div>
     </div>
-    <div class="card">
-      <strong>Treino</strong>
-      <div class="status-row"><span style="color:var(--text2);font-size:13px">Nenhum treino ainda</span></div>
-    </div>`;
+    <div class="card${bloq}">
+      <strong>${lock}Treino</strong>
+      <div class="status-row">
+        <span style="color:var(--text2);font-size:13px">${_dadosCompletos ? 'Nenhum treino ainda' : 'Bloqueado'}</span>
+        <button class="btn btn-ghost btn-sm" onclick="mostrarTab('treinos')">Ver</button>
+      </div>
+    </div>
+    ${pagamentosResumoInicio()}`;
 }
 
 // ── CHECKBOX GROUPS (mesmo padrão "valores | valores", ver js/avaliacao.js) ──
@@ -495,7 +794,7 @@ function _popularObjetivos(){
 async function carregarAnamnese(){
   hide('an-banner');
   _popularObjetivos();
-  toggle('an-gestacao-wrap', _alunoCadastroBasico.sexo === 'F');
+  toggle('an-gestacao-wrap', _dadosPessoais.sexo === 'F');
 
   _renderEquipCheckboxes('an-local-equip-wrap');
 
@@ -718,7 +1017,7 @@ function avalMostrarForm(){
   toggle('aval-form-view', true);
   hide('av-erro');
   _avalFotos = {};
-  setVal('av-data', new Date().toISOString().slice(0,10));
+  setVal('av-data', (d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'))(new Date()));   // data local (UTC virava o dia às 21h)
   ['peso','altura','cintura','quadril','abdomen','ombro','braco-d','braco-e','coxa-d','coxa-e','pant-d','pant-e','gordura','mmuscular','osso','obs'].forEach(k=>setVal('av-'+k,''));
   $('av-tem-bioimpedancia').checked = false;
   hide('av-bioimpedancia-wrap');
@@ -778,3 +1077,42 @@ async function salvarAvaliacao(){
     btn.disabled = false;
   }
 }
+
+// ── AVISO DE PROCESSAMENTO ───────────────────────────────────────────────────
+// Toda ação que espera o servidor mostra "processando" e bloqueia cliques repetidos
+// (js/carregando.js). Ações com confirm() (desistir, cancelar pedido) ficam de fora.
+Carregando.envolver({
+  alunoEntrar: 'Entrando...',
+  alunoCadastrar: 'Criando sua conta...',
+  salvarCadastroBasico: 'Salvando seu cadastro...',
+  solicitarTroca: 'Enviando o pedido...',
+  confirmarTroca: 'Confirmando...',
+  salvarDadosPessoais: 'Salvando seus dados...',
+  alunoTrocarSenha: 'Salvando a senha...',
+  alunoTrocarEmail: 'Salvando o e-mail...',
+  salvarAnamnese: 'Salvando sua anamnese...',
+  salvarAvaliacao: 'Enviando sua avaliação...',
+  esqueciSenha: 'Avisando seu personal...',
+  alunoTrocarSenhaObrigatoria: 'Salvando a nova senha...',
+  salvarSenhaPorLink: 'Salvando a nova senha...',
+});
+
+
+// ── Tema: lua no cabeçalho (lembra a escolha; sem escolha, segue o aparelho) ──
+function _aplicarIconeTema(){
+  const escuro = document.documentElement.classList.contains('dark');
+  document.querySelectorAll('[data-tema-btn] i').forEach(i => { i.className = escuro ? 'ph-sun' : 'ph-moon'; });
+  const m = document.querySelector('meta[name=theme-color]'); if(m) m.setAttribute('content', escuro ? '#121212' : '#f5f5f5');
+}
+function alunoToggleTema(){
+  const escuro = document.documentElement.classList.toggle('dark');
+  try{ localStorage.setItem('fitcpx-aluno-tema', escuro ? 'dark' : 'light'); }catch(e){}
+  _aplicarIconeTema();
+}
+(function(){
+  // As telas de entrada também ganham a lua (uma por .topo).
+  document.querySelectorAll('.topo').forEach(t => {
+    t.insertAdjacentHTML('beforeend', '<button class="btn-tema" type="button" data-tema-btn onclick="alunoToggleTema()" aria-label="Alternar modo escuro" title="Alternar modo escuro"><i class=ph-moon></i></button>');
+  });
+  _aplicarIconeTema();
+})();

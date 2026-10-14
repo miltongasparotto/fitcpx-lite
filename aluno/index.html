@@ -4,16 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Portal do Aluno | FitCPX</title>
-<meta name="theme-color" content="#0b7a43">
+<meta name="theme-color" content="#f5f5f5">
 <link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FitCPX Aluno">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="../icons/icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap">
-<link rel="stylesheet" href="../css/tokens.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="../css/tokens.css?v=20261014c">
 <link rel="stylesheet" href="../css/icons.css">
-<link rel="stylesheet" href="portal.css">
-<script>try{if(window.matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.classList.add('dark')}catch(e){}</script>
+<link rel="stylesheet" href="../css/carregando.css?v=20261014c">
+<link rel="stylesheet" href="portal.css?v=20261014c">
+<script>try{var _t=localStorage.getItem('fitcpx-aluno-tema');var _d=_t?_t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(_d){document.documentElement.classList.add('dark');document.querySelector('meta[name=theme-color]').setAttribute('content','#121212')}}catch(e){}</script>
 </head>
 <body>
 
@@ -23,69 +29,157 @@
   <p class="hint">Carregando...</p>
 </div>
 
-<!-- ══ ENTRADA — já é aluno? / sou novo ══ -->
-<div id="tela-entrada" class="tela hidden">
-  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
-  <h1>Bem-vindo</h1>
-  <p class="hint">Você já é aluno cadastrado com seu personal?</p>
-  <button class="btn btn-primary" onclick="irPara('tela-login-email')" style="margin-bottom:10px">Já sou aluno</button>
-  <button class="btn btn-ghost" onclick="mostrarTelaNovo()">Sou aluno novo</button>
-  <div id="entrada-sem-codigo" class="alert alert-amber hidden" style="margin-top:16px">Esse link não tem o convite de nenhum personal. Peça o link de cadastro certo pra quem vai te acompanhar.</div>
-</div>
-
-<!-- ══ LOGIN — e-mail ══ -->
-<div id="tela-login-email" class="tela hidden">
+<!-- ══ LOGIN — e-mail + senha ══ -->
+<div id="tela-login" class="tela tela-form hidden">
   <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
   <h1>Entrar</h1>
-  <p class="hint">Digite o e-mail cadastrado com seu personal.</p>
-  <div id="login-email-erro" class="alert alert-red hidden"></div>
-  <div class="field"><label>E-mail</label><input type="email" id="login-email" autocomplete="username"></div>
-  <button class="btn btn-primary" onclick="irParaSenha()">Continuar</button>
-  <button class="btn btn-ghost" onclick="irPara('tela-entrada')" style="margin-top:10px">Voltar</button>
+  <p class="hint">Use o e-mail e a senha do seu cadastro.</p>
+  <div id="login-aviso" class="alert alert-amber hidden"></div>
+  <div id="login-erro" class="alert alert-red hidden"></div>
+  <form onsubmit="alunoEntrar();return false" novalidate>
+    <div class="field"><label for="login-email">E-mail</label><input type="email" id="login-email" autocomplete="username" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next"></div>
+    <div class="field"><label for="login-senha">Senha</label>
+      <div class="campo-senha"><input type="password" id="login-senha" autocomplete="current-password" enterkeyhint="go"><button type="button" class="ver-senha" onclick="verSenha('login-senha',this)" aria-label="Mostrar senha"><i class=ph-eye></i></button></div>
+    </div>
+    <div class="acao-fixa">
+      <button type="submit" class="btn btn-primary" id="login-btn">Entrar</button>
+      <p class="acao-nota"><button type="button" class="link-btn" onclick="abrirEsqueci()">Esqueci minha senha</button></p>
+      <p class="acao-nota" id="login-nota">Primeiro acesso? Abra o link de cadastro que seu personal enviou.</p>
+      <p class="acao-nota hidden" id="login-criar">Ainda não tem conta? <button type="button" class="link-btn" onclick="abrirCadastro()">Criar minha conta</button></p>
+    </div>
+  </form>
 </div>
 
-<!-- ══ LOGIN — senha ══ -->
-<div id="tela-login-senha" class="tela hidden">
+<!-- ══ CADASTRO — chega pelo link do personal ══ -->
+<div id="tela-cadastro" class="tela tela-form hidden">
   <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
-  <h1>Sua senha</h1>
-  <p class="hint" id="login-senha-email"></p>
-  <div id="login-senha-erro" class="alert alert-red hidden"></div>
-  <div class="field"><label>Senha</label><input type="password" id="login-senha" autocomplete="current-password"></div>
-  <button class="btn btn-primary" onclick="alunoEntrar()">Entrar</button>
-  <p class="hint" style="text-align:center;margin-top:16px;margin-bottom:0">Esqueceu a senha? Peça uma nova pro seu personal.</p>
-</div>
-
-<!-- ══ CADASTRO — nome + e-mail + senha ══ -->
-<div id="tela-cadastro" class="tela hidden">
-  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
-  <h1>Criar minha conta</h1>
-  <p class="hint" id="cadastro-hint">Você vai virar aluno do personal deste link. Confira com ele se não tiver certeza.</p>
+  <div class="convite">
+    <span class="convite-av" id="cad-av">P</span>
+    <div><div class="convite-rot">Cadastro com</div><div class="convite-nome" id="cad-personal">seu personal</div></div>
+  </div>
+  <h1>Crie seu acesso</h1>
+  <p class="hint">Preencha os dados abaixo para criar seu login.</p>
   <div id="cadastro-erro" class="alert alert-red hidden"></div>
-  <div class="field"><label>Nome completo</label><input type="text" id="cad-nome"></div>
-  <div class="field"><label>E-mail</label><input type="email" id="cad-email" autocomplete="username"></div>
-  <div class="field"><label>Senha</label><input type="password" id="cad-senha" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></div>
-  <button class="btn btn-primary" id="cad-btn" onclick="alunoCadastrar()">Criar conta</button>
-  <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--text2)">
-    Já tem conta? <button class="link-btn" onclick="irPara('tela-login-email')">Entrar</button>
-  </p>
+  <form onsubmit="alunoCadastrar();return false" novalidate>
+    <div class="field"><label for="cad-nome">Nome completo</label><input type="text" id="cad-nome" autocomplete="name" autocapitalize="words" enterkeyhint="next"></div>
+    <div class="field"><label for="cad-cpf">CPF</label><input type="text" id="cad-cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" autocomplete="off" enterkeyhint="next" oninput="mascararCpf(this)"><div class="obs">Nome, CPF e e-mail identificam você. Só o e-mail pode mudar depois.</div></div>
+    <div class="field"><label for="cad-email">E-mail</label><input type="email" id="cad-email" autocomplete="email" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next"></div>
+    <div class="field"><label for="cad-senha">Senha</label>
+      <div class="campo-senha"><input type="password" id="cad-senha" autocomplete="new-password" placeholder="Mínimo 6 caracteres" enterkeyhint="go"><button type="button" class="ver-senha" onclick="verSenha('cad-senha',this)" aria-label="Mostrar senha"><i class=ph-eye></i></button></div>
+    </div>
+    <div class="acao-fixa">
+      <button type="submit" class="btn btn-primary" id="cad-btn">Criar minha conta</button>
+      <p class="acao-nota">Já tenho conta. <button type="button" class="link-btn" onclick="abrirLogin()">Entrar</button></p>
+    </div>
+  </form>
 </div>
 
-<!-- ══ MINHAS INFORMAÇÕES (trocar senha) ══ -->
-<div id="tela-conta" class="tela hidden">
+<!-- ══ ESQUECI MINHA SENHA ══ -->
+<div id="tela-esqueci" class="tela tela-form hidden">
   <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
-  <h1>Minhas informações</h1>
+  <h1>Esqueci minha senha</h1>
+  <p class="hint">Digite o e-mail do seu cadastro. Vamos avisar seu personal para redefinir a sua senha.</p>
+  <div id="esqueci-erro" class="alert alert-red hidden"></div>
+  <div id="esqueci-ok" class="alert alert-green hidden"></div>
+  <form onsubmit="esqueciSenha();return false" novalidate>
+    <div class="field"><label for="esqueci-email">E-mail</label><input type="email" id="esqueci-email" autocomplete="username" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go"></div>
+    <div class="acao-fixa">
+      <button type="submit" class="btn btn-primary" id="esqueci-btn">Avisar meu personal</button>
+      <p class="acao-nota"><button type="button" class="link-btn" onclick="abrirLogin()">Voltar para o login</button></p>
+    </div>
+  </form>
+</div>
+
+<!-- ══ CRIAR NOVA SENHA PELO LINK (o personal enviou aluno/?r=...) ══ -->
+<div id="tela-link-senha" class="tela tela-form hidden">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <h1>Crie sua nova senha</h1>
+  <p class="hint" id="ls-hint">Escolha a senha que você vai usar para entrar no portal.</p>
+  <div id="ls-erro" class="alert alert-red hidden"></div>
+  <form id="ls-form" onsubmit="salvarSenhaPorLink();return false" novalidate>
+    <div class="field"><label for="ls-nova">Nova senha</label>
+      <div class="campo-senha"><input type="password" id="ls-nova" autocomplete="new-password" placeholder="Mínimo 6 caracteres" enterkeyhint="next"><button type="button" class="ver-senha" onclick="verSenha('ls-nova',this)" aria-label="Mostrar senha"><i class=ph-eye></i></button></div>
+    </div>
+    <div class="field"><label for="ls-nova2">Repita a nova senha</label>
+      <div class="campo-senha"><input type="password" id="ls-nova2" autocomplete="new-password" enterkeyhint="go"><button type="button" class="ver-senha" onclick="verSenha('ls-nova2',this)" aria-label="Mostrar senha"><i class=ph-eye></i></button></div>
+    </div>
+    <div class="acao-fixa">
+      <button type="submit" class="btn btn-primary" id="ls-btn">Salvar nova senha e entrar</button>
+    </div>
+  </form>
+  <div id="ls-sair" class="acao-fixa hidden">
+    <button type="button" class="btn btn-primary" onclick="abrirLogin()">Ir para o login</button>
+  </div>
+</div>
+
+<!-- ══ TROCA OBRIGATÓRIA (depois que o personal redefine a senha) ══ -->
+<div id="tela-trocar-senha" class="tela tela-form hidden">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <h1>Crie sua nova senha</h1>
+  <p class="hint">Seu personal definiu uma senha temporária. Para continuar, escolha a sua própria senha.</p>
+  <div id="tp-erro" class="alert alert-red hidden"></div>
+  <form onsubmit="alunoTrocarSenhaObrigatoria();return false" novalidate>
+    <div class="field"><label for="tp-nova">Nova senha</label>
+      <div class="campo-senha"><input type="password" id="tp-nova" autocomplete="new-password" placeholder="Mínimo 6 caracteres" enterkeyhint="next"><button type="button" class="ver-senha" onclick="verSenha('tp-nova',this)" aria-label="Mostrar senha"><i class=ph-eye></i></button></div>
+    </div>
+    <div class="field"><label for="tp-nova2">Repita a nova senha</label>
+      <div class="campo-senha"><input type="password" id="tp-nova2" autocomplete="new-password" enterkeyhint="go"><button type="button" class="ver-senha" onclick="verSenha('tp-nova2',this)" aria-label="Mostrar senha"><i class=ph-eye></i></button></div>
+    </div>
+    <div class="acao-fixa">
+      <button type="submit" class="btn btn-primary" id="tp-btn">Salvar e entrar</button>
+      <p class="acao-nota"><button type="button" class="link-btn" onclick="alunoSair()">Sair</button></p>
+    </div>
+  </form>
+</div>
+
+<!-- ══ MINHA CONTA (trocar senha e e-mail) ══ -->
+<div id="tela-conta" class="tela tela-form hidden">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <h1>Minha conta</h1>
   <p class="hint" id="conta-email"></p>
-  <div id="conta-erro" class="alert alert-red hidden"></div>
-  <div id="conta-sucesso" class="alert alert-green hidden">Senha alterada!</div>
-  <div class="field"><label>Nova senha</label><input type="password" id="conta-senha" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></div>
-  <button class="btn btn-primary" id="conta-btn" onclick="alunoTrocarSenha()">Salvar nova senha</button>
-  <hr style="border:0;border-top:1px solid var(--border);margin:22px 0">
-  <div id="conta-email-erro" class="alert alert-red hidden"></div>
-  <div id="conta-email-sucesso" class="alert alert-green hidden">E-mail alterado! Use o novo e-mail da próxima vez que entrar.</div>
-  <div class="field"><label>Novo e-mail de login</label><input type="email" id="conta-novo-email" autocomplete="off" placeholder="novo@email.com"></div>
-  <p class="hint" style="margin-top:-6px">Seu nome e CPF continuam os mesmos. O e-mail é o único dado que pode mudar.</p>
-  <button class="btn btn-ghost" id="conta-email-btn" onclick="alunoTrocarEmail()">Alterar e-mail</button>
-  <button class="btn btn-ghost" onclick="fecharTelaConta()" style="margin-top:10px">Voltar</button>
+
+  <div class="card">
+    <h2>Alterar senha</h2>
+    <div id="conta-erro" class="alert alert-red hidden"></div>
+    <div id="conta-sucesso" class="alert alert-green hidden">Senha alterada.</div>
+    <form onsubmit="alunoTrocarSenha();return false" novalidate>
+      <div class="field"><label for="conta-senha-atual">Senha atual</label>
+        <div class="campo-senha"><input type="password" id="conta-senha-atual" autocomplete="current-password"><button type="button" class="ver-senha" onclick="verSenha('conta-senha-atual',this)" aria-label="Mostrar senha"><i class=ph-eye></i></button></div>
+      </div>
+      <div class="field"><label for="conta-senha-nova">Nova senha</label>
+        <div class="campo-senha"><input type="password" id="conta-senha-nova" autocomplete="new-password" placeholder="Mínimo 6 caracteres"><button type="button" class="ver-senha" onclick="verSenha('conta-senha-nova',this)" aria-label="Mostrar senha"><i class=ph-eye></i></button></div>
+      </div>
+      <div class="field"><label for="conta-senha-nova2">Repita a nova senha</label>
+        <div class="campo-senha"><input type="password" id="conta-senha-nova2" autocomplete="new-password"><button type="button" class="ver-senha" onclick="verSenha('conta-senha-nova2',this)" aria-label="Mostrar senha"><i class=ph-eye></i></button></div>
+      </div>
+      <button type="submit" class="btn btn-primary" id="conta-btn">Salvar nova senha</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Alterar e-mail</h2>
+    <p class="hint" style="margin-bottom:14px">Seu nome e CPF continuam os mesmos. O e-mail é o único dado que pode mudar.</p>
+    <div id="conta-email-erro" class="alert alert-red hidden"></div>
+    <div id="conta-email-sucesso" class="alert alert-green hidden">E-mail alterado. Use o novo e-mail na próxima vez que entrar.</div>
+    <form onsubmit="alunoTrocarEmail();return false" novalidate>
+      <div class="field"><label for="conta-email-atual">E-mail atual</label><input type="email" id="conta-email-atual" autocomplete="off" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
+      <div class="field"><label for="conta-email-senha">Senha atual</label>
+        <div class="campo-senha"><input type="password" id="conta-email-senha" autocomplete="current-password"><button type="button" class="ver-senha" onclick="verSenha('conta-email-senha',this)" aria-label="Mostrar senha"><i class=ph-eye></i></button></div>
+      </div>
+      <div class="field"><label for="conta-email-novo">Novo e-mail</label><input type="email" id="conta-email-novo" autocomplete="off" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="novo@email.com"></div>
+      <div class="field"><label for="conta-email-novo2">Repita o novo e-mail</label><input type="email" id="conta-email-novo2" autocomplete="off" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
+      <button type="submit" class="btn btn-primary" id="conta-email-btn">Salvar novo e-mail</button>
+    </form>
+  </div>
+
+  <div class="card" data-instalar hidden style="margin-bottom:16px">
+    <h2>Instalar no celular</h2>
+    <p class="hint">Deixe o aplicativo na tela inicial do seu celular, como qualquer outro app.</p>
+    <button type="button" class="btn btn-primary" onclick="instalarApp()"><i class=ph-download-simple></i> Instalar aplicativo</button>
+    <p class="hint" id="instalar-ajuda" hidden style="margin-top:10px"></p>
+  </div>
+
+  <button class="btn btn-ghost" onclick="fecharTelaConta()" style="margin-bottom:24px">Voltar</button>
 </div>
 
 <!-- ══ CADASTRO BÁSICO (uma tela só, logo após criar a conta) ══ -->
@@ -97,14 +191,24 @@
   <div class="field"><label>Nome completo</label><input type="text" id="cb-nome" autocomplete="name"></div>
   <div class="field"><label>CPF</label><input type="text" id="cb-cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" autocomplete="off" oninput="mascararCpf(this)"></div>
   <p class="hint" style="margin-top:-6px">Nome, CPF e e-mail identificam você no sistema. Só o e-mail pode mudar depois.</p>
-  <div class="grid-2">
-    <div class="field"><label>Nascimento</label><input type="date" id="cb-nascimento"></div>
-    <div class="field"><label>Sexo</label><select id="cb-sexo"><option value="">Selecionar</option><option value="M">Masculino</option><option value="F">Feminino</option></select></div>
-  </div>
-  <div class="field"><label>WhatsApp</label><input type="tel" id="cb-whatsapp" placeholder="(00) 00000-0000"></div>
-  <div class="field"><label>Profissão</label><input type="text" id="cb-profissao"></div>
   <button class="btn btn-primary" id="cb-btn" onclick="salvarCadastroBasico()">Continuar</button>
   <button class="btn btn-ghost hidden" id="cb-desistir" onclick="desistirDoCadastro()" style="margin-top:10px">Desistir do cadastro</button>
+</div>
+
+<!-- ══ DADOS PESSOAIS (dentro do app; libera Anamnese, Avaliações e Treinos) ══ -->
+<div id="tela-dados" class="tela hidden">
+  <div class="topo"><span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span></div>
+  <h1>Dados pessoais</h1>
+  <p class="hint">Nascimento, sexo e WhatsApp liberam Anamnese, Avaliações e Treinos.</p>
+  <div id="dp-erro" class="alert alert-red hidden"></div>
+  <div class="grid-2">
+    <div class="field"><label>Nascimento</label><input type="text" id="dp-nascimento" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" autocomplete="bday" oninput="mascararData(this)"></div>
+    <div class="field"><label>Sexo</label><select id="dp-sexo"><option value="">Selecionar</option><option value="M">Masculino</option><option value="F">Feminino</option></select></div>
+  </div>
+  <div class="field"><label>WhatsApp</label><input type="tel" id="dp-whatsapp" placeholder="(00) 00000-0000" autocomplete="tel"></div>
+  <div class="field"><label>Profissão <span style="color:var(--text3);font-weight:400">(opcional)</span></label><input type="text" id="dp-profissao"></div>
+  <button class="btn btn-primary" id="dp-btn" onclick="salvarDadosPessoais()">Salvar</button>
+  <button class="btn btn-ghost" onclick="fecharTelaDados()" style="margin-top:10px">Voltar</button>
 </div>
 
 <!-- ══ CONFLITO: perfil já vinculado a outro personal ══ -->
@@ -135,9 +239,10 @@
 <div id="tela-app" class="app-shell hidden">
   <div class="app-header">
     <span class="topo-mark"><i class=ph-barbell></i></span><span class="topo-logo">FitCPX</span><span class="topo-sub">Portal do Aluno</span>
-    <span style="margin-left:auto;display:flex;gap:14px">
+    <span class="app-header-acoes">
+      <button class="btn-tema" type="button" data-tema-btn onclick="alunoToggleTema()" aria-label="Alternar modo escuro" title="Alternar modo escuro"><i class=ph-moon></i></button>
       <button class="link-btn" onclick="abrirTelaConta()"><i class=ph-gear></i> Conta</button>
-      <button class="link-btn" onclick="alunoSair()">Sair</button>
+      <button class="link-btn" onclick="alunoSair()"><i class=ph-sign-out></i> Sair</button>
     </span>
   </div>
 
@@ -147,7 +252,9 @@
     <div id="painel-inicio" class="painel-app">
       <h1 id="inicio-nome">Olá!</h1>
       <p class="hint">Aqui você acompanha sua anamnese, avaliações e treino.</p>
+      <div id="inicio-personal"></div>
       <div id="inicio-transf"></div>
+      <div id="inicio-dados"></div>
       <div id="inicio-status"></div>
     </div>
 
@@ -375,11 +482,23 @@
     <!-- TREINOS -->
     <div id="painel-treinos" class="painel-app hidden">
       <h1>Treinos</h1>
-      <div class="card" style="text-align:center;padding:32px 16px">
-        <div style="font-size:32px;margin-bottom:10px"><i class=ph-barbell></i></div>
-        <div style="font-weight:600;margin-bottom:4px">Nenhum treino ainda</div>
-        <div style="font-size:13px;color:var(--text2)">Seu personal está preparando seu treino de adaptação. Assim que ficar pronto, aparece aqui.</div>
-      </div>
+      <p class="hint">Os treinos montados pelo seu personal para você.</p>
+      <div id="treinos-corpo"></div>
+    </div>
+
+    <!-- AGENDA -->
+    <div id="painel-agenda" class="painel-app hidden">
+      <h1>Agenda</h1>
+      <p class="hint">Suas avaliações e aulas marcadas.</p>
+      <div id="agenda-corpo"></div>
+    </div>
+
+    <!-- PAGAMENTOS (aberta pela Início) -->
+    <div id="painel-pagamentos" class="painel-app hidden">
+      <h1>Pagamentos</h1>
+      <p class="hint">Mensalidades e pagamentos do seu plano.</p>
+      <div id="pagamentos-corpo"></div>
+      <button class="btn btn-ghost" onclick="mostrarTab('inicio')" style="margin-top:6px">Voltar</button>
     </div>
 
   </div>
@@ -389,10 +508,17 @@
     <button class="tabbar-btn" id="tab-anamnese" onclick="mostrarTab('anamnese')"><span class="ico"><i class=ph-clipboard-text></i></span>Anamnese</button>
     <button class="tabbar-btn" id="tab-avaliacoes" onclick="mostrarTab('avaliacoes')"><span class="ico"><i class=ph-ruler></i></span>Avaliações</button>
     <button class="tabbar-btn" id="tab-treinos" onclick="mostrarTab('treinos')"><span class="ico"><i class=ph-barbell></i></span>Treinos</button>
+    <button class="tabbar-btn" id="tab-agenda" onclick="mostrarTab('agenda')"><span class="ico"><i class=ph-calendar-blank></i></span>Agenda</button>
   </div>
+  <div id="toast-bloqueio" class="toast hidden" role="status"></div>
 </div>
 
-<script src="js/aluno-supabase.js"></script>
-<script src="js/aluno-app.js"></script>
+<script src="../js/marca.js?v=20261014c"></script>
+<script src="../js/instalar.js?v=20261014c"></script>
+<script src="../js/carregando.js?v=20261014c"></script>
+<script src="js/aluno-supabase.js?v=20261014c"></script>
+<script src="js/portal-adapters.js?v=20261014c"></script>
+<script src="js/marca-portal.js?v=20261014c"></script>
+<script src="js/aluno-app.js?v=20261014c"></script>
 </body>
 </html>

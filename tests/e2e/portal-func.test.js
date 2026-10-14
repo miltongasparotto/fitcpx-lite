@@ -31,8 +31,9 @@ const limpaNumero=v=>{const s=typeof v==='number'?String(v):(typeof v==='string'
   console.log('após resolver-vinculo:',await page.evaluate(()=>[...document.querySelectorAll('.tela:not(.hidden),.app-shell:not(.hidden)')].map(e=>e.id)));
   // cadastro básico
   await page.evaluate(()=>{ irPara('tela-cadastro-basico'); });
-  await page.fill('#cb-nascimento','1990-05-20');await page.selectOption('#cb-sexo','F');await page.fill('#cb-whatsapp','(44) 99999-1111');await page.fill('#cb-profissao','Professora <b>de</b> yoga');
+  await page.fill('#cb-cpf','52998224725');
   await page.evaluate(()=>salvarCadastroBasico());await page.waitForTimeout(400);
+  await page.evaluate(()=>{_dadosCompletos=true;aplicarBloqueioAbas();});
   // anamnese
   await page.evaluate(()=>{mostrarTab('anamnese');});await page.waitForTimeout(300);
   await page.evaluate(()=>{

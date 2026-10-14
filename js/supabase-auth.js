@@ -86,7 +86,8 @@ async function authSair(){
   // CRM (js/crm-store.js): mesmo cuidado do students/LIBS acima — sem isto o
   // DB do CRM (tasks/fluxos/modalidades/...) da conta anterior ficava visível
   // pra próxima conta que logasse neste navegador.
-  if(typeof DB!=='undefined') DB = { tasks:[], fluxos:[], modalidades:[], waTpls:[], customCats:[], deletedCats:[], pipeOrder:[], dashPipeOrder:[], historico:{}, config:{ studioName:'FitCPX Lite', personalName:'', whatsapp:'', urgencyDays:3 } };
+  if(typeof DB!=='undefined') DB = _crmDefaults();
+  if(typeof marcaRemover==='function') marcaRemover();   // cor da conta anterior não vaza para a próxima
 
   document.getElementById('app-root').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
@@ -298,3 +299,6 @@ document.getElementById('auth-email')?.addEventListener('keydown', e=>{ if(e.key
   const { data } = await supa.auth.getSession();
   if(data?.session?.user) await onLoginSucesso(data.session.user);
 })();
+
+// Aviso de processamento nas ações de entrada (js/carregando.js)
+Carregando.envolver({ authEntrar: 'Entrando...', authCadastrar: 'Criando sua conta...', authSair: 'Salvando e saindo...' });

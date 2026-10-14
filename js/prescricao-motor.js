@@ -4297,7 +4297,7 @@ function _injetarEstilosExcv2(){
       .excv2-ffoot{padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px}
       .excv2-fbtn-clear{background:none;border:1px solid var(--border);border-radius:6px;color:var(--text3);font-size:12px;padding:6px 12px;cursor:pointer;font-family:inherit;transition:all .12s}
       .excv2-fbtn-clear:hover{border-color:var(--text2);color:var(--text2)}
-      .excv2-fbtn-apply{background:var(--accent2);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:700;padding:6px 18px;cursor:pointer;flex:1;font-family:inherit;transition:opacity .12s}
+      .excv2-fbtn-apply{background:var(--accent2);border:none;border-radius:6px;color:var(--on-accent2);font-size:12px;font-weight:700;padding:6px 18px;cursor:pointer;flex:1;font-family:inherit;transition:opacity .12s}
       .excv2-fbtn-apply:hover{opacity:.85}
     `;
     document.head.appendChild(st);
@@ -5387,7 +5387,7 @@ function novaPrescricao(){
   const s=getActive(); if(!s) return;
   _treinoEditId = criarRascunho(s);
   selectedObj=''; _modeloSelecionado = PERIODIZACAO_ATIVA ? '' : 'LP';
-  setVal('pr-nivel',''); setVal('pr-frequencia',''); setVal('pr-obs',''); setVal('pr-validade','12sem');
+  setVal('pr-nivel',''); setVal('pr-frequencia',''); setVal('pr-obs',''); setVal('pr-validade',(typeof cfgValidadePadrao==='function'?cfgValidadePadrao():'12sem'));
   setVal('pr-objetivo-sec',''); setVal('pr-duracao',''); setVal('pr-horario','');
   setVal('pr-local',''); setVal('pr-gosta',''); setVal('pr-evitar','');
   _s3={seriesPorEx:3,volPorGrupo:{},divisaoIdx:0,divisaoOpcoes:[],fichaObj:null,treinoAtivo:0,aquecTipos:(_s3.aquecTipos||['Mobilidade'])};
@@ -5447,7 +5447,7 @@ function treinosContinuarRascunho(id){
   _treinoEditId = id;
   selectedObj = t.objetivo||''; _modeloSelecionado = t.modelo || (PERIODIZACAO_ATIVA ? '' : 'LP');
   setVal('pr-nivel', t.nivel||''); setVal('pr-frequencia', t.frequencia||''); setVal('pr-obs', t.obs||'');
-  setVal('pr-validade', t.prazoSemanas||'12sem');
+  setVal('pr-validade', t.prazoSemanas||(typeof cfgValidadePadrao==='function'?cfgValidadePadrao():'12sem'));
   setVal('pr-objetivo-sec', t.objetivoSec||''); setVal('pr-duracao', t.duracao||'');
   setVal('pr-horario', t.horario||''); setVal('pr-local', t.local||'');
   setVal('pr-gosta', t.gosta||''); setVal('pr-evitar', t.evitar||'');
@@ -5470,7 +5470,7 @@ function treinosAbrirAprovado(id){
   _treinoEditId = id;
   selectedObj = t.objetivo||''; _modeloSelecionado = t.modelo || (PERIODIZACAO_ATIVA ? '' : 'LP');
   setVal('pr-nivel', t.nivel||''); setVal('pr-frequencia', t.frequencia||''); setVal('pr-obs', t.obs||'');
-  setVal('pr-validade', t.prazoSemanas||'12sem');
+  setVal('pr-validade', t.prazoSemanas||(typeof cfgValidadePadrao==='function'?cfgValidadePadrao():'12sem'));
   setVal('pr-objetivo-sec', t.objetivoSec||''); setVal('pr-duracao', t.duracao||'');
   setVal('pr-horario', t.horario||''); setVal('pr-local', t.local||'');
   setVal('pr-gosta', t.gosta||''); setVal('pr-evitar', t.evitar||'');
@@ -6077,7 +6077,7 @@ function aprovarTreinoMotor(){
   aprovarRascunho(s, _treinoEditId, {
     objetivo:selectedObj, nivel:val('pr-nivel'), frequencia:val('pr-frequencia'),
     modelo:_modeloSelecionado, obs:val('pr-obs')||'',
-    prazoSemanas: val('pr-validade')||'12sem',
+    prazoSemanas: val('pr-validade')||(typeof cfgValidadePadrao==='function'?cfgValidadePadrao():'12sem'),
     // Dados Atuais de Treino (Bloco 3) — o que foi de fato usado nesta
     // prescrição, que pode ter sido ajustado aqui sem alterar a Anamnese.
     objetivoSec: val('pr-objetivo-sec')||'', duracao: val('pr-duracao')||'',

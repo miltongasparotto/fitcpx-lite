@@ -14,6 +14,7 @@
 // (limpaTexto/limpaNumero) antes de ir pro blob do trainer; o código do link é
 // resolvido aqui com service_role; o caminho de foto precisa estar na pasta dele.
 import { corsHeaders } from '../_shared/cors.ts';
+import { senhaAtualConfere } from '../_shared/contas.ts';
 import {
   getAdminClient, getCallerUser, novoId, criadorDeIds, loadStudents, saveStudents,
   findStudentByAlunoUserId, jsonResponse,
@@ -42,12 +43,15 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (acao === 'resolver-vinculo') return jsonResponse(await resolverVinculo(admin, caller, codigo), 200, corsHeaders);
+    if (acao === 'dados-pessoais') return jsonResponse(await gravarDadosPessoais(admin, caller, body.dados || {}), 200, corsHeaders);
     if (acao === 'cadastro') return jsonResponse(await gravarCadastro(admin, caller, body.perfil || {}, codigo), 200, corsHeaders);
     if (acao === 'solicitar-troca') return jsonResponse(await solicitarTroca(admin, caller, body.perfil || {}, codigo), 200, corsHeaders);
     if (acao === 'confirmar-troca') return jsonResponse(await confirmarTroca(admin, caller), 200, corsHeaders);
     if (acao === 'cancelar-troca') return jsonResponse(await cancelarTroca(admin, caller), 200, corsHeaders);
     if (acao === 'status-vinculo') return jsonResponse(await statusVinculo(admin, caller), 200, corsHeaders);
-    if (acao === 'alterar-email') return jsonResponse(await alterarEmail(admin, caller, body.novoEmail), 200, corsHeaders);
+    if (acao === 'alterar-email') return jsonResponse(await alterarEmail(admin, caller, body), 200, corsHeaders);
+    if (acao === 'alterar-senha') return jsonResponse(await alterarSenha(admin, caller, body), 200, corsHeaders);
+    if (acao === 'trocar-senha-obrigatoria') return jsonResponse(await trocarSenhaObrigatoria(admin, caller, body.novaSenha), 200, corsHeaders);
     if (acao === 'cancelar-cadastro') return jsonResponse(await cancelarCadastro(admin, caller), 200, corsHeaders);
     if (acao === 'anamnese') return jsonResponse(await gravarAnamnese(admin, caller, body.anamnese || {}), 200, corsHeaders);
     if (acao === 'avaliacao') return jsonResponse(await gravarAvaliacao(admin, caller, body.medidas || {}, Array.isArray(body.fotos) ? body.fotos : []), 200, corsHeaders);
@@ -96,6 +100,37 @@ function limparPerfil(p: any) {
     whatsapp: zap,
     profissao: limpaTexto(p.profissao, 120),
   };
+}
+
+// Dados pessoais que liberam o app: nascimento, sexo e WhatsApp (profissão é opcional).
+function dadosPessoaisDe(s: any) {
+  const p = s?.perfil || {};
+  return {
+    nascimento: typeof p.nascimento === 'string' ? p.nascimento : '',
+    sexo: p.sexo === 'M' || p.sexo === 'F' ? p.sexo : '',
+    whatsapp: typeof p.whatsapp === 'string' ? p.whatsapp : '',
+    profissao: typeof p.profissao === 'string' ? p.profissao : '',
+  };
+}
+function dadosPessoaisCompletos(d: { nascimento: string; sexo: string; whatsapp: string }) {
+  return !!(d.nascimento && d.sexo && d.whatsapp.replace(/\D/g, '').length >= 10);
+}
+
+// O próprio aluno completa os dados pessoais (sem redigitar o CPF).
+async function gravarDadosPessoais(admin: any, caller: any, bruto: any) {
+  const trainerId = await _trainerDoAluno(admin, caller.id);
+  const p = limparPerfil(bruto);
+  if (!p.nascimento) throw new ErroUsuario('Informe uma data de nascimento válida.');
+  if (!p.sexo) throw new ErroUsuario('Informe o sexo.');
+  if (p.whatsapp.replace(/\D/g, '').length < 10) throw new ErroUsuario('Informe um WhatsApp válido, com DDD.');
+  const { students } = await loadStudents(admin, trainerId);
+  const s = findStudentByAlunoUserId(students, caller.id);
+  if (!s) throw new ErroUsuario('Seu cadastro não foi encontrado. Fale com seu personal.');
+  s.perfil.nascimento = p.nascimento; s.perfil.sexo = p.sexo;
+  s.perfil.whatsapp = p.whatsapp; s.perfil.profissao = p.profissao;
+  await saveStudents(admin, trainerId, students);
+  const dp = dadosPessoaisDe(s);
+  return { status: 'ok', dadosPessoais: dp, dadosCompletos: dadosPessoaisCompletos(dp) };
 }
 
 // Registro do aluno nesta conta (se existir em algum personal que já a vinculou).
@@ -160,13 +195,16 @@ async function resolverVinculo(admin: any, caller: any, codigo: string | null) {
 
   const { students } = await loadStudents(admin, acesso.trainer_user_id);
   const s = findStudentByAlunoUserId(students, caller.id);
-  const completo = !!(s?.perfil?.nascimento && soDigitos(s?.perfil?.cpf).length === 11);
+  // Cadastro (nome + CPF) é o que vincula; dados pessoais completos só liberam as abas do app.
+  const completo = soDigitos(s?.perfil?.cpf).length === 11;
+  const dp = dadosPessoaisDe(s);
   // Entrou pelo link de OUTRO personal: o app reabre o cadastro, e a ação 'cadastro' decide
   // (CPF já vinculado ao personal atual => oferece pedir transferência).
   const trainerLink = codigo ? await trainerPorCodigo(admin, codigo) : null;
   const outro = trainerLink && trainerLink !== acesso.trainer_user_id;
   return {
     status: 'ok', trainerId: acesso.trainer_user_id, cadastroCompleto: completo,
+    dadosPessoais: dp, dadosCompletos: dadosPessoaisCompletos(dp),
     nome: s?.perfil?.nome || '', personalNome: await nomeDoPersonal(admin, acesso.trainer_user_id),
     cpfRegistrado: soDigitos(s?.perfil?.cpf).length === 11,
     ...(outro ? { outroPersonalNome: await nomeDoPersonal(admin, trainerLink) } : {}),
@@ -361,10 +399,14 @@ async function statusVinculo(admin: any, caller: any) {
 
 // ── E-mail de login: o único dado que muda, e só pelo próprio aluno logado ──
 
-async function alterarEmail(admin: any, caller: any, novoEmailBruto: unknown) {
-  const novo = normalizaEmail(novoEmailBruto);
+// Exige o e-mail atual E a senha atual (não há confirmação por e-mail: sem isto, quem pegasse o
+// celular desbloqueado trocaria o login). Quem pede é sempre o dono da conta logada.
+async function alterarEmail(admin: any, caller: any, b: any) {
+  const novo = normalizaEmail(b?.novoEmail);
   if (!novo || novo.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(novo)) throw new ErroUsuario('E-mail inválido.');
-  if (novo === normalizaEmail(caller.email)) return { status: 'ok' };
+  if (normalizaEmail(b?.emailAtual) !== normalizaEmail(caller.email)) return { status: 'email-atual-nao-confere' };
+  if (!(await senhaAtualConfere(caller.email, b?.senhaAtual))) return { status: 'senha-incorreta' };
+  if (novo === normalizaEmail(caller.email)) throw new ErroUsuario('O novo e-mail é igual ao atual.');
 
   const { error } = await admin.auth.admin.updateUserById(caller.id, { email: novo, email_confirm: true });
   if (error) {
@@ -378,6 +420,32 @@ async function alterarEmail(admin: any, caller: any, novoEmailBruto: unknown) {
     const s = findStudentByAlunoUserId(students, caller.id);
     if (s) { s.perfil.email = novo; await saveStudents(admin, acesso.trainer_user_id, students); }
   }
+  return { status: 'ok' };
+}
+
+// ── Senha: troca pelo aluno (senha atual + nova) e troca obrigatória após redefinição ──
+
+function validaSenhaNova(v: unknown): string {
+  if (typeof v !== 'string' || v.length < 6 || v.length > 72) throw new ErroUsuario('A nova senha precisa ter entre 6 e 72 caracteres.');
+  return v;
+}
+
+async function alterarSenha(admin: any, caller: any, b: any) {
+  const nova = validaSenhaNova(b?.novaSenha);
+  if (!(await senhaAtualConfere(caller.email, b?.senhaAtual))) return { status: 'senha-incorreta' };
+  if (nova === b.senhaAtual) throw new ErroUsuario('A nova senha precisa ser diferente da atual.');
+  const { error } = await admin.auth.admin.updateUserById(caller.id, { password: nova, app_metadata: { ...(caller.app_metadata || {}), trocar_senha: false } });
+  if (error) throw error;
+  return { status: 'ok' };
+}
+
+// Depois que o personal redefine a senha, a conta fica com trocar_senha=true: o aluno entra com a
+// senha temporária e só passa daí criando a própria (sem pedir a temporária de novo: ele acabou de usá-la).
+async function trocarSenhaObrigatoria(admin: any, caller: any, novaSenha: unknown) {
+  if (caller.app_metadata?.trocar_senha !== true) throw new ErroUsuario('Não há troca de senha pendente.');
+  const nova = validaSenhaNova(novaSenha);
+  const { error } = await admin.auth.admin.updateUserById(caller.id, { password: nova, app_metadata: { ...(caller.app_metadata || {}), trocar_senha: false } });
+  if (error) throw error;
   return { status: 'ok' };
 }
 

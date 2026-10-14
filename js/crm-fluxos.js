@@ -179,10 +179,26 @@ function renderStepsList(){
         <input type="number" min="0" value="${s.dias}" onchange="updStep(${i},'dias',+this.value)" title="dias após referência">
         <select onchange="updStep(${i},'refId',this.value);renderStepsList()">${refOptsHtml}</select>
       </div>
+      <select onchange="setStepPapel(${i},this.value)" title="Marca esta etapa para o Painel acompanhar o prazo" style="margin-top:6px">
+        <option value=""${!s.papel?' selected':''}>Função no Painel: nenhuma</option>
+        <option value="prescricao"${s.papel==='prescricao'?' selected':''}>Função no Painel: prazo para prescrever o treino</option>
+        <option value="reavaliacao"${s.papel==='reavaliacao'?' selected':''}>Função no Painel: prazo da reavaliação</option>
+      </select>
+      <select onchange="updStep(${i},'waTpl',this.value?Number(this.value):'')" title="Quando a etapa chegar, o aviso entra na aba A enviar do WhatsApp com este modelo" style="margin-top:6px">
+        <option value=""${!s.waTpl?' selected':''}>Mensagem de WhatsApp: nenhuma</option>
+        ${(DB.waTpls||[]).map(t=>`<option value="${t.id}"${s.waTpl===t.id?' selected':''}>Mensagem de WhatsApp: ${escHTML(t.nome)}</option>`).join('')}
+      </select>
     </div>`;
   }).join('') + `<button class="btn btn-ghost btn-sm" onclick="addFluxoStep()"><i class=ph-plus></i> Adicionar Etapa</button>`;
 }
 function updStep(i,field,val){ if(editingSteps[i]) editingSteps[i][field]=val; }
+// Cada função (prescrição, reavaliação) vale para UMA etapa por fluxo: marcar outra desmarca a anterior.
+function setStepPapel(i,val){
+  if(!editingSteps[i]) return;
+  if(val) editingSteps.forEach(s=>{ if(s.papel===val) s.papel=''; });
+  editingSteps[i].papel=val;
+  renderStepsList();
+}
 function addFluxoStep(){ editingSteps.push({id:novoId(),nomeCustom:'',nome:'',dias:7,refId:'trigger',tipo:'notif',cat:getCatDefs()[0]?.id}); renderStepsList(); }
 function removeStep(i){ editingSteps.splice(i,1); renderStepsList(); }
 function moveStep(i,dir){ const j=i+dir; if(j<0||j>=editingSteps.length) return; [editingSteps[i],editingSteps[j]]=[editingSteps[j],editingSteps[i]]; renderStepsList(); }
@@ -336,6 +352,35 @@ function deleteModPermanent(id){
   crmConfirm('Excluir definitivamente esta modalidade? Não pode ser desfeito.', ()=>{
     DB.modalidades=DB.modalidades.filter(x=>x.id!==id); crmSave(); renderFluxosCRM(); crmToast('Modalidade excluída','info');
   });
+}
+
+/* ── KIT INICIAL ─────────────────────────────────────────────────────────── */
+// Fluxo pronto para o personal editar ou apagar: avaliação -> prescrever em 7 dias ->
+// acompanhamento em 7, 15 e 30 dias -> reavaliação em 60 dias (contados da prescrição).
+// Criado uma única vez, só se a conta ainda não tem nenhum fluxo (DB.kitFluxos marca que já passou).
+// Chamado por seedPresetCats() (js/crm-categorias.js), depois que as categorias existem.
+function seedKitFluxos(){
+  if(DB.kitFluxos) return;
+  if(DB.fluxos.length){ DB.kitFluxos=true; return; }
+  const cats=getCatDefs(); if(!cats.length) return;
+  if(typeof waGarantirModelos==='function') waGarantirModelos();   // os modelos de acompanhamento precisam existir
+  const cat=nome=>(cats.find(c=>c.label===nome)||cats[0]).id;
+  const tpl=chave=>{ const t=(DB.waTpls||[]).find(x=>x.sys===chave); return t?t.id:undefined; };
+  const etapa=(nome,dias,refId,tipo,catNome,extra)=>Object.assign({id:novoId(),nomeCustom:nome,nome,dias,refId,tipo,cat:cat(catNome)},extra||{});
+  const prescrever=etapa('Prescrever o treino',7,'trigger','prazo','Treino',{papel:'prescricao'});
+  const steps=[
+    prescrever,
+    etapa('Acompanhamento 7 dias',7,prescrever.id,'notif','Monitoramento',{waTpl:tpl('acomp7')}),
+    etapa('Acompanhamento 15 dias',15,prescrever.id,'notif','Monitoramento',{waTpl:tpl('acomp15')}),
+    etapa('Acompanhamento 30 dias',30,prescrever.id,'notif','Monitoramento',{waTpl:tpl('acomp30')}),
+    etapa('Reavaliação 60 dias',60,prescrever.id,'notif','Reavaliação',{papel:'reavaliacao',waTpl:tpl('reaval60')}),
+  ];
+  steps.forEach(s=>{ if(s.waTpl===undefined) delete s.waTpl; });
+  DB.fluxos.push({id:novoId(),nome:'Ciclo completo',icon:'ph-flow-arrow',
+    desc:'Avaliação, prescrição em 7 dias, acompanhamento em 7, 15 e 30 dias e reavaliação em 60 dias.',
+    trigger:'Avaliação física',triggerCat:cat('Avaliação'),steps});
+  DB.kitFluxos=true;
+  crmSave();
 }
 
 /* ── TELA "FLUXOS DE TRABALHO" — abas Categorias / Fluxos / Modalidades ─── */

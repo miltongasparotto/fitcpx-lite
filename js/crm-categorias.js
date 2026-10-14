@@ -12,16 +12,19 @@
 function seedPresetCats(){
   if(!DB.customCats) DB.customCats=[];
   if(!DB.deletedCats) DB.deletedCats=[];
-  if(DB.customCats.length || DB.deletedCats.length) return; // já semeado
-  const presets=[
-    {label:'Avaliação',     icon:'ph-clipboard-text', color:'#8b5cf6'},
-    {label:'Treino',        icon:'ph-barbell', color:'#3b82f6'},
-    {label:'Monitoramento', icon:'ph-chart-bar', color:'#00b37e'},
-    {label:'Reavaliação',   icon:'ph-magnifying-glass', color:'#f97316'},
-    {label:'Renovação',     icon:'ph-arrows-clockwise', color:'#f59e0b'},
-  ];
-  presets.forEach(ps=>{ DB.customCats.push({id:novoId(), ...ps}); });
-  crmSave();
+  if(!(DB.customCats.length || DB.deletedCats.length)){   // ainda não semeado
+    const presets=[
+      {label:'Avaliação',     icon:'ph-clipboard-text', color:'#8b5cf6'},
+      {label:'Treino',        icon:'ph-barbell', color:'#3b82f6'},
+      {label:'Monitoramento', icon:'ph-chart-bar', color:'#00b37e'},
+      {label:'Reavaliação',   icon:'ph-magnifying-glass', color:'#f97316'},
+      {label:'Renovação',     icon:'ph-arrows-clockwise', color:'#f59e0b'},
+    ];
+    presets.forEach(ps=>{ DB.customCats.push({id:novoId(), ...ps}); });
+    crmSave();
+  }
+  // Fluxos de fábrica dependem das categorias acima (js/crm-fluxos.js).
+  if(typeof seedKitFluxos==='function') seedKitFluxos();
 }
 
 function getCatDefs(){

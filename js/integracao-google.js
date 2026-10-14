@@ -91,8 +91,8 @@ function importarJSON(event){
 // NAVEGAÇÃO LATERAL — telas de biblioteca
 // ══════════════════════════════════════════════════════════════════════════
 
-const NAV_SCREENS = ['welcome-screen','student-view','screen-dashboard','screen-alunos','screen-locais','screen-biblioteca','screen-distribuicao','screen-periodizacao','screen-exercicios','screen-arquivadas','screen-agenda','screen-pipeline','screen-whatsapp','screen-fluxos','screen-portal-aluno','screen-config'];
-const NAV_ITEMS   = ['nav-dashboard','nav-alunos','nav-locais','nav-biblioteca','nav-distribuicao','nav-periodizacao','nav-exercicios','nav-arquivadas','nav-agenda','nav-pipeline','nav-whatsapp','nav-fluxos','nav-portal-aluno','nav-config'];
+const NAV_SCREENS = ['welcome-screen','student-view','screen-dashboard','screen-alunos','screen-locais','screen-biblioteca','screen-distribuicao','screen-periodizacao','screen-exercicios','screen-arquivadas','screen-agenda','screen-pipeline','screen-whatsapp','screen-fluxos','screen-portal-aluno','screen-config','screen-treinar','screen-financeiro'];
+const NAV_ITEMS   = ['nav-dashboard','nav-alunos','nav-locais','nav-biblioteca','nav-distribuicao','nav-periodizacao','nav-exercicios','nav-arquivadas','nav-agenda','nav-pipeline','nav-whatsapp','nav-fluxos','nav-portal-aluno','nav-config','nav-treinar','nav-financeiro'];
 
 function noop(){}
 
@@ -135,8 +135,13 @@ function _navGoForcado(tela){
     if(tela==='whatsapp')     renderWhatsappCRM();
     if(tela==='fluxos')       renderFluxosCRM();
     if(tela==='portal-aluno') renderPortalAluno();
-    if(tela==='config')       renderConfigCRM();
+    if(tela==='config')       { _cfgMarca=null; renderConfigCRM(); }
+    if(tela==='treinar')      renderTreinar();
+    if(tela==='financeiro')   renderFinanceiro();
   }
+  if(typeof financeiroAtualizarBadge==='function') financeiroAtualizarBadge();
+  if(typeof shellInjetarFerramentas==='function') shellInjetarFerramentas();
+  const ms=document.querySelector('.main-scroll:not(.hidden)'); if(ms) ms.scrollTop=0;
 }
 function navGo(tela){
   if(typeof _guardNav==='function') _guardNav(()=>_navGoForcado(tela));

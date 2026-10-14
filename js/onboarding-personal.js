@@ -47,6 +47,11 @@ async function carregarPortalLink(){
   if(error){ wrap.innerHTML = '<div class="alert alert-amber">Erro ao carregar link: '+escHTML(error.message)+'</div>'; return; }
   _portalLinkCodigo = data?.codigo || null;
   _portalNomeExibicao = data?.nome_exibicao || '';
+  // O nome do Perfil (Configurações) é o nome que o aluno vê: se ainda não chegou ao portal, envia agora.
+  const nomePerfil = (DB.config && DB.config.personalName || '').trim();
+  if(!_portalNomeExibicao && nomePerfil){
+    try{ await chamarTrainerFn('definir-nome', { nome:nomePerfil }); _portalNomeExibicao = nomePerfil; }catch(e){}
+  }
   renderPortalLinkBox();
 }
 
@@ -65,6 +70,7 @@ async function gerarPortalLink(){
   const { error } = await supa.from('personal_links').insert({ trainer_user_id:_supaUser.id, codigo });
   if(error){ alert('Erro ao gerar link: '+error.message); return; }
   _portalLinkCodigo = codigo;
+  if(typeof marcaPublicar === 'function') await marcaPublicar();   // a marca configurada antes do link existir segue junto
   renderPortalLinkBox();
 }
 
@@ -79,10 +85,13 @@ function _portalLinkSoLocal(){
   return location.protocol === 'file:' || ['localhost','127.0.0.1'].includes(location.hostname);
 }
 function abrirAppAluno(modo){
-  const url = modo === 'cadastro' ? _portalUrlCadastro() : _portalUrlAcesso();
+  const url = modo === 'cadastro' ? _portalUrlCadastro() : _portalUrlLogin();
   if(url) window.open(url, '_blank', 'noopener');
 }
 function _portalUrlCadastro(){ return _portalLinkCodigo ? _portalUrlAcesso() + '?c=' + _portalLinkCodigo : null; }
+// Link de acesso (quem já é aluno). Com ?p=CODIGO a tela de login já aparece com a marca do personal;
+// sem o código (link antigo) o portal mostra a marca assim que o aluno entra.
+function _portalUrlLogin(){ return _portalLinkCodigo ? _portalUrlAcesso() + '?p=' + _portalLinkCodigo : _portalUrlAcesso(); }
 
 // Card da Dashboard com os dois links — cópia rápida sem precisar abrir a
 // tela Portal do Aluno. Busca o código só se ainda não tiver em memória.
@@ -92,7 +101,7 @@ async function renderDashPortalLinks(){
     const { data } = await supa.from('personal_links').select('codigo').eq('trainer_user_id', _supaUser.id).maybeSingle();
     _portalLinkCodigo = data?.codigo || null;
   }
-  const urlAcesso = _portalUrlAcesso(), urlCadastro = _portalUrlCadastro();
+  const urlAcesso = _portalUrlLogin(), urlCadastro = _portalUrlCadastro();
   box.innerHTML = `
     <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:var(--text)"><i class=ph-device-mobile></i> Links do Portal do Aluno</div>
     <div style="display:flex;gap:16px;flex-wrap:wrap">
@@ -125,7 +134,7 @@ function _avisoSemCpf(){
 
 function renderPortalLinkBox(){
   const wrap = $('portal-link-wrap'); if(!wrap) return;
-  const urlAcesso = _portalUrlAcesso();
+  const urlAcesso = _portalUrlLogin();
   const urlCadastro = _portalUrlCadastro();
   wrap.innerHTML = `
     <div class="card" style="margin-bottom:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -138,12 +147,12 @@ function renderPortalLinkBox(){
     </div>
     <div class="field" style="margin-bottom:18px">
       <label>Seu nome para os alunos e outros personals</label>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Aparece em avisos como "este perfil já está vinculado ao personal ...". Sem nome, aparece "outro personal".</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="text" id="portal-nome-exibicao" maxlength="80" value="${escHTML(_portalNomeExibicao)}" placeholder="Ex: Rafael Souza" style="flex:1" oninput="this.dataset.sujo=1">
-        <button class="btn btn-ghost btn-sm" onclick="salvarNomeExibicao(this)">Salvar</button>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Aparece em avisos como "este perfil já está vinculado ao personal ...". Você edita em Configurações &gt; Perfil, junto com o nome do studio e a marca do app.</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-weight:600">${_portalNomeExibicao ? escHTML(_portalNomeExibicao) : '<span style="color:var(--text3);font-weight:400">sem nome definido</span>'}</span>
+        <button class="btn btn-ghost btn-sm" onclick="_cfgTab='perfil';navGo('config')"><i class=ph-pencil-simple></i> Editar no Perfil</button>
       </div>
-      ${_portalNomeExibicao ? '' : '<div class="alert alert-amber" style="margin:10px 0 0"><i class=ph-warning></i> Defina seu nome pra que os avisos de transferência mostrem quem você é.</div>'}
+      ${_portalNomeExibicao ? '' : '<div class="alert alert-amber" style="margin:10px 0 0"><i class=ph-warning></i> Defina seu nome no Perfil pra que os avisos de transferência mostrem quem você é.</div>'}
     </div>
     ${_portalLinkSoLocal() ? `<div class="alert alert-amber" style="margin-bottom:14px"><i class=ph-warning></i> Você está rodando o sistema localmente — estes links só abrem neste computador. Pra mandar pro celular do aluno, o sistema precisa estar publicado (Fase 9).</div>` : ''}
     <div class="field">
@@ -163,16 +172,6 @@ function renderPortalLinkBox(){
           <button class="btn btn-ghost btn-sm" onclick="copiarLink('portal-link-cadastro-input', this)"><i class=ph-clipboard-text></i> Copiar</button>
         </div>` : `<button class="btn btn-primary btn-sm" onclick="gerarPortalLink()">Gerar meu link de cadastro</button>`}
     </div>`;
-}
-
-async function salvarNomeExibicao(btn){
-  const el = $('portal-nome-exibicao'); if(!el) return;
-  const nome = el.value.trim();
-  if(!nome){ alert('Digite o nome que os alunos devem ver.'); return; }
-  try{ await chamarTrainerFn('definir-nome', { nome }); }
-  catch(e){ alert('Não foi possível salvar: '+e.message); return; }
-  _portalNomeExibicao = nome;
-  if(btn){ const t=btn.textContent; btn.textContent='✓ Salvo'; setTimeout(()=>{ btn.textContent=t; renderPortalLinkBox(); }, 1000); }
 }
 
 function copiarLink(inputId, btn){
@@ -258,6 +257,7 @@ async function carregarPortalTransferencias(){
   renderFaixaChegando();
   if(typeof renderScreenAlunos==='function') renderScreenAlunos();
   aplicarEstadoTransferencia(typeof getActive==='function' ? getActive() : null);
+  sincronizarPedidosSenha().catch(()=>{});   // pedidos de "esqueci minha senha" viram tarefa urgente
 }
 
 function _linhaDado(rotulo, valor){
@@ -336,23 +336,20 @@ async function anteciparTransferencia(id, manterTreinos){
     ? 'Liberar agora este aluno para o outro personal, levando os treinos junto?'
     : 'Liberar agora este aluno para o outro personal SEM os treinos? Anamnese e avaliações vão junto.';
   if(!confirm(msg+'\n\nIsso não pode ser desfeito.')) return;
-  try{ await chamarTrainerFn('antecipar', { id, manterTreinos }); }
-  catch(e){ alert('Não foi possível liberar: '+e.message); return; }
-  await _aposAcaoTransferencia();
+  try{ await Carregando.durante('Liberando o aluno...', async()=>{ await chamarTrainerFn('antecipar', { id, manterTreinos }); await _aposAcaoTransferencia(); }); }
+  catch(e){ alert('Não foi possível liberar: '+e.message); }
 }
 
 async function responderChegada(id, aceitar){
   if(!aceitar && !confirm('Recusar este aluno? O pedido de transferência é encerrado.')) return;
-  try{ await chamarTrainerFn('responder-novo', { id, aceitar }); }
-  catch(e){ alert('Não foi possível responder: '+e.message); return; }
-  await carregarPortalTransferencias();
+  try{ await Carregando.durante('Respondendo ao pedido...', async()=>{ await chamarTrainerFn('responder-novo', { id, aceitar }); await carregarPortalTransferencias(); }); }
+  catch(e){ alert('Não foi possível responder: '+e.message); }
 }
 
 async function cancelarPedidoTransferencia(id){
   if(!confirm('Cancelar o pedido de transferência deste aluno?')) return;
-  try{ await chamarTrainerFn('cancelar', { id }); }
-  catch(e){ alert('Não foi possível cancelar: '+e.message); return; }
-  await carregarPortalTransferencias();
+  try{ await Carregando.durante('Cancelando o pedido...', async()=>{ await chamarTrainerFn('cancelar', { id }); await carregarPortalTransferencias(); }); }
+  catch(e){ alert('Não foi possível cancelar: '+e.message); }
 }
 
 // ─── Aluno em transferência: faixa + cadastro só pra visualização ──────────
@@ -555,46 +552,172 @@ function renderPortalStatusBadge(s){
   btnStatus.textContent = bloqueado ? 'Liberar acesso' : 'Bloquear acesso';
 }
 
-// Mesmo botão serve pra "conceder acesso" (aluno sem conta ainda) e pra
-// "resetar senha" (já tem conta) — a Edge Function decide sozinha qual dos
-// dois casos é. Sem e-mail/link envolvido: você define a senha temporária
-// (ou deixa eu gerar uma) e repassa pro aluno por fora (WhatsApp etc.); ele
-// troca em "Minhas informações" dentro do Portal quando quiser.
-function _gerarSenhaTemporaria(){
-  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
-  let out = ''; for(let i=0;i<8;i++) out += chars[Math.floor(Math.random()*chars.length)];
-  return out;
+// ─── Redefinir senha do aluno ──────────────────────────────────────────────
+// Um modal, dois jeitos:
+//  • LINK (padrão quando vem da tarefa "Esqueci minha senha"): o servidor gera um link de uso único (24 h)
+//    e a mensagem abre no WhatsApp do aluno. Ele toca no link, escolhe a nova senha e já entra. Nenhuma
+//    senha passa pelo WhatsApp e a senha atual continua valendo até ele usar o link.
+//  • ESCOLHIDA pelo personal (padrão no Perfil; aluno presente, normalmente pedindo ajuda): a senha só é
+//    alterada. Nada é enviado e o aluno não é obrigado a trocá-la.
+let _rs = null;   // { s, tarefaId, senha }
+
+function _rsModoAtual(){ return document.querySelector('input[name=rs-modo]:checked')?.value === 'manual' ? 'manual' : 'link'; }
+
+function abrirRedefinirSenha(studentId, tarefaId){
+  const s = studentId!=null ? (students||[]).find(x=>x.id===studentId) : getActive();
+  if(!s || !s.perfil?.email){ alert('Preenche o e-mail do aluno primeiro.'); return; }
+  if(alunoTravado(s)){ alert('Cadastro em transferência: só visualização.'); return; }
+  _rs = { s, tarefaId: tarefaId||null, senha: '' };
+  $('rs-aluno').textContent = (s.perfil.nome || '(sem nome)') + ' · ' + s.perfil.email;
+  hide('rs-erro'); show('rs-passo1'); hide('rs-passo2'); hide('rs-passo3');
+  const radio = document.querySelector(`input[name=rs-modo][value=${tarefaId ? 'link' : 'manual'}]`); if(radio) radio.checked = true;
+  setVal('rs-senha', '');
+  rsModo();
+  crmOpenModal('m-reset-senha');
+}
+// O botão "Redefinir senha" do Perfil usa o mesmo modal (abre no modo "escolher a senha").
+function alunoResetarSenha(){ abrirRedefinirSenha(); }
+
+function rsModo(){
+  const manual = _rsModoAtual() === 'manual';
+  toggle('rs-manual-wrap', manual);
+  toggle('rs-dica-manual', manual); toggle('rs-dica-link', !manual);
+  $('rs-btn').innerHTML = manual ? '<i class=ph-key></i> Salvar nova senha' : '<i class=ph-chat-circle-text></i> Gerar link e enviar no WhatsApp';
+  if(manual) setTimeout(()=>{ const i=$('rs-senha'); if(i) i.focus(); }, 0);
 }
 
-async function alunoResetarSenha(){
-  const s = getActive(); if(!s || !s.perfil?.email) { alert('Preenche o e-mail do aluno primeiro.'); return; }
-  if(alunoTravado(s)){ alert('Cadastro em transferência: só visualização.'); return; }
-  const digitada = prompt('Senha temporária pra esse aluno (mínimo 6 caracteres).\nDeixe em branco pra eu gerar uma:');
-  if(digitada === null) return; // cancelou
-  const senha = digitada.trim() || _gerarSenhaTemporaria();
-  if(senha.length < 6){ alert('Senha precisa de pelo menos 6 caracteres.'); return; }
+async function rsRedefinir(){
+  if(!_rs) return;
+  hide('rs-erro');
+  const manual = _rsModoAtual() === 'manual';
+  const { s } = _rs;
+  if(manual) return _rsSalvarSenhaEscolhida(s);
+  return _rsEnviarLink(s);
+}
 
-  const { data, error } = await supa.functions.invoke('trainer-transferencia', {
-    body: { acao: 'definir-senha', email: s.perfil.email, novaSenha: senha },
-  });
-  if(error){ alert('Erro ao definir senha: '+await msgErroFuncao(error)); return; }
+// Jeito 1: link de uso único para o aluno criar a nova senha.
+async function _rsEnviarLink(s){
+  const { data, error } = await Carregando.durante('Gerando o link...', () => supa.functions.invoke('trainer-transferencia', {
+    body: { acao: 'gerar-link-senha', email: s.perfil.email },
+  }));
+  if(error){ _rsErro('Não foi possível gerar o link: '+await msgErroFuncao(error)); return; }
+  const url = _portalUrlAcesso() + '?r=' + encodeURIComponent(data.token);
+  _rsConcluirTarefas(s.id);
+  hide('rs-passo1');
+  $('rs-link').value = url;
+  $('rs-msg').value = _rsMensagem(s, url);
+  const semZap = !_rsTelefone(s);
+  toggle('rs-sem-zap', semZap);
+  $('rs-enviar').disabled = semZap;
+  show('rs-passo2');
+  if(!semZap) rsEnviarWhatsApp();   // a mensagem já abre no WhatsApp do aluno
+}
 
+// Jeito 2: o personal escolhe a senha; só altera (sem mensagem e sem troca obrigatória).
+async function _rsSalvarSenhaEscolhida(s){
+  const digitada = val('rs-senha').trim();
+  if(digitada.length < 6){ _rsErro('A senha precisa ter pelo menos 6 caracteres.'); return; }
+  const { data, error } = await Carregando.durante('Salvando a senha...', () => supa.functions.invoke('trainer-transferencia', {
+    body: { acao: 'definir-senha', email: s.perfil.email, novaSenha: digitada },
+  }));
+  if(error){ _rsErro('Não foi possível redefinir: '+await msgErroFuncao(error)); return; }
   s.perfil.alunoUserId = data.alunoUserId;
   s.perfil.portalStatus = s.perfil.portalStatus || 'ativo';
-  renderPortalStatusBadge(s);
+  if(typeof renderPortalStatusBadge==='function' && typeof getActive==='function' && getActive()?.id===s.id) renderPortalStatusBadge(s);
   try{ localStorage.setItem(lsKey('acm-students'), JSON.stringify(students)); }catch(e){}
   if(typeof supaAutoSave==='function') supaAutoSave();
-
-  alert('Senha definida: '+senha+'\n\nRepassa pro aluno (WhatsApp, etc). Ele pode trocar em "Minhas informações" dentro do Portal quando quiser.');
+  _rsConcluirTarefas(s.id);
+  hide('rs-passo1');
+  $('rs-novasenha').value = digitada;
+  show('rs-passo3');
 }
+function _rsErro(msg){ show('rs-erro'); $('rs-erro').textContent = msg; }
+
+// Fecha a tarefa urgente de senha deste aluno (se veio de um pedido) e atualiza o CRM.
+function _rsConcluirTarefas(studentId){
+  if(typeof DB==='undefined' || !DB.tasks) return;
+  let mudou = false;
+  DB.tasks.forEach(t=>{ if(t.acao==='senha' && t.alunoId===studentId && !t.done){ t.done = true; t.doneDate = todayStr(); mudou = true; } });
+  if(!mudou) return;
+  crmSave(); if(typeof updateBadges==='function') updateBadges();
+  if(typeof _crmRefreshCurrentScreen==='function') _crmRefreshCurrentScreen();
+  if(typeof renderDashboard==='function' && !$('screen-dashboard')?.classList.contains('hidden')) renderDashboard();
+}
+
+function _rsMensagem(s, url){
+  const primeiro = (s.perfil.nome || '').trim().split(/\s+/)[0] || 'tudo bem';
+  return `Olá, ${primeiro}! Para criar uma nova senha no Portal do Aluno, toque no link abaixo. Ele vale por 24 horas e só funciona uma vez:\n\n`
+    + `${url}\n\n`
+    + `Depois, para trocar a senha ou o e-mail quando quiser, toque em "Conta", no topo do portal, ao lado de "Sair".`;
+}
+function _rsTelefone(s){
+  const ddi = '55';
+  let p = String(s.perfil?.whatsapp || '').replace(/\D/g, '');
+  if(p.startsWith('55') && p.length > 11) p = p.slice(2);
+  return p.length >= 10 ? ddi + p : '';
+}
+function rsEnviarWhatsApp(){
+  if(!_rs) return;
+  const fone = _rsTelefone(_rs.s);
+  if(!fone){ alert('Este aluno não tem WhatsApp cadastrado. Copie a mensagem.'); return; }
+  window.open(`https://wa.me/${fone}?text=${encodeURIComponent($('rs-msg').value)}`, '_blank', 'noopener');
+}
+function _copiarTexto(texto, btn, rotulo){
+  const ok = () => { if(btn){ const t = btn.textContent; btn.textContent = 'Copiado'; setTimeout(()=>{ btn.textContent = rotulo || t; }, 1500); } };
+  if(navigator.clipboard?.writeText) navigator.clipboard.writeText(texto).then(ok).catch(()=>prompt('Copie manualmente (Ctrl+C):', texto));
+  else prompt('Copie manualmente (Ctrl+C):', texto);
+}
+function rsCopiar(btn, idCampo){ _copiarTexto($(idCampo).value, btn, 'Copiar'); }
+function rsCopiarMensagem(btn){ _copiarTexto($('rs-msg').value, btn, 'Copiar mensagem'); }
+
+// ─── Pedidos de "Esqueci minha senha" → tarefa urgente no CRM ──────────────
+// O aluno não escreve no CRM do personal (é um blob dele); a Edge Function esqueci-senha grava o
+// pedido em senha_pedidos e ESTE painel cria a tarefa, uma por pedido (idempotente pelo id do pedido).
+function _catUrgenteId(){
+  if(typeof seedPresetCats==='function') seedPresetCats();
+  const existente = (DB.customCats||[]).find(c=>!c.archived && String(c.label||'').trim().toLowerCase()==='urgente');
+  if(existente) return existente.id;
+  const cat = { id: novoId(), label: 'Urgente', icon: 'ph-siren', color: '#c42b2b' };
+  DB.customCats.push(cat);
+  return cat.id;
+}
+
+async function sincronizarPedidosSenha(){
+  if(!_supaUser || typeof DB==='undefined' || !Array.isArray(DB.tasks)) return;
+  const { data, error } = await supa.from('senha_pedidos').select('id,aluno_user_id,criado_em').eq('status', 'aberto');
+  if(error || !Array.isArray(data)){   // tabela ainda não criada (sql/senha-pedidos.sql): segue sem tarefas
+    if(error) console.warn('Pedidos de senha: não foi possível consultar senha_pedidos —', error.message);
+    return;
+  }
+  let mudou = false;
+  data.forEach(p=>{
+    const s = (students||[]).find(x=>x.perfil?.alunoUserId===p.aluno_user_id);
+    if(!s || DB.tasks.some(t=>t.pedidoSenhaId===p.id)) return;
+    DB.tasks.push({
+      id: novoId(), alunoId: s.id, titulo: 'Redefinir senha', cat: _catUrgenteId(), tipo: 'prazo',
+      data: _isoLocal(new Date(p.criado_em)), hora: '', done: false, doneDate: null,
+      manual: true, acao: 'senha', pedidoSenhaId: p.id, obs: 'O aluno pediu a redefinição pela tela de login.',
+    });
+    mudou = true;
+  });
+  // Pedido já atendido (por outro aparelho ou outra aba): fecha a tarefa que sobrou aqui.
+  const abertos = new Set(data.map(p=>p.id));
+  DB.tasks.forEach(t=>{ if(t.acao==='senha' && !t.done && t.pedidoSenhaId && !abertos.has(t.pedidoSenhaId)){ t.done = true; t.doneDate = todayStr(); mudou = true; } });
+  if(!mudou) return;
+  crmSave();
+  if(typeof updateBadges==='function') updateBadges();
+  if(typeof _crmRefreshCurrentScreen==='function') _crmRefreshCurrentScreen();
+  if(typeof renderDashboard==='function' && !$('screen-dashboard')?.classList.contains('hidden')) renderDashboard();
+}
+setInterval(()=>{ if(document.visibilityState==='visible') sincronizarPedidosSenha().catch(()=>{}); }, 180000);
 
 async function alunoTogglePortalStatus(){
   const s = getActive(); if(!s || !s.perfil?.alunoUserId || !_supaUser) return;
   if(alunoTravado(s)){ alert('Cadastro em transferência: só visualização.'); return; }
   const novo = s.perfil.portalStatus === 'bloqueado' ? 'ativo' : 'bloqueado';
   if(novo==='bloqueado' && !confirm('Bloquear o acesso deste aluno ao Portal? Ele continua logando, mas vê uma tela de acesso bloqueado até você liberar de novo.')) return;
-  const { error } = await supa.from('alunos_acesso').update({ status: novo })
-    .eq('trainer_user_id', _supaUser.id).eq('aluno_user_id', s.perfil.alunoUserId);
+  const { error } = await Carregando.durante(novo==='bloqueado' ? 'Bloqueando o acesso...' : 'Liberando o acesso...', () => supa.from('alunos_acesso').update({ status: novo })
+    .eq('trainer_user_id', _supaUser.id).eq('aluno_user_id', s.perfil.alunoUserId));
   if(error){ alert('Erro ao atualizar acesso: '+error.message); return; }
   s.perfil.portalStatus = novo;
   renderPortalStatusBadge(s);

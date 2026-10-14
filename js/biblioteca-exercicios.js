@@ -48,7 +48,7 @@ function renderExercicios(){
     const contra = e.cnt ? `<span style="color:var(--red);font-size:12px">${e.cnt.split('|')[0].trim()}</span>` : '<span style="color:var(--text3)">—</span>';
     const gDisplay = e.g || (e.gp||'').split('|')[0].trim();
     tr.innerHTML = `
-      <td style="font-weight:550">${e.n}</td>
+      <td style="font-weight:500">${e.n}</td>
       <td style="font-size:12px;color:var(--text2)">${gDisplay}</td>
       <td style="font-size:12px;color:var(--text3)">${e.padrao||e.pad||'—'}</td>
       <td style="font-size:12px"><span class="badge badge-gray">${e.r||e.res||'—'}</span></td>

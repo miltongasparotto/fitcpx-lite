@@ -20,7 +20,8 @@
 // Treino aprovado antes do campo `prazoSemanas` existir não tem
 // `dataVencimento`. Nesse caso assume o padrão do sistema (12 semanas) contado
 // da aprovação — mesmo número que aprovarRascunho() usa como default.
-const DASH_PRAZO_PADRAO_SEMANAS = 12;
+// (Configurações > Regras e prazos: validadeSemanas, janelaProximo, janelaAgendar, diasAlunoNovo.)
+function _dashCfg(chave, padrao){ return (typeof cfgNum === 'function') ? cfgNum(chave, padrao) : padrao; }
 
 function _dashParseBR(str){
   if(!str || typeof str !== 'string') return null;
@@ -85,7 +86,7 @@ function dashClassificarAluno(s){
                || (treino.id ? new Date(treino.id) : null);
     if(aprov){
       venc = new Date(aprov);
-      venc.setDate(venc.getDate() + DASH_PRAZO_PADRAO_SEMANAS * 7);
+      venc.setDate(venc.getDate() + _dashCfg('validadeSemanas', 12) * 7);
       dias = _dashDiasAte(venc);
     }
   }
@@ -98,7 +99,8 @@ function dashClassificarAluno(s){
     };
   }
 
-  const bucket = dias < 0 ? 'vencido' : dias <= 7 ? 'proximo' : dias <= 14 ? 'agendar' : 'ok';
+  const jProx = _dashCfg('janelaProximo', 7), jAgend = Math.max(_dashCfg('janelaAgendar', 14), jProx);
+  const bucket = dias < 0 ? 'vencido' : dias <= jProx ? 'proximo' : dias <= jAgend ? 'agendar' : 'ok';
   const detalhe = dias < 0
     ? 'Venceu em ' + _dashFmt(venc)
     : 'Vence em ' + _dashFmt(venc);
@@ -117,289 +119,560 @@ function dashLevantarPendencias(){
   return grupos;
 }
 
-// ── Tela ──────────────────────────────────────────────────────────────────
-// Painel único, fundido com o CRM de prazos trazido do FitCPX Flow (ver
-// ESTRATEGIA-MERGE.md). Ordem: saudação → banner de tarefa CRM vencida →
-// faixa de números (treino + CRM) → onboarding (some quando concluído) →
-// duas colunas (pendência de treino | tarefas do CRM) → pipeline por
-// categoria → ações rápidas. Cada bloco lê sua própria fonte (students[]
-// para treino, DB.tasks para CRM) sem inventar estado paralelo.
-// Visual: classes .dash-* / .kpi* em css/app.css (nada de estilo inline aqui).
 
-const _DASH_SECOES = [
-  { chave:'vencido',     titulo:'Treino vencido',        icone:'ph-warning-circle', cor:'var(--red)',
-    chip:'badge-red',   vazio:'Nenhum treino vencido.' },
-  { chave:'proximo',     titulo:'Vence esta semana',     icone:'ph-clock',          cor:'var(--amber)',
-    chip:'badge-amber', vazio:'Nada vencendo nos próximos 7 dias.' },
-  { chave:'agendar',     titulo:'Agendar reavaliação',   icone:'ph-calendar-check', cor:'var(--amber)',
-    chip:'badge-amber', vazio:'Nada para agendar nas próximas 2 semanas.' },
-  { chave:'sem-treino',  titulo:'Sem treino',            icone:'ph-barbell',        cor:'var(--blue)',
-    chip:'badge-blue',  vazio:'Todo aluno tem treino.' },
-  { chave:'sem-data',    titulo:'Treino sem data',       icone:'ph-question',       cor:'var(--text3)',
-    chip:'badge-gray',  vazio:'' },
-];
+// ── Painel v2 (08/10/2026) ────────────────────────────────────────────────
+// Modelo "Foco por área" (documentos/design-handoff/PAINEL-ESPECIFICACAO.md).
+// Cada pendência aparece em UM lugar só:
+//   ciclo de treino -> Avaliação e treino · pagamento/contrato -> Financeiro
+//   agenda e tarefas avulsas (sem fluxo) -> Hoje
+// Classificação do treino segue sendo dashClassificarAluno() (acima): o Painel
+// só LÊ os prazos que já existem. Layout dos 3 tamanhos: css/painel.css.
+// Pagamentos/contratos e "Treinar aluno" entram por js/adapters.js.
 
-// Etiqueta curta do prazo, no lado direito da linha.
-function _dashChip(c, sec){
-  let txt = '';
-  if(c.bucket === 'vencido')       txt = 'há ' + Math.abs(c.dias) + ' d';
-  else if(c.bucket === 'proximo' || c.bucket === 'agendar') txt = c.dias === 0 ? 'hoje' : 'em ' + c.dias + ' d';
-  else if(c.bucket === 'sem-treino') txt = c.temAvaliacao ? 'avaliado' : 'avaliar';
-  else txt = 'conferir';
-  return '<span class="badge ' + sec.chip + '">' + txt + '</span>';
-}
+const DASH_ETAPAS = [['todos','Todos'], ['avaliar','Avaliar'], ['prescrever','Prescrever'], ['vencendo','Vencendo'], ['vencido','Vencido']];
+const DASH_ETAPA_ROTULO = { avaliar:'Avaliar', prescrever:'Prescrever', vencendo:'Vencendo', vencido:'Vencido', conferir:'Conferir' };
 
-function _dashLinhaAluno(c, sec){
-  return '<div onclick="dashAbrirAluno(' + c.id + ')" class="dash-linha" role="button" tabindex="0">' +
-      '<span class="dash-nome">' + escHTML(c.nome) + '</span>' +
-      '<span class="dash-det">' + escHTML(c.detalhe) + '</span>' +
-      _dashChip(c, sec) +
-      '<i class="ph-caret-right dash-go"></i>' +
-    '</div>';
-}
+window._dashArea  = window._dashArea  || 'ciclo';
+window._dashEtapa = window._dashEtapa || 'todos';
 
-function dashAbrirAluno(id){
-  if(typeof selectStudent === 'function') selectStudent(id);
-}
-
-function dashIrPara(chave){
-  const alvo = document.getElementById('dash-sec-' + chave);
-  if(alvo) alvo.scrollIntoView({ behavior:'smooth', block:'start' });
-}
-
-// Fonte CRM disponível? (js/crm-store.js carrega antes de dashboard.js, mas
-// o check protege contra chamada precoce/erro de carga.)
 function _dashTemCrm(){ return typeof DB !== 'undefined' && Array.isArray(DB.tasks); }
-
+function _dashLS(k, v){
+  try{ if(v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); }catch(e){}
+  return null;
+}
+function _dashAlunoAtivo(s){
+  const c = s.crm || {};
+  return !c.archived && c.status !== 'pausado' && c.status !== 'inativo';
+}
+function _dashPrimeiroNome(){
+  const n = (_dashTemCrm() && DB.config && DB.config.personalName) || '';
+  return n.trim().split(/\s+/)[0] || '';
+}
 function _dashSaudacao(){
-  const studio = (_dashTemCrm() && DB.config && DB.config.studioName) || 'FitCPX Lite';
-  const personalRaw = (_dashTemCrm() && DB.config && DB.config.personalName) || '';
-  const personal = personalRaw ? ', ' + personalRaw.split(' ')[0] : '';
-  return '<p class="dash-hello">Olá' + escHTML(personal) + '. Aqui está o que precisa de atenção em <strong>' + escHTML(studio) + '</strong>.</p>';
+  const h = new Date().getHours();
+  const base = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
+  const nome = _dashPrimeiroNome();
+  return nome ? base + ', ' + nome : base;
+}
+function _dashDataExtenso(){
+  const t = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long' });
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function _dashIniciais(nome){
+  const p = String(nome || '').split(/\s+/).filter(w => w.length > 2).slice(0, 2);
+  return (p.map(w => w[0]).join('') || String(nome || '?')[0] || '?').toUpperCase();
+}
+function _dashFmtCurto(d){
+  return d ? d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) : '';
+}
+function _dashFmtISO(iso){ return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : ''; }
+function _dashMoney(v){ return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 }); }
+function _dashDias(n, passado){
+  n = Math.abs(n);
+  if(n === 0) return 'hoje';
+  return (passado ? 'há ' : 'em ') + n + (n === 1 ? ' dia' : ' dias');
+}
+function _dashModalidade(s){
+  const m = String((s.perfil || {}).modalidade || '').toLowerCase();
+  return (m === 'online' || m === 'hibrido' || m === 'híbrido') ? 'Consultoria' : 'Presencial';
 }
 
-function _dashBannerCrm(){
-  if(!_dashTemCrm()) return '';
+// Data (AAAA-MM-DD) da etapa do fluxo do aluno marcada com a função `papel`
+// ('prescricao' | 'reavaliacao'). Null se o aluno não tem fluxo com essa etapa
+// ou se a tarefa dela já foi concluída. O campo `papel` é gravado em crm-fluxos.js.
+function _dashDataFuncao(s, papel){
+  if(!_dashTemCrm() || !s.crm || !Array.isArray(s.crm.fluxos)) return null;
+  let melhor = null;
+  s.crm.fluxos.forEach(af => {
+    const fl = DB.fluxos.find(f => f.id === af.id); if(!fl) return;
+    const etapa = (fl.steps || []).find(st => st.papel === papel); if(!etapa) return;
+    const tid = (af.tasks || []).find(id => {
+      const t = DB.tasks.find(x => x.id === id);
+      return t && t.stepId && t.stepId.startsWith(etapa.id + '_fl');
+    });
+    const t = DB.tasks.find(x => x.id === tid);
+    if(!t || t.done) return;
+    const d = liveDate(t);
+    if(d && (!melhor || d < melhor)) melhor = d;
+  });
+  return melhor;
+}
+
+function _dashLinhaCiclo(s, c){
   const hoje = todayStr();
-  const vencidas = DB.tasks.filter(t => taskVisible(t) && !t.done && diffDays(liveDate(t), hoje) < 0);
-  if(!vencidas.length) return '';
-  return '<div class="dash-banner">' +
-    '<i class="ph-siren"></i>' +
-    '<span>' + vencidas.length + ' tarefa' + (vencidas.length===1?'':'s') + ' do CRM vencida' + (vencidas.length===1?'':'s') + '. Ação necessária.</span>' +
-    '<button class="btn btn-primary btn-sm" onclick="navGo(\'agenda\')">Resolver agora</button>' +
-    '</div>';
-}
+  const mod = _dashModalidade(s);
+  const o = { id:s.id, nome:c.nome, ini:_dashIniciais(c.nome), mod, etapa:'conferir', tom:'gray', tag:'', status:'',
+              aval:'Pendente', avalSub:'sem registro', trTxt:'Não prescrito', trSub:'aguarda avaliação', pct:0, ord:5, dias:0 };
 
-function _dashKpi(icone, label, valor, tom, onclick){
-  const cls = valor === 0 ? 'is-zero' : (tom ? 'is-' + tom : '');
-  return '<button class="kpi" onclick="' + onclick + '">' +
-    '<span class="kpi-label"><i class="' + icone + '"></i>' + label + '</span>' +
-    '<span class="kpi-num ' + cls + '">' + valor + '</span>' +
-    '</button>';
-}
-
-function _dashStatsBar(g){
-  const total = (typeof students !== 'undefined') ? students.length : 0;
-  const ativos = (typeof students !== 'undefined')
-    ? students.filter(s => {
-        const crm = s.crm || {};
-        return !crm.archived && crm.status !== 'pausado' && crm.status !== 'inativo';
-      }).length
-    : total;
-  const treinoVencido = g.vencido.length;
-
-  let crmVencidas = 0, crmHojeUrg = 0;
-  if(_dashTemCrm()){
-    const hoje = todayStr();
-    crmVencidas = DB.tasks.filter(t => taskVisible(t) && !t.done && diffDays(liveDate(t), hoje) < 0).length;
-    crmHojeUrg = DB.tasks.filter(t => {
-      if(!taskVisible(t) || t.done) return false;
-      const d = diffDays(liveDate(t), hoje);
-      return d === 0 || (d > 0 && d <= taskUrgDays(t) && t.tipo === 'prazo');
-    }).length;
+  if(c.ultAval){
+    const d = _dashDiasAte(c.ultAval);
+    o.aval = _dashFmtCurto(c.ultAval);
+    o.avalSub = _dashDias(d, true);
   }
+  // Reavaliação marcada no fluxo: aparece como subtexto da avaliação.
+  const reav = _dashDataFuncao(s, 'reavaliacao');
+  if(reav && c.ultAval) o.avalSub += ' · reavaliar ' + _dashFmtISO(reav);
 
-  return '<div class="kpis">' +
-    _dashKpi('ph-users', 'Alunos ativos', ativos, '', "navGo('alunos')") +
-    _dashKpi('ph-warning-circle', 'Treino vencido', treinoVencido, 'red', "dashIrPara('vencido')") +
-    _dashKpi('ph-alarm', 'Tarefas CRM vencidas', crmVencidas, 'red', "navGo('agenda')") +
-    _dashKpi('ph-push-pin', 'Hoje e urgentes', crmHojeUrg, 'amber', "navGo('agenda')") +
-    '</div>';
+  const tr = c.treino;
+  if(tr && c.venc){
+    o.trTxt = 'vence ' + _dashFmtCurto(c.venc);
+    const ap = _dashParseBR(tr.dataAprovacao);
+    o.trSub = ap ? 'prescrito ' + _dashFmtCurto(ap) : '';
+    if(ap){
+      const total = c.venc - ap, feito = new Date() - ap;
+      o.pct = total > 0 ? Math.max(0, Math.min(100, Math.round(feito / total * 100))) : 100;
+    }
+  } else if(tr){ o.trTxt = 'Sem data'; o.trSub = 'conferir cadastro'; }
+
+  if(c.bucket === 'vencido'){
+    o.etapa = 'vencido'; o.tom = 'red'; o.ord = 0; o.dias = c.dias; o.pct = 100;
+    o.tag = Math.abs(c.dias) + (Math.abs(c.dias) === 1 ? ' dia' : ' dias');
+    o.status = 'Treino vencido ' + _dashDias(c.dias, true) + ' · reavaliar';
+  } else if(c.bucket === 'proximo' || c.bucket === 'agendar'){
+    o.etapa = 'vencendo'; o.tom = 'amber'; o.ord = 3; o.dias = c.dias;
+    o.tag = c.dias === 0 ? 'hoje' : c.dias + (c.dias === 1 ? ' dia' : ' dias');
+    o.status = 'Treino vence ' + (c.dias === 0 ? 'hoje' : _dashDias(c.dias, false));
+  } else if(c.bucket === 'sem-treino' && !c.temAvaliacao){
+    o.etapa = 'avaliar'; o.tom = 'blue'; o.ord = 4;
+    const criado = s.id > 1e12 ? Math.round((Date.now() - s.id) / 86400000) : null;
+    o.tag = (criado !== null && criado <= _dashCfg('diasAlunoNovo', 14)) ? 'novo' : 'pendente';
+    o.status = 'Sem avaliação' + (criado !== null ? ' · aluno ' + _dashDias(criado, true) : '');
+  } else if(c.bucket === 'sem-treino'){
+    o.etapa = 'prescrever'; o.tom = 'amber'; o.ord = 2;
+    const prazo = _dashDataFuncao(s, 'prescricao');
+    if(prazo){
+      const d = diffDays(prazo, hoje);
+      o.dias = d;
+      o.trSub = 'prescrever até ' + _dashFmtISO(prazo);
+      if(d < 0){ o.tom = 'red'; o.ord = 1; o.tag = 'atrasada'; o.status = 'Prescrição atrasada ' + _dashDias(d, true); }
+      else { o.tag = d === 0 ? 'hoje' : d + (d === 1 ? ' dia' : ' dias'); o.status = 'Prescrever até ' + _dashFmtISO(prazo); }
+    } else {
+      o.tag = c.ultAval ? 'avaliado ' + _dashDias(_dashDiasAte(c.ultAval), true) : '';
+      o.status = 'Avaliado em ' + _dashFmt(c.ultAval) + ', pronto para prescrever';
+    }
+  } else if(c.bucket === 'sem-data'){
+    o.tag = 'conferir'; o.status = c.detalhe;
+  } else return null;   // em dia
+  return o;
 }
 
-function _dashOnboarding(){
-  if(!_dashTemCrm()) return '';
+function dashLinhasCiclo(){
+  const lista = (typeof students !== 'undefined' && Array.isArray(students)) ? students : [];
+  const out = [];
+  lista.forEach(s => {
+    if(!_dashAlunoAtivo(s)) return;
+    const o = _dashLinhaCiclo(s, dashClassificarAluno(s));
+    if(o) out.push(o);
+  });
+  out.sort((a, b) => (a.ord - b.ord) || (a.dias - b.dias) || a.nome.localeCompare(b.nome, 'pt-BR'));
+  return out;
+}
+
+// Saúde: ativos agora e variação líquida em 30 dias (entradas - saídas).
+// Entrada = aluno cadastrado nos últimos 30 dias. Saída = aluno desativado
+// (pausado/inativo) nos últimos 30 dias. Arquivado/excluído não conta.
+function dashSaude(){
+  const lista = (typeof students !== 'undefined' && Array.isArray(students)) ? students : [];
+  const corte = Date.now() - 30 * 86400000;
+  let ativos = 0, entradas = 0, saidas = 0;
+  lista.forEach(s => {
+    const c = s.crm || {};
+    if(c.archived) return;
+    const desativado = c.status === 'pausado' || c.status === 'inativo';
+    if(!desativado) ativos++;
+    if(s.id > 1e12 && s.id >= corte && (s.perfil || {}).nome) entradas++;
+    if(desativado && c.statusSince && new Date(c.statusSince + 'T12:00:00').getTime() >= corte) saidas++;
+  });
+  return { ativos, entradas, saidas, liquido: entradas - saidas };
+}
+
+function dashHoje(){
+  const r = { agenda:[], tarefas:[] };
+  if(!_dashTemCrm()) return r;
+  const hoje = todayStr(), amanha = addDays(hoje, 1);
+  const livres = DB.tasks.filter(t => taskVisible(t) && !t.fluxoRef);   // tarefas do ciclo (fluxo) ficam em Avaliação e treino
+  const nomeDe = t => t.alunoId ? alunoNome(findAluno(t.alunoId)) : '';
+  livres.filter(t => liveDate(t) === hoje && t.hora).sort((a, b) => String(a.hora).localeCompare(String(b.hora)))
+    .forEach(t => r.agenda.push({ id:t.id, hora:t.hora, titulo:t.titulo, quem:nomeDe(t), done:!!t.done }));
+  const ag = new Set(r.agenda.map(a => a.id));
+  livres.filter(t => !t.done && !ag.has(t.id) && liveDate(t) <= amanha)
+    .sort((a, b) => liveDate(a).localeCompare(liveDate(b)))
+    .slice(0, 8)
+    .forEach(t => {
+      const d = diffDays(liveDate(t), hoje);
+      r.tarefas.push({ id:t.id, titulo:t.titulo, quem:nomeDe(t),
+        due: d < 0 ? 'atrasada ' + Math.abs(d) + 'd' : d === 0 ? 'hoje' : 'amanhã', tom: d < 0 ? 'red' : d === 0 ? 'amber' : 'gray' });
+    });
+  return r;
+}
+
+// Últimas atividades: eventos que o sistema já guarda (aluno novo, treino
+// aprovado, avaliação, tarefa concluída) + o que o próprio Painel registra
+// (DB.atividades, ex.: pagamento recebido).
+function dashAtividades(){
+  const ev = [];
+  const corte = Date.now() - 30 * 86400000;
+  const lista = (typeof students !== 'undefined' && Array.isArray(students)) ? students : [];
+  lista.forEach(s => {
+    const nome = (s.perfil || {}).nome; if(!nome) return;
+    if(s.id > 1e12 && s.id >= corte) ev.push({ ts:s.id, ic:'ph-user-plus', nome, what:'Novo aluno cadastrado', exato:true });
+    (s.treinos || []).forEach(t => {
+      if(typeof TREINOS_STATUS === 'undefined' || t.status !== TREINOS_STATUS.APROVADO) return;
+      const d = _dashParseBR(t.dataAprovacao);
+      if(d && d.getTime() >= corte) ev.push({ ts:d.getTime() + 43200000, ic:'ph-barbell', nome, what:'Treino prescrito' });
+    });
+    (s.avaliacoesAntro || []).forEach(a => {
+      if(!a.data_avaliacao) return;
+      const d = a.data_avaliacao.includes('/') ? _dashParseBR(a.data_avaliacao) : new Date(a.data_avaliacao + 'T12:00:00');
+      if(d && !isNaN(+d) && d.getTime() >= corte) ev.push({ ts:d.getTime(), ic:'ph-clipboard-text', nome, what:'Avaliação registrada' });
+    });
+  });
+  if(_dashTemCrm()){
+    DB.tasks.filter(t => t.done && t.doneDate && t.alunoId).forEach(t => {
+      const d = new Date(t.doneDate + 'T12:00:00');
+      if(d.getTime() >= corte) ev.push({ ts:d.getTime(), ic:'ph-check-circle', nome:alunoNome(findAluno(t.alunoId)), what:'Concluído: ' + t.titulo });
+    });
+    (DB.atividades || []).forEach(a => ev.push({ ts:a.ts, ic:a.ic, nome:a.nome, what:a.what, exato:true, novo:Date.now() - a.ts < 120000 }));
+  }
+  ev.sort((a, b) => b.ts - a.ts);
+  return ev.slice(0, 6).map(e => {
+    const d = new Date(e.ts), h0 = new Date(); h0.setHours(0, 0, 0, 0);
+    const dias = Math.round((h0 - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+    let quando = dias <= 0 ? (e.exato ? d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }) : 'hoje')
+               : dias === 1 ? 'ontem' : _dashFmtCurto(d);
+    if(e.novo) quando = 'agora';
+    return Object.assign({}, e, { quando });
+  });
+}
+function dashRegistrarAtividade(ic, nome, what){
+  if(!_dashTemCrm()) return;
+  DB.atividades = DB.atividades || [];
+  DB.atividades.unshift({ ts:Date.now(), ic, nome, what });
+  DB.atividades = DB.atividades.slice(0, 50);
+  if(typeof crmSave === 'function') crmSave();
+}
+
+function _dashPassos(){
+  if(!_dashTemCrm()) return [];
   const hasConfig = !!(DB.config && (DB.config.personalName || (DB.config.studioName && DB.config.studioName !== 'FitCPX Lite')));
   const hasFluxo = DB.fluxos.filter(f => !f.archived).length > 0;
   const lista = (typeof students !== 'undefined') ? students : [];
-  const hasCrmAluno = lista.some(s => s.crm && s.crm.fluxos && s.crm.fluxos.length);
-
-  const steps = [
-    { done:hasConfig,   titulo:'Configure seu perfil',          sub:'Nome do personal, do estúdio, WhatsApp e prazo de urgência padrão.',                onclick:"navGo('config')" },
-    { done:hasFluxo,    titulo:'Crie um fluxo de trabalho',     sub:'Defina etapas e prazos: o fluxo gera as tarefas automaticamente.',                   onclick:"navGo('fluxos')" },
-    { done:hasCrmAluno, titulo:'Vincule um fluxo a um aluno',   sub:'Na ficha do aluno, associe uma modalidade ou fluxo para as tarefas começarem a nascer.', onclick:"navGo('alunos')" },
-    { done:hasCrmAluno, titulo:'Acompanhe pelo Pipeline',       sub:'Veja todos os alunos por categoria de prazo e mova entre etapas.',                   onclick:"navGo('pipeline')" },
+  const hasVinculo = lista.some(s => s.crm && s.crm.fluxos && s.crm.fluxos.length);
+  const hasPortal = _dashLS('fitcpx-portal-divulgado') === '1';
+  return [
+    { ic:'ph-user-circle',  t:'Configure seu perfil',          s:'Nome, estúdio e WhatsApp',   done:hasConfig,  go:"navGo('config')" },
+    { ic:'ph-flow-arrow',   t:'Crie um fluxo de trabalho',     s:'Etapas, prazos e avisos',    done:hasFluxo,   go:"navGo('fluxos')" },
+    { ic:'ph-link',         t:'Vincule um fluxo a um aluno',   s:'As tarefas começam a nascer', done:hasVinculo, go:"navGo('alunos')" },
+    { ic:'ph-device-mobile', t:'Divulgue o Portal do Aluno',   s:'Envie o link de acesso',     done:hasPortal,  go:"dashToggleMenu('portal')" },
   ];
-  if(steps.every(s => s.done)) return '';
-
-  const itens = steps.map((s, i) => {
-    const num = s.done ? '<i class="ph-check"></i>' : (i + 1);
-    return '<div class="dash-step' + (s.done ? ' done' : '') + '">' +
-      '<span class="dash-step-n">' + num + '</span>' +
-      '<div style="flex:1;min-width:0">' +
-        '<div class="dash-step-t">' + escHTML(s.titulo) + '</div>' +
-        (s.done ? '' : '<div class="dash-step-s">' + escHTML(s.sub) + '</div>') +
-      '</div>' +
-      (s.done ? '' : '<button class="btn btn-ghost btn-sm" onclick="' + s.onclick + '">Abrir</button>') +
-      '</div>';
-  }).join('');
-
-  return '<div class="dash-steps"><div class="dash-steps-h">Primeiros passos</div>' + itens + '</div>';
 }
 
-function _dashColunaTreino(g){
-  const pend = g.vencido.length + g.proximo.length + g.agendar.length + g['sem-treino'].length + g['sem-data'].length;
-  let html = '<div><div class="dash-h"><h3>Treino</h3></div>';
+// ── Ações rápidas ─────────────────────────────────────────────────────────
+const DASH_ACOES = [
+  { id:'novo', label:'Novo aluno', curto:'Novo aluno', ic:'ph-user-plus', primaria:true, itens:[
+      { ic:'ph-pencil-simple-line', t:'Cadastro manual', s:'Preencher os dados agora',               fn:'dashNovoManual()' },
+      { ic:'ph-paper-plane-tilt',   t:'Cadastro online', s:'Copiar o link para o aluno preencher',    fn:'dashCopiarLinkCadastro()' } ] },
+  { id:'treinar', label:'Treinar aluno', curto:'Treinar', ic:'ph-barbell',        fn:'TreinarAdapter.abrir()' },
+  { id:'agenda',  label:'Agenda',        curto:'Agenda',  ic:'ph-calendar-blank', fn:"navGo('agenda')" },
+  { id:'portal', label:'Portal do Aluno', curto:'Portal', ic:'ph-device-mobile', itens:[
+      { ic:'ph-arrow-square-out', t:'Abrir portal',        s:'Abre o portal em nova aba',      fn:'dashPortalAbrir()' },
+      { ic:'ph-copy',             t:'Copiar link',         s:'Para colar onde quiser',          fn:'dashPortalCopiar()' },
+      { ic:'ph-whatsapp-logo',    t:'Enviar por WhatsApp', s:'Abre com mensagem pronta',        fn:'dashPortalWhatsApp()' } ] },
+];
 
-  if(pend === 0){
-    html += '<div class="dash-ok"><i class="ph-check-circle"></i>Todos os treinos estão em dia.</div>';
-  } else {
-    _DASH_SECOES.forEach(sec => {
-      const itens = g[sec.chave];
-      if(!itens.length) return;
-      html += '<div id="dash-sec-' + sec.chave + '" class="dash-sec">' +
-        '<div class="dash-sec-h">' +
-          '<i class="' + sec.icone + '" style="color:' + sec.cor + ';font-size:16px"></i>' +
-          '<span>' + sec.titulo + '</span>' +
-          '<span class="n">' + itens.length + '</span>' +
-        '</div>' +
-        '<div class="dash-list">' + itens.map(c => _dashLinhaAluno(c, sec)).join('') + '</div></div>';
-    });
+function _dashAcaoHTML(a, tile){
+  const cls = (tile ? 'dp-tile' : 'dp-act') + (a.primaria ? ' is-primary' : '');
+  const click = a.itens ? "dashToggleMenu('" + a.id + "')" : "dashFecharMenus();" + a.fn;
+  const menu = a.itens ? '<div class="dp-menu" role="menu" data-menu-id="' + a.id + '">' +
+      '<div class="dp-sheet-h"><span class="dp-grip"></span><b>' + a.label + '</b></div>' +
+      a.itens.map(it => '<button type="button" class="dp-menu-it" role="menuitem" onclick="dashFecharMenus();' + it.fn + '">' +
+        '<span class="dp-menu-ic"><i class=' + it.ic + '></i></span>' +
+        '<span class="dp-menu-tx"><b>' + it.t + '</b><small>' + it.s + '</small></span></button>').join('') +
+    '</div>' : '';
+  return '<div class="dp-actwrap" data-menu="1" data-act="' + a.id + '">' +
+    '<button type="button" class="' + cls + '" onclick="' + click + '"' + (a.itens ? ' aria-haspopup="menu"' : '') + '>' +
+      '<i class=' + a.ic + '></i><span class="dp-act-l">' + (tile ? a.curto : a.label) + '</span>' +
+      (a.itens && !tile ? '<i class="ph-caret-down dp-chev"></i>' : '') + '</button>' + menu + '</div>';
+}
+
+function dashToggleMenu(id){
+  const dp = document.querySelector('.dp'); if(!dp) return;
+  const w = Array.from(document.querySelectorAll('.dp-actwrap[data-act="' + id + '"]')).find(x => x.offsetParent !== null); if(!w) return;
+  const abre = !w.classList.contains('open');
+  dashFecharMenus();
+  if(abre){ w.classList.add('open'); dp.classList.add('menu-open'); }
+}
+function dashFecharMenus(){
+  document.querySelectorAll('.dp-actwrap.open').forEach(w => w.classList.remove('open'));
+  const dp = document.querySelector('.dp'); if(dp) dp.classList.remove('menu-open');
+}
+document.addEventListener('mousedown', e => {
+  if(e.target.closest && !e.target.closest('[data-menu]')) dashFecharMenus();
+});
+
+// ── Ações: novo aluno e portal ──────────────────────────────────────────────
+function dashNovoManual(){
+  if(typeof abrirNovoAluno === 'function') abrirNovoAluno(); else navGo('alunos');
+}
+async function _dashCopiar(texto){
+  try{ await navigator.clipboard.writeText(texto); return true; }
+  catch(e){
+    const ta = document.createElement('textarea'); ta.value = texto; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try{ ok = document.execCommand('copy'); }catch(_){}
+    ta.remove(); return ok;
   }
-  html += '</div>';
-  return html;
 }
-
-function _dashColunaCrm(){
-  if(!_dashTemCrm()) return '<div></div>';
-  const hoje = todayStr();
-  const allPending = DB.tasks.filter(t => taskVisible(t) && !t.done);
-  const overdue = allPending.filter(t => diffDays(liveDate(t), hoje) < 0);
-  const todayT = allPending.filter(t => liveDate(t) === hoje);
-  const urgentT = allPending.filter(t => {
-    const d = diffDays(liveDate(t), hoje);
-    return d >= 0 && d <= taskUrgDays(t) && t.tipo === 'prazo';
+async function _dashGarantirCodigo(){
+  if(typeof _portalLinkCodigo !== 'undefined' && _portalLinkCodigo) return _portalLinkCodigo;
+  if(typeof supa === 'undefined' || typeof _supaUser === 'undefined' || !_supaUser) return null;
+  const { data } = await supa.from('personal_links').select('codigo').eq('trainer_user_id', _supaUser.id).maybeSingle();
+  _portalLinkCodigo = data && data.codigo || null;
+  return _portalLinkCodigo;
+}
+async function dashLinkCadastro(){
+  return Carregando.durante('Preparando o link...', async () => {
+    let cod = await _dashGarantirCodigo();
+    if(!cod && typeof gerarPortalLink === 'function'){ await gerarPortalLink(); cod = _portalLinkCodigo; }
+    return cod ? _portalUrlCadastro() : null;
   });
-
-  const filtro = window._dashCrmFiltro || 'urgente';
-  let lista;
-  if(filtro === 'urgente'){
-    lista = [...overdue, ...todayT, ...urgentT.filter(t => !todayT.find(x => x.id === t.id))];
-  } else if(filtro === '7d'){
-    lista = allPending.filter(t => { const d = diffDays(liveDate(t), hoje); return d > 0 && d <= 7; });
-  } else if(filtro === '30d'){
-    lista = allPending.filter(t => { const d = diffDays(liveDate(t), hoje); return d > 0 && d <= 30; });
-  } else {
-    lista = allPending;
-  }
-  lista = lista.sort((a, b) => liveDate(a).localeCompare(liveDate(b))).slice(0, 30);
-  const merged = mergeTasks(lista);
-
-  const filtros = [['urgente','Urgentes'], ['7d','7 dias'], ['30d','30 dias'], ['all','Todas']]
-    .map(([v, l]) => '<button class="btn btn-xs ' + (filtro===v?'btn-primary':'btn-ghost') +
-      '" onclick="window._dashCrmFiltro=\'' + v + '\';renderDashboard()">' + l + '</button>').join('');
-
-  const corpo = merged.length ? merged.map(m => taskCardHTML(m)).join('') :
-    '<div class="empty" style="padding:32px 16px"><i class="ph-check-circle"></i><div class="empty-title">Nada pendente neste filtro</div></div>';
-
-  return '<div>' +
-    '<div class="dash-h"><h3>Tarefas do CRM</h3><div style="display:flex;gap:4px">' + filtros + '</div></div>' +
-    '<div style="max-height:520px;overflow-y:auto">' + corpo + '</div>' +
-    '</div>';
+}
+function _dashMarcarPortal(){ _dashLS('fitcpx-portal-divulgado', '1'); }
+async function dashCopiarLinkCadastro(){
+  const url = await dashLinkCadastro();
+  if(!url){ crmToast('Não foi possível gerar o link agora', 'err'); return; }
+  const ok = await _dashCopiar(url);
+  _dashMarcarPortal();
+  crmToast(ok ? 'Link de cadastro copiado' : 'Copie o link: ' + url);
+}
+function dashPortalAbrir(){ _dashMarcarPortal(); abrirAppAluno('acesso'); crmToast('Portal aberto em nova aba'); }
+async function dashPortalCopiar(){
+  const ok = await _dashCopiar(_portalUrlAcesso());
+  _dashMarcarPortal();
+  crmToast(ok ? 'Link do portal copiado' : 'Copie o link: ' + _portalUrlAcesso());
+}
+function dashPortalWhatsApp(){
+  _dashMarcarPortal();
+  abrirWhatsApp('portal', null, { link:_portalUrlAcesso() });
+  crmToast('WhatsApp Web aberto com o link');
 }
 
-function _dashPipelineResumo(){
-  if(!_dashTemCrm()) return '';
-  const catDefs = getCatDefs();
-  const lista = (typeof students !== 'undefined') ? students : [];
-  const pausedIds = new Set(lista.filter(a => a.crm && (a.crm.archived || a.crm.status === 'pausado' || a.crm.status === 'inativo')).map(a => a.id));
-  const allVisible = DB.tasks.filter(t => !pausedIds.has(t.alunoId) && !t.done);
+// ── Ações das linhas ───────────────────────────────────────────────────────
+function dashAbrirAluno(id){
+  if(typeof selectStudent === 'function') selectStudent(id);
+}
+function dashPrescrever(id){
+  dashAbrirAluno(id);
+  setTimeout(() => { if(typeof switchTab === 'function') switchTab('prescricao'); }, 0);
+}
+function dashMensagem(id, tipo){ abrirWhatsApp(tipo, id); }
+function dashTrocarArea(k){
+  if(k === window._dashArea) return;
+  window._dashArea = k;
+  document.querySelectorAll('.dp-stat').forEach(b => b.classList.toggle('on', b.dataset.area === k));
+  _dashRenderPainel(true);
+}
+function dashTrocarEtapa(k){ window._dashEtapa = k; _dashRenderPainel(false); }
+function dashAbrirAgenda(){ navGo('agenda'); }
+function dashTarefa(id){
+  if(typeof toggleTaskDone !== 'function') return;
+  const t = DB.tasks.find(x => x.id === id), vaiConcluir = t && !t.done;
+  toggleTaskDone(id);
+  if(vaiConcluir) crmToast('Tarefa concluída');
+  renderDashboard();
+}
+function dashDispensarBoasVindas(){ _dashLS('fitcpx-dash-welcome-off', '1'); renderDashboard(); }
+function dashCobrar(id){
+  const p = FinanceiroAdapter.listarPagamentosVencidos().find(x => x.id === id); if(!p) return;
+  abrirWhatsApp('cobranca', p.alunoId, { valor:_dashMoney(p.valor), vencimento:_dashFmtISO(p.vencimento) });
+}
+async function dashReceber(id){
+  const p = FinanceiroAdapter.listarPagamentosVencidos().find(x => x.id === id); if(!p) return;
+  const ok = await Carregando.durante('Registrando o pagamento...', () => FinanceiroAdapter.marcarRecebido(id));
+  if(!ok){ crmToast('Não foi possível registrar o pagamento', 'err'); return; }
+  const el = document.querySelector('[data-pag="' + id + '"]');
+  if(el) el.classList.add('saindo');
+  setTimeout(() => {
+    dashRegistrarAtividade('ph-money', p.nome, 'Pagamento recebido');
+    renderDashboard();
+    crmToast('Pagamento de ' + String(p.nome).split(' ')[0] + ' marcado como recebido');
+  }, 340);
+}
+function dashRenovar(id){
+  const c = FinanceiroAdapter.listarContratos().find(x => x.id === id); if(!c) return;
+  abrirWhatsApp('renovacao', c.alunoId, { plano:c.plano || '', vencimento:_dashFmtISO(c.fim) });
+}
+function dashAjustar(id){ FinanceiroAdapter.abrirContrato(id); }
 
-  const defaultOrder = catDefs.map(c => c.id);
-  const pipeOrder = (DB.dashPipeOrder && DB.dashPipeOrder.length) ? DB.dashPipeOrder
-                   : (DB.pipeOrder && DB.pipeOrder.length) ? DB.pipeOrder : defaultOrder;
-  const usedCats = [...new Set(allVisible.map(t => t.cat))];
-  const orderedCats = [...pipeOrder.filter(id => usedCats.includes(id)), ...usedCats.filter(id => !pipeOrder.includes(id))];
+// ── Renderização ──────────────────────────────────────────────────────────
+function _dashChipHTML(tom, txt){ return '<span class="dp-chip tom-' + tom + '">' + escHTML(txt) + '</span>'; }
+function _dashAvatar(ini, tom){ return '<span class="dp-av' + (tom ? ' tom-' + tom : '') + '">' + escHTML(ini) + '</span>'; }
 
-  const cols = orderedCats.map(cat => {
-    const def = catDefs.find(c => c.id === cat) || { label:catLabel(cat), icon:catIcon(cat), color:'#6b7280' };
-    const tasks = allVisible.filter(t => t.cat === cat).sort((a, b) => liveDate(a).localeCompare(liveDate(b)));
-    if(!tasks.length) return '';
-    const byAluno = {};
-    tasks.forEach(t => { (byAluno[t.alunoId] = byAluno[t.alunoId] || []).push(t); });
-    let idx = 0;
-    const cards = Object.entries(byAluno).map(([alunoId, aTasks]) => {
-      const al = findAluno(Number(alunoId)); if(!al) return '';
-      return mergeTasks(aTasks).map(m => {
-        const ids = m.tasks.map(t => t.id).join(',');
-        const card = buildPipeCard(m, 'dash', al, "toggleTaskDoneMany('" + ids + "')", "toggleTaskDoneMany('" + ids + "')");
-        return idx++ >= 3 ? '' : card;
-      }).join('');
-    }).join('');
-    return '<div class="pipe-col">' +
-      '<div class="pipe-col-h">' +
-        '<span class="pipe-col-t"><span style="color:' + def.color + '">' + icHTML(def.icon) + '</span>' + escHTML(def.label) + '</span>' +
-        '<span class="badge badge-gray">' + tasks.length + '</span>' +
-      '</div>' +
-      '<div class="pipe-col-b">' + cards + '</div></div>';
-  }).join('');
+function _dashAcoesLinha(o){
+  const cons = o.mod === 'Consultoria';
+  const tipoMsg = cons ? 'pedirDados' : (o.etapa === 'prescrever' ? 'mensagem' : 'avaliacao');
+  const primaria = o.etapa === 'prescrever' ? 'prescrever' : (cons ? 'msg' : 'agenda');
+  const defs = [
+    { k:'msg',        l:cons ? 'Pedir dados' : 'Mensagem', ic:'ph-whatsapp-logo', fn:'dashMensagem(' + o.id + ",'" + tipoMsg + "')" },
+    { k:'agenda',     l:'Agenda',     ic:'ph-calendar-plus', fn:'dashAbrirAgenda()' },
+    { k:'prescrever', l:'Prescrever', ic:'ph-barbell',       fn:'dashPrescrever(' + o.id + ')' },
+  ];
+  defs.sort((a, b) => (b.k === primaria) - (a.k === primaria));
+  return defs.map(a => a.k === primaria
+    ? '<button type="button" class="dp-btn is-primary" onclick="' + a.fn + '"><i class=' + a.ic + '></i><span>' + a.l + '</span></button>'
+    : '<button type="button" class="dp-btn is-icon" title="' + a.l + '" aria-label="' + a.l + ' ' + escHTML(o.nome) + '" onclick="' + a.fn + '"><i class=' + a.ic + '></i><span class="dp-btn-l">' + a.l + '</span></button>'
+  ).join('');
+}
 
-  return '<div style="margin-top:32px">' +
-    '<div class="dash-h"><h3>Pipeline por categoria</h3>' +
-      '<button class="btn btn-ghost btn-sm" onclick="navGo(\'pipeline\')">Ver completo<i class="ph-arrow-right"></i></button>' +
+function _dashLinhaHTML(o){
+  const barTom = o.tom === 'red' ? 'red' : o.tom === 'amber' ? 'amber' : 'green';
+  return '<div class="dp-row">' +
+    '<div class="dp-c-aluno">' + _dashAvatar(o.ini) +
+      '<div class="dp-who"><div class="dp-nome">' + escHTML(o.nome) + '</div>' +
+      '<div class="dp-sub dp-mod">' + o.mod + '</div><div class="dp-sub dp-status tom-' + o.tom + '-t">' + escHTML(o.status) + '</div></div></div>' +
+    '<div class="dp-c-sit">' + _dashChipHTML(o.tom, DASH_ETAPA_ROTULO[o.etapa]) + (o.tag ? '<span class="dp-tag tom-' + o.tom + '-t">' + escHTML(o.tag) + '</span>' : '') + '</div>' +
+    '<div class="dp-c-dados">' +
+      '<div class="dp-c-mod"><div class="dp-k">Modalidade</div><div class="dp-v">' + o.mod + '</div></div>' +
+      '<div class="dp-c-aval"><div class="dp-k">Avaliação</div><div class="dp-v">' + escHTML(o.aval) + '</div><div class="dp-s">' + escHTML(o.avalSub) + '</div></div>' +
+      '<div class="dp-c-treino"><div class="dp-k">Treino</div><div class="dp-v">' + escHTML(o.trTxt) + '</div><div class="dp-s">' + escHTML(o.trSub) + '</div>' +
+        '<div class="dp-bar"><i class="bar-' + barTom + '" style="width:' + o.pct + '%"></i></div></div>' +
     '</div>' +
-    '<div class="pipe-scroll">' +
-      (cols || '<div class="empty" style="padding:24px 16px;flex:1"><div class="empty-title">Sem tarefas pendentes</div></div>') +
-    '</div></div>';
+    '<div class="dp-c-acoes">' + _dashAcoesLinha(o) + '</div>' +
+  '</div>';
 }
 
-function _dashAcoesRapidas(){
-  const novoAluno = (typeof abrirNovoAluno === 'function') ? 'abrirNovoAluno()' : "navGo('alunos')";
-  return '<div class="dash-quick">' +
-    '<button class="btn btn-primary" onclick="' + novoAluno + '"><i class="ph-plus"></i>Novo aluno</button>' +
-    '<button class="btn btn-ghost" onclick="navGo(\'agenda\')"><i class="ph-calendar-blank"></i>Agenda</button>' +
-    '<button class="btn btn-ghost" onclick="navGo(\'pipeline\')"><i class="ph-kanban"></i>Pipeline</button>' +
-    '<button class="btn btn-ghost" onclick="navGo(\'fluxos\')"><i class="ph-flow-arrow"></i>Fluxos</button>' +
-    '</div>';
+function _dashPainelCiclo(D){
+  const rows = D.rows.filter(r => window._dashEtapa === 'todos' || r.etapa === window._dashEtapa);
+  const cont = k => k === 'todos' ? D.rows.length : D.rows.filter(r => r.etapa === k).length;
+  const abas = DASH_ETAPAS.map(([k, l]) =>
+    '<button type="button" class="dp-seg-b' + (window._dashEtapa === k ? ' on' : '') + '" onclick="dashTrocarEtapa(\'' + k + '\')">' + l + '<span>' + cont(k) + '</span></button>').join('');
+  const corpo = rows.length
+    ? '<div class="dp-thead"><span>Aluno</span><span>Avaliação</span><span>Treino</span><span>Situação</span><span></span></div>' + rows.map(_dashLinhaHTML).join('')
+    : '<div class="dp-vazio"><i class=ph-check-circle></i>Tudo em dia</div>';
+  return '<div class="dp-ph"><div><h3>Avaliação e treino</h3><p>Prazos definidos em cada fluxo</p></div>' +
+    '<div class="dp-segs"><div class="dp-seg">' + abas + '</div></div></div>' + corpo;
+}
+
+function _dashPainelFin(D){
+  const f = D.fin;
+  if(!f.disponivel){
+    return '<h3>Financeiro</h3><p class="dp-p">Controle manual: registre os recebimentos e acompanhe os contratos</p>' +
+      '<div class="dp-2col"><div class="dp-box"><div class="dp-box-h"><b>Pagamentos vencidos</b></div>' +
+      '<div class="dp-vazio dp-vazio-s"><i class=ph-hourglass></i>' + escHTML(FinanceiroAdapter.textoEmBreve) + '</div></div>' +
+      '<div class="dp-box"><div class="dp-box-h"><b>Contratos</b></div><div class="dp-vazio dp-vazio-s"><i class=ph-hourglass></i>Vencimentos e renovações aparecem aqui.</div></div></div>';
+  }
+  const total = f.pag.reduce((s, p) => s + Number(p.valor || 0), 0);
+  const hoje = todayStr();
+  const pags = f.pag.length ? f.pag.map(p => {
+    const d = diffDays(p.vencimento, hoje);
+    return '<div class="dp-pag" data-pag="' + p.id + '"><div class="dp-pag-in">' + _dashAvatar(_dashIniciais(p.nome), 'red') +
+      '<div class="dp-pag-b"><div class="dp-pag-t"><span>' + escHTML(p.nome) + '</span><b>' + _dashMoney(p.valor) + '</b></div>' +
+      '<div class="dp-s">' + escHTML(p.descricao || 'Pagamento') + ' · venceu ' + _dashFmtISO(p.vencimento) + ' · <span class="tom-red-t">' + _dashDias(d, true) + '</span></div>' +
+      '<div class="dp-pag-a"><button type="button" class="dp-btn" onclick="dashCobrar(' + p.id + ')"><i class=ph-whatsapp-logo></i><span>Enviar cobrança</span></button>' +
+      '<button type="button" class="dp-btn is-primary" onclick="dashReceber(' + p.id + ')"><i class=ph-check></i><span>Marcar recebido</span></button></div></div></div></div>';
+  }).join('') : '<div class="dp-vazio dp-vazio-s"><i class=ph-check-circle></i>Tudo recebido</div>';
+  const cons = f.con.length ? f.con.map(c => {
+    const d = diffDays(c.fim, hoje), venc = d < 0;
+    return '<div class="dp-con"><div class="dp-con-b"><div class="dp-con-t"><span>' + escHTML(c.nome) + '</span>' + _dashChipHTML(venc ? 'red' : 'amber', venc ? 'vencido' : d + (d === 1 ? ' dia' : ' dias')) + '</div>' +
+      '<div class="dp-s">' + escHTML(c.plano || 'Contrato') + ' · ' + (venc ? 'venceu ' : 'vence ') + _dashFmtISO(c.fim) + '</div></div>' +
+      '<button type="button" class="dp-btn" onclick="' + (venc ? 'dashAjustar(' : 'dashRenovar(') + c.id + ')"><i class=' + (venc ? 'ph-pencil-simple-line' : 'ph-whatsapp-logo') + '></i><span>' + (venc ? 'Ajustar' : 'Renovar') + '</span></button></div>';
+  }).join('') : '<div class="dp-vazio dp-vazio-s"><i class=ph-check-circle></i>Nenhum contrato pendente</div>';
+  return '<h3>Financeiro</h3><p class="dp-p">Controle manual: registre os recebimentos e acompanhe os contratos</p>' +
+    '<div class="dp-2col"><div class="dp-box is-danger"><div class="dp-box-h"><b>Pagamentos vencidos</b><b class="tom-red-t">' + _dashMoney(total) + '</b></div>' + pags + '</div>' +
+    '<div class="dp-box"><div class="dp-box-h"><b>Contratos</b></div>' + cons + '</div></div>';
+}
+
+function _dashPainelHoje(D){
+  const h = D.hoje;
+  const prox = h.agenda.findIndex(a => !a.done);
+  const ag = h.agenda.length ? h.agenda.map((a, i) =>
+    '<div class="dp-ag' + (a.done ? ' done' : '') + '"><span class="dp-ag-h">' + escHTML(a.hora) + '</span>' +
+    '<div class="dp-ag-b' + (i === prox ? ' now' : '') + '"><div class="dp-ag-t">' + escHTML(a.titulo) + '</div>' + (a.quem ? '<div class="dp-s">' + escHTML(a.quem) + '</div>' : '') + '</div>' +
+    '<span class="dp-ag-l">' + (a.done ? 'concluída' : i === prox ? 'próxima' : '') + '</span></div>').join('')
+    : '<div class="dp-vazio dp-vazio-s"><i class=ph-check-circle></i>Nada agendado para hoje</div>';
+  const tar = h.tarefas.length ? h.tarefas.map(t =>
+    '<div class="dp-tar" role="button" tabindex="0" onclick="dashTarefa(' + t.id + ')"><span class="dp-cb"><i class=ph-check></i></span>' +
+    '<div class="dp-tar-b"><div class="dp-tar-t">' + escHTML(t.titulo) + '</div>' + (t.quem ? '<div class="dp-s">' + escHTML(t.quem) + '</div>' : '') + '</div>' +
+    _dashChipHTML(t.tom, t.due) + '</div>').join('')
+    : '<div class="dp-vazio dp-vazio-s"><i class=ph-check-circle></i>Nenhuma tarefa aberta</div>';
+  return '<h3>Hoje</h3><p class="dp-p">Agenda do dia e tarefas soltas do CRM (o ciclo de treino tem área própria)</p>' +
+    '<div class="dp-2col"><div class="dp-box"><div class="dp-box-h"><b>Agenda</b><a href="#" onclick="dashAbrirAgenda();return false">Abrir agenda</a></div>' + ag + '</div>' +
+    '<div class="dp-box"><div class="dp-box-h"><b>Tarefas · ' + h.tarefas.length + ' abertas</b></div>' + tar + '</div></div>';
+}
+
+function _dashRenderPainel(animar){
+  const el = document.getElementById('dp-main'); if(!el || !window._dashD) return;
+  const D = window._dashD, a = window._dashArea;
+  const html = a === 'fin' ? _dashPainelFin(D) : a === 'hoje' ? _dashPainelHoje(D) : _dashPainelCiclo(D);
+  if(animar){
+    el.classList.add('fade-out');
+    requestAnimationFrame(() => requestAnimationFrame(() => { el.innerHTML = html; el.classList.remove('fade-out'); }));
+  } else el.innerHTML = html;
+}
+
+function _dashStatHTML(k, ic, rotulo, curto, n, sub, tomN){
+  return '<button type="button" class="dp-stat' + (window._dashArea === k ? ' on' : '') + '" data-area="' + k + '" onclick="dashTrocarArea(\'' + k + '\')">' +
+    '<span class="dp-stat-l"><span class="dp-stat-ic"><i class=' + ic + '></i></span><span class="dp-l-full">' + rotulo + '</span><span class="dp-l-short">' + curto + '</span></span>' +
+    '<span class="dp-stat-n' + (tomN ? ' tom-' + tomN + '-t' : '') + '">' + n + '</span><span class="dp-stat-s">' + sub + '</span></button>';
 }
 
 function renderDashboard(){
-  const el = document.getElementById('dash-conteudo');
-  if(!el) return;
+  const el = document.getElementById('dash-conteudo'); if(!el) return;
+  try{ waGarantirModelos(); }catch(e){}
 
-  if(typeof renderDashPortalLinks==='function') renderDashPortalLinks();
+  const rows = dashLinhasCiclo();
+  const fin = { disponivel:!!FinanceiroAdapter.disponivel, pag:[], con:[] };
+  if(fin.disponivel){ try{ fin.pag = FinanceiroAdapter.listarPagamentosVencidos(); fin.con = FinanceiroAdapter.listarContratos(); }catch(e){} }
+  const D = window._dashD = { rows, fin, hoje:dashHoje(), saude:dashSaude() };
+  const cont = k => rows.filter(r => r.etapa === k).length;
+  const hojeN = D.hoje.agenda.length + D.hoje.tarefas.length;
+  const sa = D.saude;
 
-  const g = dashLevantarPendencias();
+  const tendencia = sa.liquido > 0 ? ['ph-trend-up', '+' + sa.liquido] : sa.liquido < 0 ? ['ph-trend-down', '−' + Math.abs(sa.liquido)] : ['ph-equals', '0'];
+  const saude = '<div class="dp-stat dp-saude"><span class="dp-stat-l"><span class="dp-stat-ic"><i class=ph-users></i></span><span>Alunos ativos</span></span>' +
+    '<span class="dp-stat-n">' + sa.ativos + '<b class="' + (sa.liquido < 0 ? 'neg' : '') + '"><i class=' + tendencia[0] + '></i>' + tendencia[1] + ' em 30 dias</b></span>' +
+    '<span class="dp-stat-s"><span class="pos">+' + sa.entradas + '</span> entradas<span class="sep">·</span><span class="neg">−' + sa.saidas + '</span> saídas</span></div>';
 
-  let html = '';
-  html += _dashSaudacao();
-  html += _dashBannerCrm();
-  html += _dashStatsBar(g);
-  html += _dashOnboarding();
+  const finN = fin.disponivel ? (window.innerWidth < 768 ? String(fin.pag.length + fin.con.length) : _dashMoney(fin.pag.reduce((s, p) => s + Number(p.valor || 0), 0))) : '—';
+  const finSub = fin.disponivel ? fin.pag.length + ' pagamentos · ' + fin.con.length + ' contratos' : 'Em breve';
+  const stats =
+    _dashStatHTML('ciclo', 'ph-heartbeat', 'Avaliação e treino', 'Treino', rows.length, cont('avaliar') + ' avaliar · ' + cont('prescrever') + ' prescrever · ' + (cont('vencendo') + cont('vencido')) + ' treino') +
+    _dashStatHTML('fin', 'ph-money', 'Financeiro', 'Financeiro', finN, finSub, fin.disponivel && fin.pag.length ? 'red' : '') +
+    _dashStatHTML('hoje', 'ph-calendar-check', 'Hoje', 'Hoje', hojeN, D.hoje.agenda.length + ' agendamentos · ' + D.hoje.tarefas.length + ' tarefas');
 
-  html += '<div class="dash-grid">' +
-    _dashColunaTreino(g) +
-    _dashColunaCrm() +
-    '</div>';
+  const passos = _dashPassos();
+  const feitos = passos.filter(p => p.done).length;
+  let lateral = '';
+  if(passos.length && feitos < passos.length){
+    lateral += '<div class="dp-card dp-passos"><div class="dp-card-h"><b>Primeiros passos</b><span>' + feitos + ' de ' + passos.length + '</span></div>' +
+      '<div class="dp-prog"><i style="width:' + Math.round(feitos / passos.length * 100) + '%"></i></div>' +
+      passos.map(p => '<div class="dp-passo' + (p.done ? ' done' : '') + '" role="button" tabindex="0"' + (p.done ? '' : ' onclick="' + p.go + '"') + '>' +
+        '<span class="dp-passo-ic"><i class=' + (p.done ? 'ph-check-circle' : p.ic) + '></i></span>' +
+        '<div class="dp-passo-b"><b>' + p.t + '</b><small>' + p.s + '</small></div><i class="ph-caret-right"></i></div>').join('') + '</div>';
+  } else if(passos.length && _dashLS('fitcpx-dash-welcome-off') !== '1'){
+    lateral += '<div class="dp-welcome"><div class="dp-welcome-h"><i class=ph-confetti></i><button type="button" onclick="dashDispensarBoasVindas()" aria-label="Dispensar"><i class=ph-x></i></button></div>' +
+      '<b>Tudo configurado!</b><p>Seu espaço está pronto. Os fluxos já estão cuidando dos prazos por você.</p></div>';
+  }
+  let nWa = 0; try{ nWa = waPendentes().length; }catch(e){}
+  if(nWa){
+    lateral += '<div class="dp-card"><div class="dp-card-h"><b>Mensagens a enviar</b><span>' + nWa + '</span></div>' +
+      '<div class="dp-passo" role="button" tabindex="0" onclick="waAbrirFila()"><span class="dp-passo-ic"><i class=ph-whatsapp-logo></i></span>' +
+      '<div class="dp-passo-b"><b>' + nWa + (nWa === 1 ? ' mensagem pronta' : ' mensagens prontas') + '</b><small>Abra a fila e envie pelo WhatsApp</small></div><i class="ph-caret-right"></i></div></div>';
+  }
+  const ativ = dashAtividades();
+  lateral +='<div class="dp-card dp-ativ"><div class="dp-card-h"><b>Últimas atividades</b></div>' +
+    (ativ.length ? ativ.map(a => '<div class="dp-at' + (a.novo ? ' novo' : '') + '"><span class="dp-at-ic"><i class=' + a.ic + '></i></span>' +
+      '<div class="dp-at-b"><b>' + escHTML(a.nome) + '</b><small>' + escHTML(a.what) + ' · ' + a.quando + '</small></div></div>').join('')
+      : '<div class="dp-vazio dp-vazio-s"><i class=ph-clock></i>Nada por aqui ainda</div>') + '</div>';
 
-  html += _dashPipelineResumo();
-  html += _dashAcoesRapidas();
+  el.innerHTML = '<div class="dp">' +
+    '<div class="dp-head"><div class="dp-hello"><h2>' + escHTML(_dashSaudacao()) + '</h2><p>' + _dashDataExtenso() + '</p></div>' +
+      '<div class="dp-acts">' + DASH_ACOES.map(a => _dashAcaoHTML(a, false)).join('') + '</div>' + shellFerramentasHTML() + '</div>' +
+    '<div class="dp-tiles">' + DASH_ACOES.map(a => _dashAcaoHTML(a, true)).join('') + '</div>' +
+    '<div class="dp-over">' + saude + stats + '</div>' +
+    '<div class="dp-grid"><section class="dp-panel" id="dp-main"></section><aside class="dp-side">' + lateral + '</aside></div>' +
+    '<div class="dp-backdrop" onclick="dashFecharMenus()"></div></div>';
 
-  html += '<p class="dash-foot">' +
-    'O prazo de treino é o de cada ficha (<span class="mono">prazoSemanas</span>, ' +
-    'padrão ' + DASH_PRAZO_PADRAO_SEMANAS + ' semanas), definido na aprovação. ' +
-    'O prazo de CRM é o da categoria ou fluxo vinculado ao aluno.' +
-    '</p>';
-
-  el.innerHTML = html;
+  _dashRenderPainel(false);
+  try{ financeiroAtualizarBadge(); shellAtualizarSino(); }catch(e){}
 }

@@ -1,82 +1,172 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   Portal do Aluno (mobile) — mesmos tokens do painel (../css/tokens.css).
-   Alvos de toque de 44px, uma coluna, barra de abas embaixo.
+   Portal do Aluno (celular primeiro) — padrão visual v2 (08/10/2026)
+   Tokens: ../css/tokens.css (os mesmos do painel). Referência:
+   documentos/design-handoff/REGRAS-DE-DESIGN.md (§12: portal só celular).
+   Uma coluna de até 480px, alvos de toque de 48px, barra de abas embaixo.
+   Em tela larga (tablet/computador) a coluna fica centralizada.
    ══════════════════════════════════════════════════════════════════════════ */
 
 html,body{height:100%}
-body{overflow:hidden;font-size:15px}
+body{overflow:hidden;font-size:15px;background:var(--bg) radial-gradient(900px 420px at 100% -10%,var(--bg-glow) 0%,transparent 65%) no-repeat}
 .hidden{display:none!important}
+:root{--tap:48px}
 
-.tela{max-width:480px;margin:0 auto;padding:24px 20px 48px;min-height:100vh;min-height:100dvh;overflow-y:auto}
-.topo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
-.topo-mark{width:30px;height:30px;border-radius:9px;background:var(--accent);color:var(--accent-text);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
-.topo-mark i{font-size:18px;vertical-align:0}
-.topo-logo{font-weight:650;font-size:16px;letter-spacing:-.015em;color:var(--text)}
-.topo-sub{font-size:13px;color:var(--text3)}
-h1{font-size:24px;font-weight:650;letter-spacing:-.025em;line-height:1.2;margin-bottom:6px}
-h2{font-size:16px;font-weight:600;margin-bottom:10px}
-p.hint{font-size:14px;color:var(--text2);margin-bottom:20px;line-height:1.5}
+/* ── Telas de entrada e de formulário ────────────────────────────────────── */
+.tela{max-width:480px;margin:0 auto;padding:max(20px,env(safe-area-inset-top)) 20px 48px;min-height:100vh;min-height:100dvh;overflow-y:auto}
+/* Rolagem própria + botão fixo embaixo: sempre à mão, mesmo com o teclado aberto */
+.tela-form{height:100vh;height:100dvh;padding-bottom:0;-webkit-overflow-scrolling:touch}
+.tela-form form{display:flex;flex-direction:column;min-height:0}
+.acao-fixa{position:sticky;bottom:0;margin:8px -20px 0;padding:14px 20px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(to bottom,transparent,var(--bg) 18px)}
+.acao-nota{text-align:center;margin:12px 0 0;font-size:13.5px;line-height:1.5;color:var(--text-muted)}
+.campo-senha{position:relative}
+.campo-senha input{padding-right:56px}
+.ver-senha{position:absolute;right:0;top:0;width:52px;height:100%;min-height:var(--tap);background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.ver-senha i{vertical-align:0}
 
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:16px;margin-bottom:12px}
+.convite{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:22px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:var(--r-card)}
+.convite-av{width:42px;height:42px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;flex-shrink:0}
+.convite-rot{font-size:12px;color:var(--text-muted);line-height:1.2}
+.convite-nome{font-size:16px;font-weight:700;letter-spacing:-.01em;line-height:1.3;overflow-wrap:anywhere}
+
+.topo{display:flex;align-items:center;gap:10px;margin-bottom:26px}
+.topo-mark{width:32px;height:32px;border-radius:10px;background:var(--primary);color:var(--on-primary);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.topo-mark i{font-size:19px;vertical-align:0}
+.topo-logo{font-weight:700;font-size:17px;letter-spacing:-.01em;color:var(--text)}
+.topo-sub{font-size:13px;color:var(--text-muted)}
+.topo .btn-tema{margin-left:auto}
+h1{font-size:24px;font-weight:700;letter-spacing:-.015em;line-height:1.2;margin-bottom:6px}
+h2{font-size:16px;font-weight:700;margin-bottom:10px}
+p.hint{font-size:14px;color:var(--text-muted);margin-bottom:20px;line-height:1.5}
+
+/* ── Cartão, campos, botões ──────────────────────────────────────────────── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);box-shadow:var(--shadow-card);padding:16px;margin-bottom:12px}
+.card strong{font-weight:700}
 .field{margin-bottom:16px}
-.field label{display:block;font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px}
-.field .obs{font-size:12px;color:var(--text3);margin-top:4px;line-height:1.4}
+.field label{display:block;font-size:13px;font-weight:500;color:var(--text-2);margin-bottom:6px}
+.field .obs{font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.4}
 
 input,select,textarea{
-  width:100%;min-height:44px;padding:0 14px;background:var(--bg2);border:1px solid var(--border2);
-  border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:16px;outline:none;
-  transition:border-color var(--t-fast) var(--ease-out),box-shadow var(--t-fast) var(--ease-out)}
-textarea{min-height:88px;padding:10px 14px;resize:vertical;line-height:1.5}
-input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
-input[type=checkbox],input[type=radio]{min-height:0;width:20px;height:20px;padding:0}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  width:100%;min-height:var(--tap);padding:0 14px;background:var(--surface);border:1px solid var(--border-strong);
+  border-radius:12px;color:var(--text);font-family:var(--sans);font-size:16px;outline:none;
+  transition:border-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease)}
+/* tokens.css fixa 14px com :not() (especificidade maior); no celular o campo precisa de 16px, senão o iOS dá zoom ao focar */
+body :is(input,select,textarea):not([type=checkbox],[type=radio],[type=file]){font-size:16px;height:auto;min-height:var(--tap);border-radius:12px}
+textarea{min-height:96px;padding:12px 14px;resize:vertical;line-height:1.5}
+input:focus,select:focus,textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-ring)}
+input[type=checkbox],input[type=radio]{min-height:0;width:22px;height:22px;padding:0}
+.grid-2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
 
-.chk-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:8px}
-.chk-label{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--text);cursor:pointer;min-height:40px;padding:0 6px;border-radius:6px}
+.chk-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:2px 8px;background:var(--surface);border:1px solid var(--border-strong);border-radius:12px;padding:8px}
+.chk-label{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--text);cursor:pointer;min-height:44px;padding:0 6px;border-radius:8px}
+.chk-label:active{background:var(--primary-tint)}
 .chk-label input{flex-shrink:0}
 
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 20px;border-radius:var(--radius);
-  font-size:15px;font-weight:600;font-family:var(--sans);cursor:pointer;border:1px solid transparent;width:100%;
-  transition:background-color var(--t-fast) var(--ease-out),transform var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out)}
-.btn:active{transform:scale(.98)}
-.btn-primary{background:var(--accent);color:var(--accent-text)}
-.btn-primary:active{background:var(--accent2)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:var(--tap);padding:0 20px;border-radius:12px;
+  font-size:15px;font-weight:500;font-family:var(--sans);cursor:pointer;border:1px solid transparent;width:100%;
+  transition:background-color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease),transform .1s var(--ease),opacity var(--t-fast) var(--ease)}
+.btn>i{font-size:19px;vertical-align:0}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:var(--primary);color:var(--on-primary)}
+.btn-primary:active{background:var(--primary-hover)}
 .btn-primary:disabled{opacity:.55}
-.btn-ghost{background:var(--bg2);border-color:var(--border2);color:var(--text)}
-.btn-sm{width:auto;min-height:38px;padding:0 14px;font-size:14px}
+.btn-ghost{background:var(--surface);border-color:var(--border-strong);color:var(--text)}
+.btn-ghost:active{border-color:var(--primary);color:var(--primary-ink)}
+.btn-sm{width:auto;min-height:44px;padding:0 16px;font-size:14px}
 .btn-row{display:flex;gap:10px;margin-top:6px}
 .btn-row .btn{width:auto;flex:1}
-.link-btn{background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;padding:6px 0;display:inline-flex;align-items:center;gap:6px;font-family:var(--sans)}
+.link-btn{background:none;border:none;color:var(--primary-ink);font-size:14px;font-weight:500;cursor:pointer;min-height:44px;padding:0 6px;display:inline-flex;align-items:center;gap:6px;font-family:var(--sans)}
 :root:not(.dark) .link-btn{color:var(--accent2)}
+.btn-tema{width:44px;height:44px;border:0;background:transparent;border-radius:12px;color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;font-size:21px;cursor:pointer}
+.btn-tema i{vertical-align:0}
+.btn-tema:active{background:var(--neutral-soft)}
 
-.alert{padding:12px 14px;border-radius:var(--radius);font-size:14px;margin-bottom:16px;line-height:1.45;border:1px solid var(--border);background:var(--bg2);color:var(--text)}
-.alert-amber{background:var(--amber-dim);border-color:var(--amber-line)}
-.alert-red{background:var(--red-dim);border-color:var(--red-line)}
-.alert-green{background:var(--accent-dim);border-color:var(--accent-dim2)}
+.alert{padding:12px 14px;border-radius:12px;font-size:14px;margin-bottom:16px;line-height:1.45;border:1px solid var(--border);background:var(--surface);color:var(--text)}
+.alert-amber{background:var(--warning-soft);border-color:var(--amber-line)}
+.alert-red{background:var(--danger-soft);border-color:var(--red-line)}
+.alert-green{background:var(--primary-tint);border-color:var(--primary-line)}
 
-.divider-label{font-size:14px;font-weight:600;color:var(--text);margin:28px 0 12px;padding-top:20px;border-top:1px solid var(--border)}
+.divider-label{font-size:14px;font-weight:700;color:var(--text);margin:28px 0 12px;padding-top:20px;border-top:1px solid var(--divider)}
 .divider-label:first-of-type{margin-top:0;padding-top:0;border-top:none}
 
-.foto-slot{border:1.5px dashed var(--border2);border-radius:var(--radius2);padding:20px 16px;text-align:center;margin-bottom:12px;cursor:pointer;background:var(--bg2);
-  transition:border-color var(--t-fast) var(--ease-out),background-color var(--t-fast) var(--ease-out)}
-.foto-slot:active{background:var(--bg4)}
-.foto-slot img{max-width:100%;max-height:180px;border-radius:8px}
-.foto-slot .foto-label{font-size:14px;color:var(--text);font-weight:600;margin-bottom:4px}
-.local-item{padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;cursor:pointer;background:var(--bg2);font-size:14px;line-height:1.45}
-.local-item:active{background:var(--bg4)}
-.local-item.selected{border-color:var(--accent);background:var(--accent-dim);box-shadow:inset 0 0 0 1px var(--accent)}
+.foto-slot{border:1.5px dashed var(--border-strong);border-radius:var(--r-card);padding:20px 16px;text-align:center;margin-bottom:12px;cursor:pointer;background:var(--surface);color:var(--text-muted);
+  transition:border-color var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease)}
+.foto-slot:active{background:var(--primary-tint);border-color:var(--primary)}
+.foto-slot img{max-width:100%;max-height:180px;border-radius:10px}
+.foto-slot .foto-label{font-size:14px;color:var(--text);font-weight:500;margin-bottom:4px}
+.local-item{padding:12px 14px;border:1px solid var(--border);border-radius:12px;margin-bottom:8px;cursor:pointer;background:var(--surface);font-size:14px;line-height:1.45;min-height:var(--tap)}
+.local-item:active{background:var(--neutral-soft)}
+.local-item.selected{border-color:var(--primary);background:var(--primary-tint);box-shadow:inset 0 0 0 1px var(--primary)}
 
-/* App (pós-cadastro) */
-.app-shell{max-width:480px;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column}
-.app-header{display:flex;align-items:center;gap:10px;padding:16px 20px 12px;flex-shrink:0}
-.app-content{flex:1;overflow-y:auto;padding:4px 20px 20px}
-.painel-app{padding-top:8px}
-.tabbar{display:flex;flex-shrink:0;border-top:1px solid var(--border);background:var(--bg2);padding-bottom:env(safe-area-inset-bottom)}
-.tabbar-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 4px 9px;background:none;border:none;color:var(--text3);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;
-  transition:color var(--t-fast) var(--ease-out)}
-.tabbar-btn .ico{font-size:22px;line-height:1;display:inline-flex}
+/* ── App (depois do cadastro) ────────────────────────────────────────────── */
+.app-shell{max-width:480px;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column;background:transparent}
+.app-header{display:flex;align-items:center;gap:6px;padding:max(10px,env(safe-area-inset-top)) 12px 6px 20px;flex-shrink:0;min-height:60px}
+.app-header .topo-sub{display:none}
+.app-header .link-btn{color:var(--text-2);font-size:13.5px}
+:root:not(.dark) .app-header .link-btn{color:var(--text-2)}
+.app-header-acoes{margin-left:auto;display:flex;align-items:center;gap:0}
+.app-content{flex:1;overflow-y:auto;padding:6px 20px 24px;-webkit-overflow-scrolling:touch}
+.painel-app{padding-top:8px;animation:painel-in var(--t-slow) var(--ease)}
+@keyframes painel-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+.tabbar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));flex-shrink:0;min-height:64px;border-top:1px solid var(--border);background:var(--surface);padding-bottom:env(safe-area-inset-bottom)}
+.tabbar-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:64px;padding:6px 2px;background:none;border:none;color:var(--text-muted);font-family:var(--sans);font-size:11px;font-weight:500;cursor:pointer;
+  transition:color var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease)}
+.tabbar-btn .ico{font-size:22px;line-height:1;display:inline-flex;width:48px;height:28px;align-items:center;justify-content:center;border-radius:14px;transition:background-color var(--t-fast) var(--ease)}
 .tabbar-btn .ico i{vertical-align:0;font-size:1em}
-.tabbar-btn.active{color:var(--accent);font-weight:600}
-:root:not(.dark) .tabbar-btn.active{color:var(--accent2)}
-.status-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-subtle)}
+.tabbar-btn:active .ico{background:var(--neutral-soft)}
+.tabbar-btn.active{color:var(--primary-ink)}
+.tabbar-btn.active .ico{background:var(--primary-tint)}
+.tabbar-btn.bloqueada{opacity:.45}
+.tabbar-btn.bloqueada .ico{position:relative}
+.tabbar-btn.bloqueada .ico::after{content:"";position:absolute;right:6px;top:2px;width:8px;height:8px;border-radius:50%;background:var(--warning);border:2px solid var(--surface);box-sizing:content-box}
+.card.bloqueado{opacity:.6;background:var(--bg);border-style:dashed;box-shadow:none}
+
+.toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);width:calc(100% - 40px);max-width:440px;padding:12px 16px;border-radius:12px;
+  background:var(--ink-card);color:#fff;font-size:14px;line-height:1.45;z-index:50;box-shadow:0 14px 30px -10px rgba(0,0,0,.4)}
+.status-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--divider)}
 .status-row:first-child{border-top:0;padding-top:0;margin-top:0}
+.status-row .st{font-size:13.5px;color:var(--text-muted)}
+
+/* ── Áreas reservadas (agenda, pagamentos) e listas ─────────────────────── */
+.vazio-card{text-align:center;padding:32px 16px}
+.vazio-ic{width:56px;height:56px;margin:0 auto 12px;border-radius:16px;background:var(--primary-soft);color:var(--primary-ink);display:flex;align-items:center;justify-content:center;font-size:26px}
+.vazio-ic i{vertical-align:0}
+.vazio-t{font-weight:700;font-size:16px;margin-bottom:4px}
+.vazio-s{font-size:13.5px;color:var(--text-muted);line-height:1.5}
+.vazio-card .badge-breve{display:inline-block;margin-top:12px;font-size:11.5px;font-weight:500;padding:3px 10px;border-radius:var(--r-chip);background:var(--info-soft);color:var(--info-ink)}
+.item-lista{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--divider);min-height:var(--tap)}
+.item-lista:first-child{border-top:0}
+.item-lista .it-b{flex:1;min-width:0}
+.item-lista .it-t{font-size:14.5px;font-weight:500}
+.item-lista .it-s{font-size:12.5px;color:var(--text-muted)}
+.chip{font-size:11.5px;font-weight:500;padding:3px 9px;border-radius:var(--r-chip);white-space:nowrap}
+.chip-red{background:var(--danger-soft);color:var(--danger-ink)}
+.chip-amber{background:var(--warning-soft);color:var(--warning-ink)}
+.chip-green{background:var(--primary-soft);color:var(--primary-ink)}
+.chip-gray{background:var(--neutral-soft);color:var(--text-2)}
+.agenda-dia{width:48px;text-align:center;flex-shrink:0}
+.agenda-dia b{display:block;font-size:20px;font-weight:700;line-height:1.1}
+.agenda-dia span{font-size:11px;color:var(--text-muted);text-transform:uppercase}
+
+/* ── Telas largas: a coluna do celular fica centralizada ─────────────────── */
+@media (min-width:600px){
+  .app-shell{border-left:1px solid var(--border);border-right:1px solid var(--border);background:color-mix(in srgb,var(--bg) 60%,var(--surface))}
+}
+@media (max-width:359px){
+  .tela,.app-header{padding-left:14px;padding-right:14px}
+  .app-content{padding-left:14px;padding-right:14px}
+  .acao-fixa{margin-left:-14px;margin-right:-14px;padding-left:14px;padding-right:14px}
+  .grid-2,.chk-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){.painel-app{animation:none}}
+
+/* Marca do personal: logo no lugar do ícone e cartão "Seu personal" (aluno/js/marca-portal.js) */
+.topo-mark.com-logo{background:transparent;overflow:hidden}
+.topo-mark img{width:100%;height:100%;object-fit:contain;border-radius:inherit;display:block}
+.convite-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+.convite-av{overflow:hidden}
+.personal-card{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:16px}
+.personal-av{width:52px;height:52px;border-radius:50%;overflow:hidden;background:var(--primary-soft);color:var(--primary-ink);display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;flex-shrink:0}
+.personal-av img{width:100%;height:100%;object-fit:cover;display:block}
+.personal-card small{display:block;color:var(--text-muted);font-size:12.5px}
+.personal-card b{display:block;font-size:16px;line-height:1.25}

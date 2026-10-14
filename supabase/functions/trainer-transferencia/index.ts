@@ -9,7 +9,10 @@
 //   cancelar              personal novo desiste do pedido que abriu
 //   listar                pedidos que saem / chegam (e roda os prazos vencidos)
 //   alterar-email-aluno   troca o e-mail de login de um aluno que já tem conta
-//   definir-senha         cria a conta do aluno (ou reseta a senha) pelo e-mail
+//   definir-senha         cria a conta do aluno (ou reseta a senha) pelo e-mail; sem senha digitada gera uma
+//                         forte no servidor e marca a conta para troca obrigatória (senha digitada pelo
+//                         personal NÃO marca e limpa a marca antiga); sempre fecha o pedido de senha
+//   gerar-link-senha      gera o link de uso único (24 h) para o aluno criar a nova senha sozinho; sem trocar nada ainda
 //   definir-nome          nome que aparece pros outros ("vinculado ao personal X")
 //
 // Regras: ver _shared/vinculo.ts. Segurança (revisão 05/10/2026):
@@ -17,6 +20,7 @@
 //  - só o personal ATUAL antecipa; o prazo de 30 dias é de quem pediu (aluno);
 //  - nada aqui é "recusar": o aluno não fica preso (passou o prazo, transfere).
 import { corsHeaders } from '../_shared/cors.ts';
+import { acharUsuarioPorEmail, gerarSenhaTemporaria, gerarTokenLink, hashToken } from '../_shared/contas.ts';
 import { getAdminClient, getCallerUser, loadStudents, saveStudents, garantirStudentNoBlob, jsonResponse, limpaTexto, UUID_RE } from '../_shared/students.ts';
 import {
   decidirCadastro, executarTransferencia, normalizaEmail, normalizaNome, novaTransferencia, soDigitos, hashCpf,
@@ -49,6 +53,7 @@ Deno.serve(async (req: Request) => {
     if (a === 'listar') return jsonResponse(await listar(admin, caller), 200, corsHeaders);
     if (a === 'alterar-email-aluno') return jsonResponse(await alterarEmailAluno(admin, caller, body.studentId, body.novoEmail), 200, corsHeaders);
     if (a === 'definir-senha') return jsonResponse(await definirSenha(admin, caller, body.email, body.novaSenha), 200, corsHeaders);
+    if (a === 'gerar-link-senha') return jsonResponse(await gerarLinkSenha(admin, caller, body.email), 200, corsHeaders);
     if (a === 'definir-nome') return jsonResponse(await definirNome(admin, caller, body.nome), 200, corsHeaders);
     return jsonResponse({ error: 'Ação desconhecida.' }, 400, corsHeaders);
   } catch (e) {
@@ -275,19 +280,6 @@ async function alterarEmailAluno(admin: any, caller: any, studentIdBruto: unknow
 
 // ── Senha ───────────────────────────────────────────────────────────────────
 
-async function acharUsuarioPorEmail(admin: any, email: string): Promise<any | null> {
-  let pagina = 1;
-  while (pagina <= 50) {
-    const { data: lista, error } = await admin.auth.admin.listUsers({ page: pagina, perPage: 200 });
-    if (error) throw error;
-    const achado = (lista?.users || []).find((u: any) => (u.email || '').toLowerCase() === email);
-    if (achado) return achado;
-    if (!lista?.users?.length || lista.users.length < 200) return null;
-    pagina++;
-  }
-  return null;
-}
-
 async function ehContaDePersonal(admin: any, userId: string): Promise<boolean> {
   const { data, error } = await admin.from('app_data').select('key').eq('user_id', userId).limit(1);
   if (error) throw error;
@@ -296,10 +288,14 @@ async function ehContaDePersonal(admin: any, userId: string): Promise<boolean> {
 
 // Cria (se não existir) ou reseta a senha do usuário desse e-mail e garante que
 // ele fica vinculado a ESTE personal. Nunca mexe em conta de outro personal.
-async function definirSenha(admin: any, caller: any, email: string, novaSenha: string) {
+async function definirSenha(admin: any, caller: any, email: string, novaSenhaBruta: unknown) {
   email = normalizaEmail(email);
   if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ErroUsuario('E-mail inválido.');
-  if (typeof novaSenha !== 'string' || novaSenha.length < 6 || novaSenha.length > 72) throw new ErroUsuario('A senha precisa ter entre 6 e 72 caracteres.');
+  // Sem senha digitada pelo personal: o servidor gera (aleatória, forte, sem caracteres ambíguos).
+  const digitada = typeof novaSenhaBruta === 'string' ? novaSenhaBruta : '';
+  const gerada = !digitada.trim();
+  const novaSenha = gerada ? gerarSenhaTemporaria() : digitada.trim();
+  if (novaSenha.length < 6 || novaSenha.length > 72) throw new ErroUsuario('A senha precisa ter entre 6 e 72 caracteres.');
 
   const { students } = await loadStudents(admin, caller.id);
   const aluno = students.find((s: any) => normalizaEmail(s?.perfil?.email) === email);
@@ -315,14 +311,15 @@ async function definirSenha(admin: any, caller: any, email: string, novaSenha: s
     const { data: acesso } = await admin.from('alunos_acesso').select('trainer_user_id').eq('aluno_user_id', alunoUserId).maybeSingle();
     if (acesso && acesso.trainer_user_id !== caller.id) throw new ErroUsuario('Esse e-mail já é de um aluno de outro personal.');
     if (!acesso && await ehContaDePersonal(admin, alunoUserId)) throw new ErroUsuario('Esse e-mail pertence a outra conta de personal.');
-    const { error: eSenha } = await admin.auth.admin.updateUserById(alunoUserId, { password: novaSenha });
+    // app_metadata.trocar_senha (só o servidor escreve; user_metadata o próprio aluno editaria): senha GERADA pelo sistema (pedido do aluno) => o portal obriga o aluno a criar a própria senha no primeiro login; senha ESCOLHIDA pelo personal (aluno presente) => sem troca obrigatória, e limpa uma marca antiga.
+    const { error: eSenha } = await admin.auth.admin.updateUserById(alunoUserId, { password: novaSenha, app_metadata: { ...(existente.app_metadata || {}), trocar_senha: gerada } });
     if (eSenha) throw eSenha;
     if (!acesso) {
       const { error: eIns } = await admin.from('alunos_acesso').insert({ trainer_user_id: caller.id, aluno_user_id: alunoUserId, status: 'ativo' });
       if (eIns) throw eIns;
     }
   } else {
-    const { data: criado, error: eCriar } = await admin.auth.admin.createUser({ email, password: novaSenha, email_confirm: true });
+    const { data: criado, error: eCriar } = await admin.auth.admin.createUser({ email, password: novaSenha, email_confirm: true, app_metadata: { trocar_senha: gerada } });
     if (eCriar) throw eCriar;
     alunoUserId = criado.user.id;
     const { error: eIns } = await admin.from('alunos_acesso').insert({ trainer_user_id: caller.id, aluno_user_id: alunoUserId, status: 'ativo' });
@@ -335,7 +332,40 @@ async function definirSenha(admin: any, caller: any, email: string, novaSenha: s
     await admin.from('alunos_identidade').update({ aluno_user_id: alunoUserId, email_norm: email, atualizado_em: new Date().toISOString() })
       .eq('id', aluno.perfil.identidadeId).is('aluno_user_id', null);
   }
-  return { status: 'ok', alunoUserId };
+  await atenderPedidosSenha(admin, alunoUserId, caller.id);
+  return { status: 'ok', alunoUserId, ...(gerada ? { senhaGerada: novaSenha } : {}) };
+}
+
+// O aluno tinha pedido a redefinição pela tela de login: o pedido está atendido.
+async function atenderPedidosSenha(admin: any, alunoUserId: string, trainerId: string) {
+  const { error } = await admin.from('senha_pedidos').update({ status: 'atendido', atendido_em: new Date().toISOString() })
+    .eq('aluno_user_id', alunoUserId).eq('trainer_user_id', trainerId).eq('status', 'aberto');
+  if (error) console.error('senha_pedidos (rode sql/senha-pedidos.sql):', error);   // não derruba a operação
+}
+
+// Link de uso único para o aluno criar a nova senha sozinho (a senha atual continua valendo até ele usar o link).
+// Devolve o token UMA vez; no banco fica só o hash. Gerar outro link cancela o anterior.
+async function gerarLinkSenha(admin: any, caller: any, email: string) {
+  email = normalizaEmail(email);
+  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ErroUsuario('E-mail inválido.');
+  const { students } = await loadStudents(admin, caller.id);
+  const aluno = students.find((s: any) => normalizaEmail(s?.perfil?.email) === email);
+  if (!aluno) throw new ErroUsuario('Esse e-mail não está no cadastro de nenhum aluno seu. Salve o Perfil do aluno primeiro.');
+  if (await pedidoAbertoDoStudent(admin, caller.id, aluno.id)) throw new ErroUsuario('Há uma transferência em andamento: o cadastro está só pra visualização.');
+  const conta = await acharUsuarioPorEmail(admin, email);
+  if (!conta) throw new ErroUsuario('Este aluno ainda não criou o acesso ao portal. Mande o link de cadastro ou escolha uma senha para ele.');
+  if (conta.id === caller.id) throw new ErroUsuario('Esse e-mail é o da sua própria conta.');
+  const { data: acesso } = await admin.from('alunos_acesso').select('trainer_user_id,status').eq('aluno_user_id', conta.id).maybeSingle();
+  if (!acesso || acesso.trainer_user_id !== caller.id) throw new ErroUsuario('Esse aluno não é seu.');
+
+  const agora = new Date();
+  await admin.from('senha_links').update({ usado_em: agora.toISOString() }).eq('aluno_user_id', conta.id).is('usado_em', null);   // cancela os anteriores
+  const token = gerarTokenLink();
+  const expiraEm = new Date(agora.getTime() + 24 * 3600 * 1000).toISOString();
+  const { error } = await admin.from('senha_links').insert({ aluno_user_id: conta.id, trainer_user_id: caller.id, token_hash: await hashToken(token), expira_em: expiraEm });
+  if (error) throw error;
+  await atenderPedidosSenha(admin, conta.id, caller.id);
+  return { status: 'ok', token, expiraEm };
 }
 
 async function definirNome(admin: any, caller: any, nomeBruto: unknown) {

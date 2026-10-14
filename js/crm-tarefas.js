@@ -162,6 +162,7 @@ function saveReschedule(){
 function _crmRefreshCurrentScreen(){
   if(document.getElementById('screen-agenda') && !document.getElementById('screen-agenda').classList.contains('hidden')) renderAgendaCRM();
   else if(document.getElementById('screen-pipeline') && !document.getElementById('screen-pipeline').classList.contains('hidden')) renderPipelineCRM();
+  else if(document.getElementById('screen-dashboard') && !document.getElementById('screen-dashboard').classList.contains('hidden') && typeof renderDashboard==='function') renderDashboard();
   const alEl=$('screen-aluno-crm');
   if(alEl && !alEl.classList.contains('hidden') && typeof currentAlunoCrmId!=='undefined' && currentAlunoCrmId!=null) navAlunoCrm(currentAlunoCrmId);
 }
@@ -175,16 +176,20 @@ function taskCardHTML(m){
   const al=findAluno(t0.alunoId);
   const clientBit=al?`<span class="tcard-cli">${escHTML(displayName(al))}</span>`:'';
   const horaTag=t0.hora?`<span class="badge badge-gray"><i class=ph-clock></i>${t0.hora}</span>`:'';
-  const actionBtn = blocked
+  const ehSenha = t0.acao === 'senha';   // pedido de "esqueci minha senha": o botão já abre o fluxo de redefinição
+  const abrirSenha = `abrirRedefinirSenha(${t0.alunoId},${t0.id})`;
+  const actionBtn = ehSenha
+    ? (allDone ? '' : `<button class="btn btn-primary btn-sm" onclick="${abrirSenha}"><i class=ph-key></i>Redefinir senha</button>`)
+    : blocked
     ? `<span class="badge badge-gray" title="Aguardando etapa anterior"><i class=ph-lock></i></span>`
     : allDone
       ? `<button class="btn btn-ghost btn-sm" onclick="toggleTaskDoneMany('${ids}')"><i class=ph-arrow-u-up-left></i>Reabrir</button>`
       : `<button class="btn btn-primary btn-sm" onclick="toggleTaskDoneMany('${ids}')">${t0.tipo==='prazo'?'<i class=ph-check></i>Feito':'<i class=ph-eye></i>Visto'}</button>`;
-  const waBtn = al ? `<button class="icon-btn" onclick="openWA(${al.id})" title="WhatsApp" aria-label="WhatsApp"><i class=ph-chat-circle-text></i></button>` : '';
-  const reschedBtn = (!allDone&&!blocked) ? `<button class="icon-btn" onclick="openReschedule('${ids}')" title="Reagendar" aria-label="Reagendar"><i class=ph-calendar-blank></i></button>` : '';
-  const editDelBtn = t0.manual ? `<button class="icon-btn" onclick="openEditManualTask(${t0.id})" title="Editar" aria-label="Editar"><i class=ph-pencil-simple></i></button><button class="icon-btn" onclick="deleteTask(${t0.id})" title="Remover" aria-label="Remover"><i class=ph-trash></i></button>` : '';
+  const waBtn = (al && !ehSenha) ? `<button class="icon-btn" onclick="openWA(${al.id})" title="WhatsApp" aria-label="WhatsApp"><i class=ph-chat-circle-text></i></button>` : '';
+  const reschedBtn = (!allDone&&!blocked&&!ehSenha) ? `<button class="icon-btn" onclick="openReschedule('${ids}')" title="Reagendar" aria-label="Reagendar"><i class=ph-calendar-blank></i></button>` : '';
+  const editDelBtn = (t0.manual && !ehSenha) ? `<button class="icon-btn" onclick="openEditManualTask(${t0.id})" title="Editar" aria-label="Editar"><i class=ph-pencil-simple></i></button><button class="icon-btn" onclick="deleteTask(${t0.id})" title="Remover" aria-label="Remover"><i class=ph-trash></i></button>` : '';
   return `<div class="tcard${allDone?' done':''}">
-    <div class="tcard-main">
+    <div class="tcard-main"${(ehSenha&&!allDone)?` role="button" tabindex="0" style="cursor:pointer" onclick="${abrirSenha}"`:''}>
       <div class="tcard-title">${escHTML(t0.titulo)}${clientBit}</div>
       <div class="tcard-meta">
         <span class="badge badge-gray"><span style="color:${catColor(t0.cat)};display:inline-flex">${icHTML(catIcon(t0.cat))}</span>${escHTML(catLabel(t0.cat))}</span>

@@ -34,10 +34,14 @@ function _treinosParseDataBR(str){
 
 // prazoSemanas aceita tanto '12sem' (valor do select) quanto 12 (número) —
 // parseInt('12sem') já resolve pra 12, então não precisa de tratamento extra.
+// Configuração do personal (DB.config, js/crm-store.js) com o valor antigo como padrão:
+// esta camada continua sem DOM e funciona mesmo se o CRM não estiver carregado.
+function _treinosCfg(chave, padrao){ return (typeof cfgNum === 'function') ? cfgNum(chave, padrao) : padrao; }
+
 function _treinosCalcularVencimento(dataAprovacaoBR, prazoSemanas){
   const base = _treinosParseDataBR(dataAprovacaoBR);
   if(!base) return null;
-  const semanas = parseInt(prazoSemanas) || 12;
+  const semanas = parseInt(prazoSemanas) || _treinosCfg('validadeSemanas', 12);
   const venc = new Date(base);
   venc.setDate(venc.getDate() + semanas*7);
   return venc.toLocaleDateString('pt-BR');
@@ -162,7 +166,7 @@ function aprovarRascunho(s, id, dadosAprovados){
     s.treinos.push(t);
   }
   const dataAprovacao = _treinosHojeBR();
-  const prazoSemanas  = dadosAprovados.prazoSemanas || t.prazoSemanas || '12sem';
+  const prazoSemanas  = dadosAprovados.prazoSemanas || t.prazoSemanas || ((typeof cfgValidadePadrao === 'function') ? cfgValidadePadrao() : '12sem');
   Object.assign(t, dadosAprovados, {
     status: TREINOS_STATUS.APROVADO,
     dataAprovacao,
@@ -189,8 +193,8 @@ function getStatusVencimento(treino){
   const semanasRestantes = Math.ceil(diasRestantes / 7);
   let tier = 'ok';
   if(diasRestantes < 0) tier = 'vencido';
-  else if(diasRestantes <= 7) tier = 'proximo';
-  else if(diasRestantes <= 14) tier = 'agendar';
+  else if(diasRestantes <= _treinosCfg('janelaProximo', 7)) tier = 'proximo';
+  else if(diasRestantes <= Math.max(_treinosCfg('janelaAgendar', 14), _treinosCfg('janelaProximo', 7))) tier = 'agendar';
   return { tier, diasRestantes, semanasRestantes, dataVencimento: treino.dataVencimento };
 }
 

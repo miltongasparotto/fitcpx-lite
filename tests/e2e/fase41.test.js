@@ -113,7 +113,9 @@ async function painel(browser){
   // nome de exibição do personal
   await ev(()=>{_formDirty=false;navGo('portal-aluno');switchPortalSubtab('link');_portalNomeExibicao='';renderPortalLinkBox();});await page.waitForTimeout(300);
   ok('nome: aviso quando vazio', (await ev(()=>document.getElementById('portal-link-wrap').innerText)).includes('Defina seu nome'));
-  await page.fill('#portal-nome-exibicao','Rafael Souza');await page.click('#portal-link-wrap button:has-text("Salvar")');await page.waitForTimeout(300);
+  // o nome agora é editado em Configurações > Perfil (mesmo nome que o aluno vê)
+  await page.click('#portal-link-wrap button:has-text("Editar no Perfil")');await page.waitForTimeout(300);
+  await page.fill('#cfg-name','Rafael Souza');await page.click('#screen-config-body button:has-text("Salvar perfil")');await page.waitForTimeout(500);
   const cn=(await ev(()=>window.__calls)).find(c=>c.acao==='definir-nome');
   ok('nome: chama definir-nome', cn&&cn.nome==='Rafael Souza');
   // aviso sem CPF no dashboard
@@ -151,7 +153,7 @@ async function portal(browser){
   ok('portal novo: nome vem preenchido', await page.inputValue('#cb-nome')==='Aluna Teste');
   await page.fill('#cb-cpf','52998224725');
   ok('portal novo: máscara do CPF', await page.inputValue('#cb-cpf')==='529.982.247-25');
-  await page.fill('#cb-nascimento','1990-05-20');
+  ok('portal novo: cadastro mínimo (sem nascimento/sexo/WhatsApp)', await page.evaluate(()=>['cb-nascimento','cb-sexo','cb-whatsapp','cb-profissao'].every(i=>!document.getElementById(i))));
 
   // email-diferente
   respostas['cadastro']={status:'email-diferente',emailMascarado:'a***@gmail.com'};
@@ -203,12 +205,32 @@ async function portal(browser){
   await page.evaluate(()=>salvarCadastroBasico());await page.waitForTimeout(500);
   ok('portal antigo: cadastro atualizado entra no app', (await telas()).includes('tela-app'));
 
+  // dados pessoais pendentes: abas bloqueadas, aviso e preenchimento
+  ok('dados pendentes: aviso na Início', (await page.textContent('#inicio-dados')).includes('Preencha seus dados pessoais'));
+  ok('dados pendentes: 3 abas marcadas como bloqueadas', await page.evaluate(()=>['anamnese','avaliacoes','treinos'].every(t=>document.getElementById('tab-'+t).classList.contains('bloqueada'))));
+  await page.click('#tab-treinos');
+  ok('dados pendentes: clicar na aba mostra mensagem e não abre', await page.evaluate(()=>!document.getElementById('toast-bloqueio').classList.contains('hidden')&&document.getElementById('painel-treinos').classList.contains('hidden')));
+  await page.evaluate(()=>abrirDados());
+  await page.fill('#dp-nascimento','20051990');
+  ok('data: máscara dd/mm/aaaa', await page.inputValue('#dp-nascimento')==='20/05/1990');
+  await page.fill('#dp-nascimento','31/02/1990');await page.selectOption('#dp-sexo','F');await page.fill('#dp-whatsapp','(44) 99999-1111');
+  await page.evaluate(()=>salvarDadosPessoais());
+  ok('data: dia inexistente é recusado', (await page.textContent('#dp-erro')).includes('inválida'));
+  respostas['dados-pessoais']={status:'ok',dadosPessoais:{nascimento:'1990-05-20',sexo:'F',whatsapp:'(44) 99999-1111',profissao:''},dadosCompletos:true};
+  await page.fill('#dp-nascimento','20/05/1990');
+  await page.evaluate(()=>salvarDadosPessoais());await page.waitForTimeout(400);
+  const dpCall=calls.find(c=>c.acao==='dados-pessoais');
+  ok('dados: envia nascimento em ISO', dpCall&&dpCall.dados.nascimento==='1990-05-20', JSON.stringify(dpCall&&dpCall.dados));
+  ok('dados: salvar libera as abas', await page.evaluate(()=>!document.getElementById('tab-anamnese').classList.contains('bloqueada')));
+  await page.click('#tab-anamnese');
+  ok('dados: aba Anamnese abre depois de liberada', await page.evaluate(()=>!document.getElementById('painel-anamnese').classList.contains('hidden')));
+
   // e-mail na conta
   respostas['alterar-email']={status:'ok'};
   await page.evaluate(()=>abrirTelaConta());
-  await page.fill('#conta-novo-email','novo@teste.com');
+  await page.fill('#conta-email-atual','aluna@teste.com');await page.fill('#conta-email-senha','segredo1');await page.fill('#conta-email-novo','novo@teste.com');await page.fill('#conta-email-novo2','novo@teste.com');
   await page.evaluate(()=>alunoTrocarEmail());await page.waitForTimeout(400);
-  ok('portal conta: alterar e-mail chama a API', calls.some(c=>c.acao==='alterar-email'&&c.novoEmail==='novo@teste.com'));
+  ok('portal conta: alterar e-mail chama a API com e-mail atual, senha atual e novo', calls.some(c=>c.acao==='alterar-email'&&c.novoEmail==='novo@teste.com'&&c.emailAtual==='aluna@teste.com'&&c.senhaAtual==='segredo1'));
   ok('portal: sem pageerror', errs.length===0, errs.join(' | '));
   await ctx.close();
 }

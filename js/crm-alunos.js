@@ -29,7 +29,7 @@ function needsReview(al){
   if(!al || al.crm?.archived) return false;
   const s=al.crm?.status;
   if(s!=='pausado'&&s!=='inativo') return false;
-  return !!al.crm?.statusSince && diffDays(todayStr(), al.crm.statusSince)>=30;
+  return !!al.crm?.statusSince && diffDays(todayStr(), al.crm.statusSince)>=cfgNum('diasRevisao',30);
 }
 
 /* ── LISTA + FILTROS ─────────────────────────────────────────────────────── */

@@ -336,13 +336,14 @@ function renderScreenAlunos(){
           ${p.novoCadastro?'<span class="badge badge-amber"><i class=ph-sparkle></i>Novo</span>':''}
           ${typeof badgeTransferencia==='function'?badgeTransferencia(s):''}
           ${(String(p.cpf||'').replace(/\D/g,'').length!==11)?'<span class="badge badge-gray" title="Sem CPF: mande o link de cadastro pro aluno preencher"><i class=ph-identification-card></i>Sem CPF</span>':''}
+          ${(p.alunoUserId && !(p.nascimento && p.sexo && String(p.whatsapp||'').replace(/\D/g,'').length>=10))?'<span class="badge badge-amber" title="Aluno com app bloqueado: faltam nascimento, sexo ou WhatsApp. Complete no Perfil ou espere o aluno preencher."><i class=ph-lock></i>Dados pendentes</span>':''}
         </div>
       </td>
-      <td class="al-sexo">${p.sexo?(p.sexo==='M'?'Masc.':'Fem.'):dash}</td>
-      <td>${nivel?`<span class="badge ${_nivelColor(nivel)}">${nivel}</span>`:dash}</td>
-      <td>${modal?`<span class="badge badge-gray">${_modalLabel(modal)}</span>`:dash}</td>
-      <td class="al-data">${ultAval}</td>
-      <td class="al-data">
+      <td class="al-sexo" data-label="Sexo">${p.sexo?(p.sexo==='M'?'Masc.':'Fem.'):dash}</td>
+      <td data-label="Nível">${nivel?`<span class="badge ${_nivelColor(nivel)}">${nivel}</span>`:dash}</td>
+      <td data-label="Atendimento">${modal?`<span class="badge badge-gray">${_modalLabel(modal)}</span>`:dash}</td>
+      <td class="al-data" data-label="Última avaliação">${ultAval}</td>
+      <td class="al-data" data-label="Último treino">
         ${temPresc ? `<span class="badge badge-green"><i class=ph-check></i>${ultTreino}</span>` : dash}
       </td>
       <td class="al-acoes">
@@ -2615,7 +2616,7 @@ function antroNovaAvaliacao(){
   const s=getActive(); if(!s) return;
   _antroEditId = null;
   antroLimparForm();
-  setVal('a-data-avaliacao', new Date().toISOString().slice(0,10));
+  setVal('a-data-avaliacao', _isoLocal(new Date()));   // data local (UTC virava o dia às 21h)
   calcIMC(); calcRCQ(); calcComp();
   Object.keys(PARES_ASSIM).forEach(par=>calcAssimetria(par));
   const titulo=$('antro-form-titulo'); if(titulo) titulo.textContent='Nova avaliação';

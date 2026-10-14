@@ -7,17 +7,26 @@
 // Flow — lista simples de templates com editar/excluir/enviar, e no modal de
 // envio um <select> agrupado por categoria no lugar do dropdown com busca.
 
+// Variáveis do studio (Configurações > Perfil), iguais para qualquer aluno.
+function waVarsStudio(txt){
+  const c = (typeof DB !== 'undefined' && DB.config) || {};
+  return String(txt || '')
+    .replace(/{studio}/g, c.studioName || 'Studio')
+    .replace(/{personal}/g, c.personalName || '')
+    .replace(/{cref}/g, c.cref || '')
+    .replace(/{whatsappStudio}/g, c.whatsapp || '');
+}
+
 function replaceVars(msg, al){
   const mod=DB.modalidades.find(m=>m.id===al.crm?.modId);
   const firstName=alunoNome(al).split(' ')[0];
   const firstAf=(al.crm?.fluxos||[])[0];
   const dias=firstAf?diffDays(todayStr(), firstAf.triggerDate):0;
-  return (msg||'')
+  return waVarsStudio((msg||'')
     .replace(/{nome}/g, firstName)
     .replace(/{nomeCompleto}/g, alunoNome(al))
     .replace(/{modalidade}/g, mod?mod.nome:'')
-    .replace(/{dias}/g, Math.abs(dias))
-    .replace(/{studio}/g, DB.config.studioName||'Studio');
+    .replace(/{dias}/g, Math.abs(dias)));
 }
 
 /* ── CRUD DE TEMPLATES ───────────────────────────────────────────────────── */
@@ -25,19 +34,24 @@ let _waEditId=null;
 function waStudioNew(){ _waEditId=null; renderWhatsappCRM(); }
 function waStudioEdit(id){ _waEditId=id; renderWhatsappCRM(); }
 function delWATpl(id){
-  crmConfirm('Excluir este template?', ()=>{ DB.waTpls=DB.waTpls.filter(t=>t.id!==id); crmSave(); renderWhatsappCRM(); crmToast('Template excluído','info'); });
+  crmConfirm('Excluir este template?', ()=>{
+    const t=DB.waTpls.find(x=>x.id===id);
+    if(t&&t.sys){ if(!DB.waSysApagados) DB.waSysApagados={}; DB.waSysApagados[t.sys]=true; }   // modelo de fábrica apagado não volta
+    DB.waTpls=DB.waTpls.filter(x=>x.id!==id); crmSave(); renderWhatsappCRM(); crmToast('Template excluído','info');
+  });
 }
 function saveWATpl(){
   const nome=$('wt-nome').value.trim();
   const msg=$('wt-msg').value.trim();
   if(!nome||!msg){ crmToast('Preencha nome e mensagem','err'); return; }
   const cat=$('wt-cat').value?Number($('wt-cat').value):null;
+  const evento=$('wt-evento')?$('wt-evento').value:'';
   if(_waEditId){
     const t=DB.waTpls.find(x=>x.id===_waEditId);
-    if(t) Object.assign(t,{nome,msg,cat});
+    if(t) Object.assign(t,{nome,msg,cat,evento});
     crmToast('Template atualizado');
   } else {
-    DB.waTpls.push({id:novoId(), nome, msg, cat});
+    DB.waTpls.push({id:novoId(), nome, msg, cat, evento});
     crmToast('Template criado');
   }
   crmSave(); _waEditId=null; renderWhatsappCRM();
@@ -78,6 +92,7 @@ function setupWA(al, msg, tplId){
   $('wa-phone').textContent=alunoTel(al)||'Sem telefone';
   $('wa-tpl-sel').innerHTML=_buildWATplOptions(tplId||null);
   $('wa-msg').value=msg;
+  $('wa-ddi').innerHTML=crmDdiOptions(waDdiPadrao());   // padrão = DDI do studio (Configurações > Perfil)
   crmOpenModal('m-crm-wa');
 }
 function openWA(alunoId){
@@ -101,10 +116,17 @@ const CRM_DDI_LIST=[
   {code:'55',flag:'🇧🇷',name:'Brasil'},{code:'351',flag:'🇵🇹',name:'Portugal'},
   {code:'1',flag:'🇺🇸',name:'EUA/Canadá'},{code:'34',flag:'🇪🇸',name:'Espanha'},
   {code:'54',flag:'🇦🇷',name:'Argentina'},{code:'598',flag:'🇺🇾',name:'Uruguai'},
+  {code:'595',flag:'🇵🇾',name:'Paraguai'},{code:'56',flag:'🇨🇱',name:'Chile'},
+  {code:'57',flag:'🇨🇴',name:'Colômbia'},{code:'52',flag:'🇲🇽',name:'México'},
+  {code:'39',flag:'🇮🇹',name:'Itália'},{code:'33',flag:'🇫🇷',name:'França'},
+  {code:'49',flag:'🇩🇪',name:'Alemanha'},{code:'44',flag:'🇬🇧',name:'Reino Unido'},
 ];
+function crmDdiOptions(sel){
+  return CRM_DDI_LIST.map(c=>'<option value="'+c.code+'"'+(c.code===sel?' selected':'')+'>'+c.flag+' +'+c.code+' '+escHTML(c.name)+'</option>').join('');
+}
 function doSendWA(){
   const msg=$('wa-msg').value;
-  const ddi=$('wa-ddi').value||'55';
+  const ddi=$('wa-ddi').value||waDdiPadrao();
   let p=(alunoTel(findAluno(curWA.alunoId))||'').replace(/[^0-9]/g,'');
   if(ddi==='55' && p.startsWith('55') && p.length>11) p=p.slice(2);
   if(!p){ crmToast('Número de telefone não cadastrado','err'); return; }
@@ -113,17 +135,28 @@ function doSendWA(){
 }
 
 /* ── TELA ────────────────────────────────────────────────────────────────── */
+let _waTab='modelos';   // 'modelos' | 'enviar'
+function waIrParaAba(tab){ _waTab=tab; renderWhatsappCRM(); }
 function renderWhatsappCRM(){
   const el=$('screen-whatsapp-body'); if(!el) return;
+  if(typeof waGarantirModelos==='function') waGarantirModelos();
+  const nFila = (typeof waPendentes==='function') ? waPendentes().length : 0;
+  const tabsHtml = `<div class="seg" style="margin-bottom:16px">
+    <button class="seg-btn${_waTab==='modelos'?' active':''}" onclick="waIrParaAba('modelos')"><i class=ph-chat-circle-text></i>Modelos</button>
+    <button class="seg-btn${_waTab==='enviar'?' active':''}" onclick="waIrParaAba('enviar')"><i class=ph-paper-plane-tilt></i>A enviar<span class="seg-n">${nFila}</span></button>
+  </div>`;
+  if(_waTab==='enviar' && typeof waRenderFila==='function'){ el.innerHTML = tabsHtml + waRenderFila(); return; }
   const catDefs=getCatDefs();
   const editing=_waEditId?DB.waTpls.find(t=>t.id===_waEditId):null;
   const catOptions='<option value="">— Sem categoria —</option>'+catDefs.map(c=>`<option value="${c.id}"${editing&&editing.cat===c.id?' selected':''}>${escHTML(c.label)}</option>`).join('');
+
+  const eventoOptions='<option value="">Nenhum (só envio manual)</option>'+Object.keys(WA_EVENTOS).map(k=>'<option value="'+k+'"'+(editing&&editing.evento===k?' selected':'')+'>'+escHTML(WA_EVENTOS[k])+'</option>').join('');
 
   const listHtml = DB.waTpls.length ? DB.waTpls.map(t=>{
     const cat=catDefs.find(c=>c.id===t.cat);
     return `<div class="lrow${_waEditId===t.id?' sel':''}">
       <div style="flex:1;min-width:0">
-        <div class="lrow-t" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${escHTML(t.nome)} ${cat?`<span class="badge badge-gray"><span style="color:${cat.color};display:inline-flex">${icHTML(cat.icon)}</span>${escHTML(cat.label)}</span>`:''}</div>
+        <div class="lrow-t" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${escHTML(t.nome)} ${t.evento&&WA_EVENTOS[t.evento]?`<span class="badge badge-blue"><i class=ph-bell></i>${escHTML(WA_EVENTOS[t.evento])}</span>`:''} ${cat?`<span class="badge badge-gray"><span style="color:${cat.color};display:inline-flex">${icHTML(cat.icon)}</span>${escHTML(cat.label)}</span>`:''}</div>
         <div class="lrow-sub">${escHTML(t.msg)}</div>
       </div>
       <div style="display:flex;gap:2px;flex-shrink:0">
@@ -143,6 +176,8 @@ function renderWhatsappCRM(){
       <div class="card-title">${_waEditId?'Editando mensagem':'Nova mensagem'}</div>
       <div class="field"><label>Nome *</label><input id="wt-nome" type="text" value="${editing?escHTML(editing.nome):''}" placeholder="Ex: Acompanhamento 7 dias"></div>
       <div class="field"><label>Categoria</label><select id="wt-cat">${catOptions}</select></div>
+      <div class="field"><label>Avisar quando</label><select id="wt-evento">${eventoOptions}</select>
+        <div class="field-sub">O aviso entra na aba A enviar quando o evento acontece. "Nenhum" deixa só o envio manual.</div></div>
       <div class="field"><label>Mensagem *</label><textarea id="wt-msg" style="min-height:180px">${editing?escHTML(editing.msg):''}</textarea>
         <div class="field-sub">Variáveis (clique para inserir no texto):</div></div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px">
@@ -150,6 +185,8 @@ function renderWhatsappCRM(){
         <button class="tbtn" onclick="insertWAVar('{nomeCompleto}')">{nomeCompleto}</button>
         <button class="tbtn" onclick="insertWAVar('{modalidade}')">{modalidade}</button>
         <button class="tbtn" onclick="insertWAVar('{studio}')">{studio}</button>
+        <button class="tbtn" onclick="insertWAVar('{personal}')">{personal}</button>
+        <button class="tbtn" onclick="insertWAVar('{vencimento}')">{vencimento}</button>
         <button class="tbtn" onclick="insertWAVar('{dias}')">{dias}</button>
       </div>
       <div class="btn-row">
