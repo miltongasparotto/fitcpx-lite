@@ -447,6 +447,9 @@ async function registrarAlunoNuvem(s){
   if(p.identidadeId && p.vinculoSync === chave) return;
   let r;
   try{
+    // A função do servidor procura o aluno na lista da NUVEM. Aluno recém-criado ainda está só aqui
+    // (o autosave espera 1,5 s), então grava agora; senão vinha "Aluno não encontrado na sua lista".
+    if(typeof supaSalvarAgora==='function') await supaSalvarAgora();
     r = await chamarTrainerFn('registrar-aluno', { studentId: s.id, nome: p.nome, cpf, email: p.email||'', whatsapp: p.whatsapp||'' });
   }catch(e){ _msgCpf('Não foi possível registrar o CPF agora: '+e.message, true); return; }
   if(r.status==='ok'){
