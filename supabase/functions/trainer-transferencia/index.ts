@@ -7,7 +7,8 @@
 //   antecipar             personal ATUAL libera agora (escolhe manter ou não o treino)
 //   responder-novo        personal NOVO aceita ou recusa receber o aluno
 //   cancelar              personal novo desiste do pedido que abriu
-//   listar                pedidos que saem / chegam (e roda os prazos vencidos)
+//   listar                pedidos que saem / chegam e pedidos de acesso de aluno antigo (e roda os prazos vencidos)
+//   responder-pendente    personal aprova ou recusa o pedido de acesso de um aluno ANTIGO (sem CPF) que bateu em nome + e-mail
 //   alterar-email-aluno   troca o e-mail de login de um aluno que já tem conta
 //   definir-senha         cria a conta do aluno (ou reseta a senha) pelo e-mail; sem senha digitada gera uma
 //                         forte no servidor e marca a conta para troca obrigatória (senha digitada pelo
@@ -28,7 +29,7 @@ import {
 } from '../_shared/vinculo.ts';
 import {
   pepperCpf, depsDecisao, depsExec, nomeDoPersonal, transferenciaAbertaDaIdentidade,
-  processarPrazosVencidos, snapshotCadastro,
+  processarPrazosVencidos, snapshotCadastro, resolverPendente, type Pendente,
 } from '../_shared/vinculo-db.ts';
 
 class ErroUsuario extends Error {}
@@ -51,6 +52,7 @@ Deno.serve(async (req: Request) => {
     if (a === 'responder-novo') return jsonResponse(await responderNovo(admin, caller, body.id, !!body.aceitar), 200, corsHeaders);
     if (a === 'cancelar') return jsonResponse(await cancelar(admin, caller, body.id), 200, corsHeaders);
     if (a === 'listar') return jsonResponse(await listar(admin, caller), 200, corsHeaders);
+    if (a === 'responder-pendente') return jsonResponse(await responderPendente(admin, caller, body.id, !!body.aprovar), 200, corsHeaders);
     if (a === 'alterar-email-aluno') return jsonResponse(await alterarEmailAluno(admin, caller, body.studentId, body.novoEmail), 200, corsHeaders);
     if (a === 'definir-senha') return jsonResponse(await definirSenha(admin, caller, body.email, body.novaSenha), 200, corsHeaders);
     if (a === 'gerar-link-senha') return jsonResponse(await gerarLinkSenha(admin, caller, body.email), 200, corsHeaders);
@@ -246,7 +248,35 @@ async function listar(admin: any, caller: any) {
     if (t.trainer_atual_id === caller.id) saindo.push({ ...base, outroNome: await nome(t.trainer_novo_id) });
     else chegando.push({ ...base, outroNome: await nome(t.trainer_atual_id) });
   }
-  return { status: 'ok', saindo, chegando, executadas: executadas.length };
+  // Alunos antigos (cadastrados à mão, sem CPF) que pediram acesso pelo link: o e-mail não é
+  // confirmado, então quem decide se é o aluno de verdade é o personal.
+  const { data: pend, error: ePend } = await admin.from('vinculos_pendentes').select('*')
+    .eq('trainer_user_id', caller.id).eq('status', 'pendente').order('criado_em', { ascending: false }).limit(100);
+  // Tabela ainda não criada (SQL não rodado): o resto da tela de transferências continua funcionando.
+  if (ePend) console.error('vinculos_pendentes:', ePend);
+  const { students } = (pend && pend.length) ? await loadStudents(admin, caller.id) : { students: [] as any[] };
+  const pendentes = ((pend || []) as Pendente[]).map((p) => {
+    const s = students.find((x: any) => x?.id === Number(p.student_id));
+    return {
+      id: p.id, studentId: Number(p.student_id), criadoEm: p.criado_em, email: p.email, cpfMascarado: p.cpf_mascarado,
+      nomeInformado: p.perfil?.nome || '', nomeCadastrado: s?.perfil?.nome || '', emailCadastrado: s?.perfil?.email || '',
+    };
+  });
+  return { status: 'ok', saindo, chegando, pendentes, executadas: executadas.length };
+}
+
+// Aprovar liga a conta ao registro antigo (CPF informado pelo aluno entra no cadastro); recusar
+// fecha o pedido e essa conta nunca mais casa com este registro (se tentar de novo, vira aluno novo).
+async function responderPendente(admin: any, caller: any, id: unknown, aprovar: boolean) {
+  if (typeof id !== 'string' || !UUID_RE.test(id)) throw new ErroUsuario('Pedido inválido.');
+  const { data, error } = await admin.from('vinculos_pendentes').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  const p = data as Pendente | null;
+  if (!p || p.trainer_user_id !== caller.id) throw new ErroUsuario('Esse pedido não é de um aluno seu.');
+  if (p.status !== 'pendente') throw new ErroUsuario('Esse pedido já foi respondido.');
+  const r = await resolverPendente(admin, p, aprovar);
+  if (r.status === 'mudou') return { status: 'mudou' };   // o cadastro mudou desde o pedido: nada foi ligado, o personal pode recusar
+  return { status: 'ok' };
 }
 
 // ── E-mail de login do aluno (trocado pelo personal) ────────────────────────

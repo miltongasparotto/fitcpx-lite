@@ -16,11 +16,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Geist+Mono:wght@400..600&display=swap">
-<link rel="stylesheet" href="css/tokens.css?v=20261014c">
-<link rel="stylesheet" href="css/icons.css?v=20261014c">
-<link rel="stylesheet" href="css/app.css?v=20261014c">
-<link rel="stylesheet" href="css/painel.css?v=20261014c">
-<link rel="stylesheet" href="css/carregando.css?v=20261014c">
+<link rel="stylesheet" href="css/tokens.css?v=20261014d">
+<link rel="stylesheet" href="css/icons.css?v=20261014d">
+<link rel="stylesheet" href="css/app.css?v=20261014g">
+<link rel="stylesheet" href="css/painel.css?v=20261014d">
+<link rel="stylesheet" href="css/carregando.css?v=20261014d">
 <script>try{if(localStorage.getItem('acm-tema')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 </head>
 <body>
@@ -61,7 +61,7 @@
     <button class="icon-btn" onclick="toggleNavMobile()" aria-label="Abrir menu"><i class=ph-list></i></button>
     <div class="mb-brand"><div class="sb-mark"><i class=ph-barbell></i></div><span class="sb-name">FitCPX Lite</span></div>
     <button class="icon-btn sino-btn" type="button" onclick="shellToggleSino(event)" aria-label="Notificações"><i class=ph-bell></i><span class="sino-dot"></span></button>
-    <div class="mb-avatar" id="mb-avatar" aria-hidden="true"></div>
+    <button class="mb-avatar ph-avatar" id="mb-avatar" type="button" data-avatar onclick="shellToggleConta(event)" aria-label="Minha conta" aria-haspopup="menu"></button>
   </div>
   <div class="nav-scrim" onclick="toggleNavMobile()"></div>
 
@@ -136,19 +136,6 @@
         </label>
       </div>
 
-      <div id="supa-user-info" class="sb-user" style="display:none">
-        <div class="sb-avatar" id="supa-user-avatar"></div>
-        <div class="sb-user-info">
-          <div class="sb-user-email" id="supa-user-email"></div>
-          <div id="sync-status" class="sb-sync" style="display:none"></div>
-        </div>
-        <button class="icon-btn" onclick="authSair()" title="Sair" aria-label="Sair"><i class=ph-sign-out></i></button>
-      </div>
-
-      <div class="sb-actions">
-        <button class="sb-btn" id="btn-instalar" data-instalar onclick="instalarApp()" hidden><i class=ph-download-simple></i><span>Instalar aplicativo</span></button>
-        <button class="sb-btn" id="btn-tema" onclick="toggleTema()"><i id="tema-icon" class=ph-moon></i><span id="tema-label">Modo escuro</span></button>
-      </div>
       <div class="sb-version">v1.6.3 · Módulo EF</div>
     </div>
   </aside>
@@ -338,7 +325,7 @@
           <div id="portal-link-wrap" style="max-width:560px"></div>
         </div>
         <div class="content hidden" id="portal-sub-transferencias">
-          <div class="alert alert-blue"><i class=ph-lightbulb></i> Quando um aluno pede pra trocar de personal, ele segue com acesso normal por até 30 dias. Você pode liberar antes (cortesia); passado o prazo a troca acontece sozinha, sem os treinos. Você não pode recusar.</div>
+          <div class="alert alert-blue"><i class=ph-lightbulb></i> <b>Transferência:</b> quando um aluno pede pra trocar de personal, ele segue com acesso normal por até 30 dias. Você pode liberar antes (cortesia); passado o prazo a troca acontece sozinha, sem os treinos, e você não pode recusar. <b>Pedido de acesso</b> (aluno antigo que criou conta pelo seu link) é outra coisa: nada é ligado até você aprovar ou recusar.</div>
           <div id="portal-transferencias-lista"></div>
         </div>
       </div>
@@ -2697,47 +2684,47 @@
   </div>
 </div>
 
-<script src="js/ids.js?v=20261014c"></script>
-<script src="js/marca.js?v=20261014c"></script>
-<script src="js/instalar.js?v=20261014c"></script>
+<script src="js/ids.js?v=20261014d"></script>
+<script src="js/marca.js?v=20261014d"></script>
+<script src="js/instalar.js?v=20261014d"></script>
 
 <!-- CRM de Prazos — extraído do FitCPX Flow (ver ESTRATEGIA-MERGE.md).
      crm-store.js primeiro (define DB + novoId já existe via ids.js), depois
      os módulos que dependem dele. Nenhum roda código no carregamento (só
      declara funções), então a ordem relativa aos demais scripts do Auto não
      importa — mas ficam agrupados aqui por clareza. -->
-<script src="js/crm-store.js?v=20261014c"></script>
-<script src="js/crm-categorias.js?v=20261014c"></script>
-<script src="js/crm-fluxos.js?v=20261014c"></script>
-<script src="js/crm-tarefas.js?v=20261014c"></script>
-<script src="js/crm-pipeline.js?v=20261014c"></script>
-<script src="js/crm-alunos.js?v=20261014c"></script>
-<script src="js/crm-whatsapp.js?v=20261014c"></script>
-<script src="js/crm-config.js?v=20261014c"></script>
-<script src="js/adapters.js?v=20261014c"></script>
-<script src="js/mensagens-wa.js?v=20261014c"></script>
+<script src="js/crm-store.js?v=20261014g"></script>
+<script src="js/crm-categorias.js?v=20261014d"></script>
+<script src="js/crm-fluxos.js?v=20261014d"></script>
+<script src="js/crm-tarefas.js?v=20261014d"></script>
+<script src="js/crm-pipeline.js?v=20261014d"></script>
+<script src="js/crm-alunos.js?v=20261014d"></script>
+<script src="js/crm-whatsapp.js?v=20261014h"></script>
+<script src="js/crm-config.js?v=20261014h"></script>
+<script src="js/adapters.js?v=20261014d"></script>
+<script src="js/mensagens-wa.js?v=20261014h"></script>
 
-<script src="js/arquivo-store.js?v=20261014c"></script>
-<script src="js/avaliacao.js?v=20261014c"></script>
-<script src="js/exercicios-db.js?v=20261014c"></script>
-<script src="js/treinos-store.js?v=20261014c"></script>
-<script src="js/prescricao-motor.js?v=20261014c"></script>
-  <script src="js/dashboard.js?v=20261014c"></script>
-<script src="js/wa-regras.js?v=20261014c"></script>
-<script src="js/integracao-google.js?v=20261014c"></script>
-<script src="js/shell.js?v=20261014c"></script>
-<script src="js/biblioteca-exercicios.js?v=20261014c"></script>
-<script src="js/init-app.js?v=20261014c"></script>
-<script src="js/arquivo-ui.js?v=20261014c"></script>
+<script src="js/arquivo-store.js?v=20261014d"></script>
+<script src="js/avaliacao.js?v=20261014d"></script>
+<script src="js/exercicios-db.js?v=20261014d"></script>
+<script src="js/treinos-store.js?v=20261014d"></script>
+<script src="js/prescricao-motor.js?v=20261014d"></script>
+  <script src="js/dashboard.js?v=20261014d"></script>
+<script src="js/wa-regras.js?v=20261014d"></script>
+<script src="js/integracao-google.js?v=20261014d"></script>
+<script src="js/shell.js?v=20261014d"></script>
+<script src="js/biblioteca-exercicios.js?v=20261014d"></script>
+<script src="js/init-app.js?v=20261014d"></script>
+<script src="js/arquivo-ui.js?v=20261014d"></script>
 
-<script src="js/carregando.js?v=20261014c"></script>
-<script src="js/supabase-auth.js?v=20261014c"></script>
+<script src="js/carregando.js?v=20261014d"></script>
+<script src="js/supabase-auth.js?v=20261014d"></script>
 
 <!-- Portal do Aluno (Fase 4) — cadastro/anamnese/avaliação/equipamentos enviados
      pelo próprio aluno via app separado (pasta aluno/). Tabelas e RLS próprias,
      fora do blob app_data do trainer — ver supabase/sql/onboarding-aluno.sql. -->
-<script src="js/locais-alunos.js?v=20261014c"></script>
-<script src="js/onboarding-personal.js?v=20261014c"></script>
+<script src="js/locais-alunos.js?v=20261014d"></script>
+<script src="js/onboarding-personal.js?v=20261014i"></script>
 
 
 

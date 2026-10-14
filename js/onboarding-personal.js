@@ -47,7 +47,7 @@ async function carregarPortalLink(){
   if(error){ wrap.innerHTML = '<div class="alert alert-amber">Erro ao carregar link: '+escHTML(error.message)+'</div>'; return; }
   _portalLinkCodigo = data?.codigo || null;
   _portalNomeExibicao = data?.nome_exibicao || '';
-  // O nome do Perfil (Configurações) é o nome que o aluno vê: se ainda não chegou ao portal, envia agora.
+  // O nome de exibição (Configurações > Marca) é o nome que o aluno vê: se ainda não chegou ao portal, envia agora.
   const nomePerfil = (DB.config && DB.config.personalName || '').trim();
   if(!_portalNomeExibicao && nomePerfil){
     try{ await chamarTrainerFn('definir-nome', { nome:nomePerfil }); _portalNomeExibicao = nomePerfil; }catch(e){}
@@ -147,12 +147,12 @@ function renderPortalLinkBox(){
     </div>
     <div class="field" style="margin-bottom:18px">
       <label>Seu nome para os alunos e outros personals</label>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Aparece em avisos como "este perfil já está vinculado ao personal ...". Você edita em Configurações &gt; Perfil, junto com o nome do studio e a marca do app.</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Aparece em avisos como "este perfil já está vinculado ao personal ...". Você edita em Configurações &gt; Marca (nome de exibição), junto com o nome do studio e o app do aluno.</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span style="font-weight:600">${_portalNomeExibicao ? escHTML(_portalNomeExibicao) : '<span style="color:var(--text3);font-weight:400">sem nome definido</span>'}</span>
-        <button class="btn btn-ghost btn-sm" onclick="_cfgTab='perfil';navGo('config')"><i class=ph-pencil-simple></i> Editar no Perfil</button>
+        <button class="btn btn-ghost btn-sm" onclick="_cfgTab='marca';navGo('config')"><i class=ph-pencil-simple></i> Editar na Marca</button>
       </div>
-      ${_portalNomeExibicao ? '' : '<div class="alert alert-amber" style="margin:10px 0 0"><i class=ph-warning></i> Defina seu nome no Perfil pra que os avisos de transferência mostrem quem você é.</div>'}
+      ${_portalNomeExibicao ? '' : '<div class="alert alert-amber" style="margin:10px 0 0"><i class=ph-warning></i> Defina seu nome de exibição na Marca pra que os avisos de transferência mostrem quem você é.</div>'}
     </div>
     ${_portalLinkSoLocal() ? `<div class="alert alert-amber" style="margin-bottom:14px"><i class=ph-warning></i> Você está rodando o sistema localmente — estes links só abrem neste computador. Pra mandar pro celular do aluno, o sistema precisa estar publicado (Fase 9).</div>` : ''}
     <div class="field">
@@ -191,7 +191,7 @@ function copiarLink(inputId, btn){
 //    O personal atual pode adiantar (cortesia) escolhendo manter ou não os treinos; não pode recusar.
 // O painel só mostra e dispara; quem decide e executa é a Edge Function trainer-transferencia.
 
-let _transf = { saindo: [], chegando: [] };
+let _transf = { saindo: [], chegando: [], pendentes: [] };   // pendentes = aluno antigo pedindo acesso (o personal aprova)
 
 async function chamarTrainerFn(acao, corpo){
   const { data, error } = await supa.functions.invoke('trainer-transferencia', { body: { acao, ...(corpo||{}) } });
@@ -234,7 +234,7 @@ async function carregarPortalTransferencias(){
   let erroMsg = '';
   try{
     const r = await chamarTrainerFn('listar');
-    _transf = { saindo: r.saindo||[], chegando: r.chegando||[] };
+    _transf = { saindo: r.saindo||[], chegando: r.chegando||[], pendentes: r.pendentes||[] };
     if(r.executadas>0 && typeof _formDirty!=='undefined' && _formDirty){
       alert('Uma transferência de aluno foi concluída. Salve o que está editando e recarregue a página para atualizar sua lista.');
     } else if(r.executadas>0 && typeof supaCarregarDados==='function' && !carregarPortalTransferencias._recarregando){
@@ -245,9 +245,9 @@ async function carregarPortalTransferencias(){
     }
   }catch(e){
     erroMsg = e.message || 'Não foi possível consultar as transferências.';
-    _transf = { saindo: [], chegando: [] };
+    _transf = { saindo: [], chegando: [], pendentes: [] };
   }
-  const total = _transf.saindo.length + _transf.chegando.length;
+  const total = _transf.saindo.length + _transf.chegando.length + _transf.pendentes.length;
   [$('portal-transferencias-count'), $('nav-portal-aluno-count')].forEach(badge=>{
     if(!badge) return;
     badge.style.display = total ? 'inline-block' : 'none';
@@ -267,11 +267,26 @@ function _linhaDado(rotulo, valor){
 function renderPortalTransferencias(wrap, erroMsg){
   if(!wrap) return;
   if(erroMsg){ wrap.innerHTML = '<div class="alert alert-amber"><i class=ph-warning></i> '+escHTML(erroMsg)+'</div>'; return; }
-  if(!_transf.saindo.length && !_transf.chegando.length){
+  if(!_transf.saindo.length && !_transf.chegando.length && !_transf.pendentes.length){
     wrap.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px 0">Nenhuma transferência em andamento.</div>';
     return;
   }
   let html = '';
+  if(_transf.pendentes.length){
+    html += '<div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin:4px 0 8px">Pedidos de acesso</div>';
+    html += _transf.pendentes.map(p=>{
+      const diferente = p.nomeInformado && p.nomeCadastrado && p.nomeInformado.trim().toLowerCase() !== p.nomeCadastrado.trim().toLowerCase();
+      return `<div class="card pedido-acesso" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:600;font-size:14px;color:var(--text)">${escHTML(p.nomeCadastrado||p.nomeInformado||'Aluno')}</span><span class="badge badge-amber">Pedido de acesso</span></div>
+        <div style="font-size:13px;color:var(--text2);margin:4px 0 8px">Alguém criou uma conta com o e-mail deste aluno antigo e pediu acesso pelo seu link. O e-mail não é confirmado: aprove só se for mesmo o seu aluno.</div>
+        ${_linhaDado('Nome informado', diferente ? p.nomeInformado : '')}${_linhaDado('CPF informado', p.cpfMascarado)}${_linhaDado('E-mail da conta', p.email)}${_linhaDado('Pedido em', _fmtDataBR(p.criadoEm))}
+        <div class="btn-row" style="padding:8px 0 0;justify-content:flex-start;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="responderPedidoAcesso('${escHTML(p.id)}', true)">É meu aluno, aprovar</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="responderPedidoAcesso('${escHTML(p.id)}', false)">Não conheço, recusar</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
   if(_transf.saindo.length){
     html += '<div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin:4px 0 8px">Saindo da sua carteira</div>';
     html += _transf.saindo.map(t=>{
@@ -320,10 +335,13 @@ function renderPortalTransferencias(wrap, erroMsg){
 // Faixa no topo da lista de Alunos: quem está chegando (ainda não está na lista).
 function renderFaixaChegando(){
   const el = $('alunos-transf-strip'); if(!el) return;
-  const n = _transf.chegando.length;
-  el.classList.toggle('hidden', !n);
-  if(!n){ el.innerHTML=''; return; }
-  el.innerHTML = `<div class="alert alert-amber" style="margin:0 24px 12px;cursor:pointer" onclick="navGo('portal-aluno');switchPortalSubtab('transferencias')"><i class=ph-arrows-left-right></i><span>${n===1?'1 aluno chegando':n+' alunos chegando'} por transferência. Ver detalhes.</span></div>`;
+  const n = _transf.chegando.length, np = _transf.pendentes.length;
+  el.classList.toggle('hidden', !n && !np);
+  if(!n && !np){ el.innerHTML=''; return; }
+  const partes = [];
+  if(n) partes.push((n===1?'1 aluno chegando':n+' alunos chegando')+' por transferência');
+  if(np) partes.push((np===1?'1 pedido':np+' pedidos')+' de acesso de aluno antigo para aprovar');
+  el.innerHTML = `<div class="alert alert-amber" style="margin:0 24px 12px;cursor:pointer" onclick="navGo('portal-aluno');switchPortalSubtab('transferencias')"><i class=ph-arrows-left-right></i><span>${partes.join(' e ')}. Ver detalhes.</span></div>`;
 }
 
 async function _aposAcaoTransferencia(){
@@ -338,6 +356,22 @@ async function anteciparTransferencia(id, manterTreinos){
   if(!confirm(msg+'\n\nIsso não pode ser desfeito.')) return;
   try{ await Carregando.durante('Liberando o aluno...', async()=>{ await chamarTrainerFn('antecipar', { id, manterTreinos }); await _aposAcaoTransferencia(); }); }
   catch(e){ alert('Não foi possível liberar: '+e.message); }
+}
+
+// Aluno antigo (cadastrado à mão, sem CPF) pediu acesso: o e-mail não é confirmado, então o personal decide.
+async function responderPedidoAcesso(id, aprovar){
+  if(typeof _formDirty!=='undefined' && _formDirty){ alert('Salve o que está editando antes de responder: o cadastro do aluno vai ser atualizado.'); return; }
+  const msg = aprovar
+    ? 'Aprovar? A conta passa a ser a deste aluno e o CPF informado entra no cadastro dele.'
+    : 'Recusar este pedido? Essa conta não poderá mais assumir este cadastro.';
+  if(!confirm(msg)) return;
+  try{
+    await Carregando.durante(aprovar ? 'Aprovando o acesso...' : 'Recusando o pedido...', async()=>{
+      const r = await chamarTrainerFn('responder-pendente', { id, aprovar });
+      if(r.status==='mudou') alert('O cadastro mudou desde o pedido (CPF, e-mail ou conta). Nada foi ligado. Recuse este pedido e peça um novo.');
+      await _aposAcaoTransferencia();
+    });
+  }catch(e){ alert('Não foi possível responder: '+e.message); }
 }
 
 async function responderChegada(id, aceitar){

@@ -3,10 +3,13 @@
 // ══════════════════════════════════════════════════════════════════════════
 // Tudo mora em DB.config (blob 'crm' do app_data; criado em js/crm-store.js).
 // Regra do projeto: só existe campo aqui se algum motor lê o valor.
-//   Perfil   -> {studio} {personal} {cref} {whatsappStudio} nas mensagens (js/crm-whatsapp.js),
-//               DDI padrão dos envios (js/mensagens-wa.js), saudação do Painel e nome na lateral.
-//   Marca    -> cor do sistema (js/marca.js) e identidade do portal do aluno
-//               (publicada em personal_links; o portal lê por marca_do_link / marca_do_aluno).
+//   Perfil   -> cadastro do personal como pessoa física (nome completo, CREF, e-mail e telefone pessoais,
+//               endereço). O aluno não vê; só {cref} entra nas mensagens (js/crm-whatsapp.js).
+//   Marca    -> o que o aluno vê: nome de exibição ({personal}), studio ({studio}), foto, WhatsApp
+//               ({whatsappStudio}; DDI padrão dos envios em js/mensagens-wa.js), contato, endereço de
+//               atendimento, cor do sistema (js/marca.js) e app do aluno
+//               (publicado em personal_links; o portal lê por marca_do_link / marca_do_aluno).
+//               Saudação do Painel e nome na lateral leem o nome de exibição e o studio.
 //   Regras   -> prazos de urgência (crm-tarefas.js), janelas e validade do treino
 //               (treinos-store.js, dashboard.js, prescricao-motor.js), revisão de parados
 //               (crm-alunos.js) e "aluno novo" (dashboard.js, wa-regras.js).
@@ -25,46 +28,121 @@ function renderConfigCRM(){
     '<button class="seg-btn' + (_cfgTab === a[0] ? ' active' : '') + '" onclick="_cfgAba(\'' + a[0] + '\')"><i class=' + a[1] + '></i>' + a[2] + '</button>').join('') + '</div>';
   const corpo = _cfgTab === 'marca' ? _cfgHtmlMarca() : _cfgTab === 'regras' ? _cfgHtmlRegras() : _cfgHtmlPerfil();
   el.innerHTML = tabs + corpo;
-  if(_cfgTab === 'perfil') _cfgPreencherNomeDoPortal();
+  if(_cfgTab === 'marca') _cfgPreencherNomeDoPortal();
 }
 
 function _cfgCampo(id, rotulo, valor, opc){
   opc = opc || {};
   return '<div class="field' + (opc.span ? ' cfg-span' : '') + '"><label for="' + id + '">' + rotulo + '</label>' +
-    '<input id="' + id + '" type="' + (opc.tipo || 'text') + '" value="' + escHTML(valor || '') + '" placeholder="' + escHTML(opc.ph || '') + '" maxlength="' + (opc.max || 80) + '">' +
+    '<input id="' + id + '" type="' + (opc.tipo || 'text') + '" value="' + escHTML(valor || '') + '" placeholder="' + escHTML(opc.ph || '') + '" maxlength="' + (opc.max || 80) + '"' + (opc.on ? ' oninput="' + opc.on + '"' : '') + '>' +
     (opc.dica ? '<div class="field-sub">' + opc.dica + '</div>' : '') + '</div>';
 }
 function _cfgSalvoEm(){ return DB.config._savedAt ? 'Salvo às ' + DB.config._savedAt : ''; }
 function _cfgCarimbo(){ DB.config._savedAt = new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }); }
 
+// ── Endereço (CEP com preenchimento automático pelo ViaCEP) ─────────────────
+// Usado nos dois endereços: 'pf' (Perfil, endereço pessoal) e 'st' (Marca, local de atendimento).
+// Só o CEP sai do navegador; se a consulta falhar, os campos continuam livres para digitar.
+const CFG_UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+const _CFG_END_CAMPOS = ['cep','rua','numero','complemento','bairro','cidade','uf'];
+function _cfgEndVazio(){ return { cep:'', rua:'', numero:'', complemento:'', bairro:'', cidade:'', uf:'' }; }
+function _cfgCepMask(s){ const d = String(s || '').replace(/\D/g, '').slice(0, 8); return d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d; }
+// Telefone brasileiro: (11) 99999-0000. Número com "+" (internacional) fica como foi digitado.
+function _cfgTelMask(s){
+  s = String(s || '');
+  if(/^\s*\+/.test(s)) return s;
+  const d = s.replace(/\D/g, '').slice(0, 11);
+  if(d.length <= 2) return d ? '(' + d : '';
+  const corte = d.length > 10 ? 7 : 6;
+  return '(' + d.slice(0, 2) + ') ' + d.slice(2, corte) + (d.length > corte ? '-' + d.slice(corte) : '');
+}
+function cfgTelDigitou(el){ el.value = _cfgTelMask(el.value); }
+
+function _cfgEnderecoHtml(p, e){
+  e = e || _cfgEndVazio();
+  const inp = (k, rot, max, ph, extra) => '<div class="field ce-' + k + '"><label for="cfg-' + p + '-' + k + '">' + rot + '</label>' +
+    '<input id="cfg-' + p + '-' + k + '" type="text" value="' + escHTML(e[k]) + '" maxlength="' + max + '" placeholder="' + ph + '"' + (extra || '') + '></div>';
+  const ufs = '<option value="">--</option>' + CFG_UFS.map(u => '<option' + (e.uf === u ? ' selected' : '') + '>' + u + '</option>').join('');
+  return '<div class="cfg-end-wrap"><div class="cfg-end">' +
+    inp('cep', 'CEP', 9, '00000-000', ' inputmode="numeric" autocomplete="postal-code" oninput="cfgCepDigitou(\'' + p + '\', this)"') +
+    inp('rua', 'Rua', 120, 'Rua, avenida...') +
+    inp('numero', 'Número', 10, '123') +
+    inp('complemento', 'Complemento', 60, 'Sala, andar...') +
+    inp('bairro', 'Bairro', 60, '') +
+    inp('cidade', 'Cidade', 60, '') +
+    '<div class="field ce-uf"><label for="cfg-' + p + '-uf">UF</label><select id="cfg-' + p + '-uf">' + ufs + '</select></div>' +
+  '</div></div>';
+}
+function _cfgEnderecoLer(p, atual){
+  const o = _cfgEndVazio();
+  _CFG_END_CAMPOS.forEach(k => { const el = $('cfg-' + p + '-' + k); o[k] = el ? el.value.trim() : ((atual && atual[k]) || ''); });
+  return o;
+}
+function _cfgEnderecoErro(e){
+  const d = e.cep.replace(/\D/g, '');
+  if(d && d.length !== 8) return 'CEP incompleto: são 8 números';
+  if(e.uf && !CFG_UFS.includes(e.uf)) return 'UF inválida';
+  return '';
+}
+async function cfgCepDigitou(p, el){
+  el.value = _cfgCepMask(el.value);
+  const cep = el.value.replace(/\D/g, '');
+  if(cep.length !== 8) return;
+  let d = null;
+  try{
+    d = await Carregando.durante('Buscando o CEP...', async () => {
+      const r = await fetch('https://viacep.com.br/ws/' + cep + '/json/');
+      if(!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    });
+  }catch(e){ d = null; }
+  const atual = $('cfg-' + p + '-cep');
+  if(!atual || atual.value !== el.value) return;   // o CEP mudou durante a busca
+  if(!d || d.erro){ crmToast('CEP não encontrado. Preencha o endereço à mão.', 'err'); return; }
+  const por = (k, v, max) => { const f = $('cfg-' + p + '-' + k); if(f) f.value = (typeof v === 'string' ? v.trim() : '').slice(0, max); };
+  por('rua', d.logradouro, 120); por('bairro', d.bairro, 60); por('cidade', d.localidade, 60);
+  const uf = $('cfg-' + p + '-uf'); if(uf) uf.value = CFG_UFS.includes(d.uf) ? d.uf : '';
+  const n = $('cfg-' + p + '-numero'); if(n) n.focus();
+}
+function cfgEnderecoCopiar(){
+  const e = DB.config.enderecoPessoal || _cfgEndVazio();
+  if(!_CFG_END_CAMPOS.some(k => e[k])){ crmToast('O endereço do Perfil está vazio.', 'err'); return; }
+  _CFG_END_CAMPOS.forEach(k => { const f = $('cfg-st-' + k); if(f) f.value = e[k] || ''; });
+  crmToast('Endereço copiado do Perfil. Clique em Salvar marca para guardar.');
+}
+
+// Seção com título dentro do card (Perfil e Marca).
+function _cfgSecao(icone, titulo, sub, corpo){
+  return '<div class="cfg-sec"><div class="cfg-sec-t"><i class=' + icone + '></i> ' + titulo + '</div>' +
+    (sub ? '<div class="field-sub cfg-sec-s">' + sub + '</div>' : '') + corpo + '</div>';
+}
+
 // ── Perfil ──────────────────────────────────────────────────────────────────
+// Cadastro do personal como pessoa física: só o FitCPX usa; o aluno não vê nada daqui (exceto o CREF nas mensagens).
 function _cfgHtmlPerfil(){
   const c = DB.config;
+  const emailLogin = (typeof _supaUser !== 'undefined' && _supaUser && _supaUser.email) || '';
   return '<div class="card">' +
-    '<div class="card-title"><i class=ph-identification-card></i> Perfil do personal e do studio</div>' +
-    '<div class="field-sub" style="margin-bottom:12px">Aparece nas mensagens de WhatsApp (variáveis {studio}, {personal}, {cref}) e para os alunos no portal.</div>' +
-    '<div class="cfg-grid">' +
-    '<div class="field cfg-span"><label>Foto</label>' + _cfgImagemHtml('foto') + '</div>' +
-    _cfgCampo('cfg-studio', 'Nome do studio', c.studioName === 'FitCPX Lite' ? '' : c.studioName, { ph:'Ex: Studio Movimento' }) +
-    _cfgCampo('cfg-name', 'Seu nome (é o nome que o aluno vê)', c.personalName, { ph:'Ex: João Silva', dica:'Aparece também nos avisos de transferência entre personais.' }) +
-    _cfgCampo('cfg-cref', 'CREF', c.cref, { ph:'Ex: 012345-G/SP', max:30 }) +
-    '<div class="field"><label for="cfg-wa">WhatsApp do studio</label><div style="display:flex;gap:8px">' +
-      '<select id="cfg-ddi" style="width:auto;max-width:150px" aria-label="DDI">' + crmDdiOptions(c.waCountryCode) + '</select>' +
-      '<input id="cfg-wa" type="text" inputmode="tel" value="' + escHTML(c.whatsapp) + '" placeholder="(11) 99999-0000" maxlength="20" style="flex:1"></div>' +
-      '<div class="field-sub">O DDI escolhido é o padrão dos envios aos seus alunos.</div></div>' +
-    _cfgCampo('cfg-email', 'E-mail de contato', c.email, { tipo:'email', ph:'voce@email.com', max:120 }) +
-    _cfgCampo('cfg-insta', 'Instagram', c.instagram, { ph:'@seuperfil', max:60 }) +
-    _cfgCampo('cfg-cidade', 'Cidade', c.cidade, { ph:'Ex: São Paulo - SP', max:80 }) +
-    _cfgCampo('cfg-end', 'Endereço do studio', c.endereco, { ph:'Rua, número, bairro', max:160, span:true }) +
-    '<div class="field cfg-span"><label for="cfg-bio">Apresentação curta</label><textarea id="cfg-bio" maxlength="280" style="min-height:76px" placeholder="Uma ou duas frases sobre o seu trabalho">' + escHTML(c.bio) + '</textarea></div>' +
-    '</div>' +
+    '<div class="card-title"><i class=ph-identification-card></i> Perfil</div>' +
+    '<div class="field-sub">Seu cadastro como pessoa física. Só o FitCPX usa estes dados e o aluno não tem acesso a eles. A única exceção é o CREF, que entra nas mensagens pela variável {cref}.</div>' +
+    _cfgSecao('ph-user', 'Dados pessoais', '',
+      '<div class="cfg-grid">' +
+      _cfgCampo('cfg-nome-completo', 'Nome completo', c.nomeCompleto, { ph:'Ex: José da Silva Souza', max:100, dica:'Seu nome civil, para o cadastro e o vínculo com o FitCPX. Não entra nas mensagens nem aparece ao aluno. Não é a variável {nomeCompleto}, que é o nome completo do aluno.' }) +
+      _cfgCampo('cfg-cref', 'CREF', c.cref, { ph:'Ex: 012345-G/SP', max:30, dica:'Seu registro profissional. Preenche a variável {cref} nas mensagens de WhatsApp.' }) +
+      '</div>') +
+    _cfgSecao('ph-chat-circle-text', 'Contato', '',
+      '<div class="cfg-grid">' +
+      _cfgCampo('cfg-email-pf', 'E-mail', c.emailPessoal || emailLogin, { tipo:'email', ph:'voce@email.com', max:120, dica:'O e-mail que o FitCPX usa para falar com você. Começa com o e-mail do login, que não muda por aqui. Não entra nas mensagens nem aparece ao aluno.' }) +
+      _cfgCampo('cfg-tel-pf', 'Telefone pessoal', c.telefonePessoal, { tipo:'tel', ph:'(11) 99999-0000', max:20, on:'cfgTelDigitou(this)', dica:'O número em que o FitCPX entra em contato com você. Não entra nas mensagens (o número delas é o WhatsApp da aba Marca) nem aparece ao aluno.' }) +
+      '</div>') +
+    _cfgSecao('ph-map-pin', 'Endereço', 'Seu endereço de cadastro. Digite o CEP e o resto é preenchido. Não entra nas mensagens nem aparece ao aluno.', _cfgEnderecoHtml('pf', c.enderecoPessoal)) +
     '<div class="btn-row" style="justify-content:flex-start">' +
       '<button class="btn btn-primary" onclick="cfgSalvarPerfil()"><i class=ph-check-circle></i> Salvar perfil</button>' +
       '<span id="cfg-saved-at" style="font-size:12px;color:var(--text3);align-self:center">' + _cfgSalvoEm() + '</span></div>' +
   '</div>';
 }
 
-// O nome que o aluno vê já pode estar salvo em Portal do Aluno (antes do Perfil existir): traz para o campo.
+// O nome que o aluno vê já pode estar salvo em Portal do Aluno (antes da Marca existir): traz para o campo.
 async function _cfgPreencherNomeDoPortal(){
   const campo = $('cfg-name');
   if(!campo || campo.value.trim() || typeof supa === 'undefined' || !_supaUser) return;
@@ -75,68 +153,89 @@ async function _cfgPreencherNomeDoPortal(){
   }catch(e){}
 }
 
-async function cfgSalvarPerfil(){
-  const v = id => ($(id) ? $(id).value.trim() : '');
-  const email = v('cfg-email');
-  if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ crmToast('E-mail inválido', 'err'); return; }
-  const tel = v('cfg-wa').replace(/\D/g, '');
-  if(tel && tel.length < 10){ crmToast('WhatsApp incompleto: informe o DDD e o número', 'err'); return; }
-  const ddi = $('cfg-ddi').value || '55';
-  const pais = CRM_DDI_LIST.find(p => p.code === ddi) || CRM_DDI_LIST[0];
+function cfgSalvarPerfil(){
   const c = DB.config;
-  Object.assign(c, {
-    studioName: v('cfg-studio') || 'FitCPX Lite', personalName: v('cfg-name'), cref: v('cfg-cref'),
-    whatsapp: v('cfg-wa'), waCountryCode: pais.code, waCountryFlag: pais.flag, waCountryName: pais.name,
-    email, instagram: v('cfg-insta'), cidade: v('cfg-cidade'), endereco: v('cfg-end'), bio: v('cfg-bio'),
-  });
+  const v = (id, atual) => ($(id) ? $(id).value.trim() : (atual || ''));
+  const email = v('cfg-email-pf', c.emailPessoal);
+  if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ crmToast('E-mail inválido', 'err'); return; }
+  const tel = v('cfg-tel-pf', c.telefonePessoal);
+  if(tel && tel.replace(/\D/g, '').length < 10){ crmToast('Telefone incompleto: informe o DDD e o número', 'err'); return; }
+  const end = _cfgEnderecoLer('pf', c.enderecoPessoal), erroEnd = _cfgEnderecoErro(end);
+  if(erroEnd){ crmToast(erroEnd, 'err'); return; }
+  Object.assign(c, { nomeCompleto: v('cfg-nome-completo', c.nomeCompleto), cref: v('cfg-cref', c.cref), emailPessoal: email, telefonePessoal: tel, enderecoPessoal: end });
   _cfgCarimbo();
   crmSave();
-  if(typeof marcaAplicarConfig === 'function') marcaAplicarConfig();
-  if(typeof updateBadges === 'function') updateBadges();
-  let aviso = '';
-  await Carregando.durante('Salvando o perfil...', async () => {
-    if(c.personalName && c.personalName !== _portalNomeExibicao && typeof chamarTrainerFn === 'function' && _supaUser){
-      try{ await chamarTrainerFn('definir-nome', { nome:c.personalName }); _portalNomeExibicao = c.personalName; }
-      catch(e){ aviso = 'O nome ainda não foi atualizado para os alunos: ' + e.message; }
-    }
-    const r = await marcaPublicar();
-    if(!r.ok && !aviso) aviso = r.msg;
-  });
   const el = $('cfg-saved-at'); if(el) el.textContent = _cfgSalvoEm();
-  crmToast(aviso ? 'Perfil salvo. ' + aviso : 'Perfil salvo!', aviso ? 'err' : undefined);
+  crmToast('Perfil salvo!');
 }
 
 // ── Marca ───────────────────────────────────────────────────────────────────
 function _cfgHtmlMarca(){
-  const m = DB.config.marca || {};
-  if(!_cfgMarca) _cfgMarca = { nomeApp:m.nomeApp || '', cor:m.cor || MARCA_COR_PADRAO, icone:m.icone || 'ph-barbell' };
+  const c = DB.config, m = c.marca || {};
+  if(!_cfgMarca) _cfgMarca = { nomeApp:m.nomeApp || '', cor:m.cor || MARCA_COR_PADRAO, icone:m.icone || 'ph-barbell', logo:!!m.usarLogo };
   const d = _cfgMarca;
   const cores = MARCA_CORES.map(k => '<button type="button" class="mc-sw' + (d.cor.toLowerCase() === k.hex ? ' on' : '') + '" style="background:' + k.hex +
     '" onclick="cfgMarcaCor(\'' + k.hex + '\')" title="' + k.nome + '" aria-label="' + k.nome + '"></button>').join('');
-  const icones = MARCA_ICONES.map(n => '<button type="button" class="mc-ic' + (d.icone === n ? ' on' : '') + '" onclick="cfgMarcaIcone(\'' + n + '\')" aria-label="' + n.slice(3) + '"><i class=' + n + '></i></button>').join('');
-  return '<div class="card">' +
-    '<div class="card-title"><i class=ph-palette></i> Marca</div>' +
-    '<div class="field-sub" style="margin-bottom:14px">A cor muda o sistema inteiro e o portal do aluno. O nome do app e o ícone aparecem no portal, onde a sua marca tem destaque. A logo do FitCPX no painel não muda.</div>' +
-    '<div class="cfg-marca"><div class="cfg-marca-form">' +
+  const icones = _cfgLogoVagaHtml() + MARCA_ICONES.map(n => '<button type="button" class="mc-ic' + (!_cfgLogoSelecionada() && d.icone === n ? ' on' : '') + '" data-ic="' + n + '" onclick="cfgMarcaIcone(\'' + n + '\')" aria-label="' + n.slice(3) + '"><i class=' + n + '></i></button>').join('');
+  const identidade = '<div class="cfg-grid">' +
+    _cfgCampo('cfg-name', 'Nome de exibição', c.personalName, { ph:'Ex: Zé Trainer', dica:'O seu nome para o aluno. Preenche a variável {personal} nas mensagens de WhatsApp, que é a assinatura, e aparece no portal e nos avisos de transferência entre personais.' }) +
+    _cfgCampo('cfg-studio', 'Nome do studio', c.studioName === 'FitCPX Lite' ? '' : c.studioName, { ph:'Ex: Studio Movimento', dica:'O nome do seu negócio. Preenche a variável {studio} nas mensagens de WhatsApp (sem nome, vira "Studio") e aparece no portal e na lateral do painel.' }) +
+    '<div class="field cfg-span"><label for="cfg-bio">Apresentação curta</label><textarea id="cfg-bio" maxlength="280" style="min-height:76px" placeholder="Uma ou duas frases sobre o seu trabalho">' + escHTML(c.bio) + '</textarea>' +
+      '<div class="field-sub">Texto de apresentação para o aluno. Não tem variável nas mensagens; vai aparecer no portal em breve.</div></div>' +
+    '<div class="field cfg-span"><label>Foto</label>' + _cfgImagemHtml('foto') + '</div>' +
+    '</div>';
+  const contato = '<div class="cfg-grid">' +
+    '<div class="field"><label for="cfg-wa">WhatsApp</label><div style="display:flex;gap:8px">' +
+      '<select id="cfg-ddi" style="width:auto;max-width:150px" aria-label="DDI">' + crmDdiOptions(c.waCountryCode) + '</select>' +
+      '<input id="cfg-wa" type="text" inputmode="tel" value="' + escHTML(c.whatsapp) + '" placeholder="(11) 99999-0000" maxlength="20" style="flex:1" oninput="cfgTelDigitou(this)"></div>' +
+      '<div class="field-sub">O número de contato do personal para o aluno. Preenche a variável {whatsappStudio} nas mensagens de WhatsApp. O DDI escolhido é o padrão dos envios quando o número do aluno vem sem o código do país.</div></div>' +
+    _cfgCampo('cfg-email', 'E-mail', c.email, { tipo:'email', ph:'voce@email.com', max:120, dica:'O e-mail de contato com o aluno. Não tem variável nas mensagens; vai aparecer no portal em breve. Pode ser diferente do e-mail do Perfil.' }) +
+    _cfgCampo('cfg-insta', 'Instagram', c.instagram, { ph:'@seuperfil', max:60, dica:'O seu perfil no Instagram para o aluno. Não tem variável nas mensagens; vai aparecer no portal em breve.' }) +
+    '</div>';
+  const endereco = '<div class="btn-row" style="justify-content:flex-start;margin:0 0 10px"><button type="button" class="btn btn-ghost btn-sm" onclick="cfgEnderecoCopiar()"><i class=ph-copy></i> Usar o endereço do Perfil</button></div>' +
+    _cfgEnderecoHtml('st', c.enderecoStudio);
+  const app = '<div class="cfg-marca"><div class="cfg-marca-form">' +
     '<div class="field"><label for="cfg-app-nome">Nome do app do aluno</label>' +
       '<input id="cfg-app-nome" type="text" maxlength="40" value="' + escHTML(d.nomeApp) + '" placeholder="FitCPX" oninput="cfgMarcaNome(this.value)">' +
-      '<div class="field-sub">Sem nome, o portal mostra "FitCPX".</div></div>' +
-    '<div class="field"><label>Logo do app (opcional)</label>' + _cfgImagemHtml('logo') + '</div>' +
+      '<div class="field-sub">O nome do app que o aluno vê, no ícone e no topo do portal. Não entra nas mensagens. Sem nome, o portal mostra "FitCPX".</div></div>' +
     '<div class="field"><label>Cor</label><div class="mc-swatches">' + cores +
       '<label class="mc-custom" title="Cor personalizada"><input type="color" id="cfg-cor-livre" value="' + d.cor + '" oninput="cfgMarcaCor(this.value)"><span>Outra</span></label></div></div>' +
-    '<div class="field"><label>Ícone do app</label><div class="mc-icons">' + icones + '</div></div>' +
-    '</div><div class="cfg-marca-side"><div class="field"><label>Pré-visualização do portal</label><div class="mc-prevs" id="cfg-marca-prev">' + _cfgPreviewHtml() + '</div></div></div></div>' +
+    '<div class="field"><label>Ícone do app</label>' + _cfgLogoAcoesHtml() + '<div class="mc-icons">' + icones + '</div></div>' +
+    '</div><div class="cfg-marca-side"><div class="field"><label>Pré-visualização do portal</label><div class="mc-prevs" id="cfg-marca-prev">' + _cfgPreviewHtml() + '</div></div></div></div>';
+  return '<div class="card">' +
+    '<div class="card-title"><i class=ph-palette></i> Marca</div>' +
+    '<div class="field-sub">Como o aluno vê você: nomes, contato e o app dele.</div>' +
+    _cfgSecao('ph-identification-card', 'Identidade', '', identidade) +
+    _cfgSecao('ph-chat-circle-text', 'Contato com o aluno', '', contato) +
+    _cfgSecao('ph-map-pin', 'Endereço de atendimento', 'Onde o aluno treina com você. Não tem variável nas mensagens; vai aparecer no portal em breve. Digite o CEP e o resto é preenchido.', endereco) +
+    _cfgSecao('ph-device-mobile', 'App do aluno', 'A cor muda o sistema inteiro e o portal do aluno. O nome do app e o ícone aparecem no portal, onde a sua marca tem destaque. A logo do FitCPX no painel não muda.', app) +
     '<div class="btn-row" style="justify-content:flex-start">' +
       '<button class="btn btn-primary" onclick="cfgSalvarMarca()"><i class=ph-check-circle></i> Salvar marca</button>' +
-      '<button class="btn btn-ghost" onclick="cfgMarcaRestaurar()">Voltar ao padrão</button>' +
+      '<button class="btn btn-ghost" onclick="cfgMarcaRestaurar()">Voltar ao padrão do app</button>' +
       '<span id="cfg-saved-at" style="font-size:12px;color:var(--text3);align-self:center">' + _cfgSalvoEm() + '</span></div>' +
   '</div>';
+}
+
+// A logo enviada é a primeira opção da grade de ícones: vaga vazia até o envio, depois miniatura selecionável.
+function _cfgLogoUrl(){ const u = (DB.config.marca || {}).logoUrl; return marcaUrlImagemOk(u) ? u : ''; }
+function _cfgLogoSelecionada(){ return !!(_cfgMarca && _cfgMarca.logo && _cfgLogoUrl()); }
+function _cfgLogoVagaHtml(){
+  const url = _cfgLogoUrl();
+  if(!url) return '<button type="button" class="mc-ic mc-ic-logo vazia" onclick="cfgEscolherArquivo(\'logo\')" title="Enviar logo" aria-label="Enviar logo"></button>';
+  return '<button type="button" class="mc-ic mc-ic-logo' + (_cfgLogoSelecionada() ? ' on' : '') + '" onclick="cfgMarcaLogo()" title="Usar a sua logo" aria-label="Usar a sua logo"><img src="' + escHTML(url) + '" alt=""></button>';
+}
+function _cfgLogoAcoesHtml(){
+  const url = _cfgLogoUrl();
+  return '<div class="cfg-img-btns" style="margin-bottom:8px"><button type="button" class="btn btn-ghost btn-sm" onclick="cfgEscolherArquivo(\'logo\')"><i class=ph-upload-simple></i> ' + (url ? 'Trocar logo' : 'Enviar logo') + '</button>' +
+    (url ? '<button type="button" class="btn btn-ghost btn-sm btn-del" onclick="cfgRemoverImagem(\'logo\')"><i class=ph-trash></i> Remover</button>' : '') + '</div>' +
+    '<input type="file" id="cfg-file-logo" accept="image/png,image/jpeg,image/webp" hidden onchange="cfgEnviarImagem(\'logo\', this)">' +
+    '<div class="field-sub" style="margin-bottom:8px">A logo enviada entra como a primeira opção abaixo e aparece no portal e no ícone de instalação quando estiver selecionada. PNG, JPEG ou WebP; o sistema reduz e comprime sozinho.</div>';
 }
 
 function _cfgPreviewHtml(){
   const d = _cfgMarca; const v = marcaCalcular(d.cor.toLowerCase());
   const nome = marcaNomeLimpo(d.nomeApp) || 'FitCPX';
-  const logo = marcaUrlImagemOk((DB.config.marca || {}).logoUrl) ? DB.config.marca.logoUrl : '';
+  const logo = _cfgLogoSelecionada() ? _cfgLogoUrl() : '';
   const sub = (DB.config.studioName && DB.config.studioName !== 'FitCPX Lite') ? DB.config.studioName : 'Portal do Aluno';
   const bloco = (vars, bg, fg, rotulo) => '<div class="mc-prev" style="' + Object.keys(vars).map(k => k + ':' + vars[k]).join(';') + ';background:' + bg + ';color:' + fg + '">' +
     '<div class="mc-prev-topo"><span class="mc-prev-mark' + (logo ? ' com-logo' : '') + '">' + (logo ? '<img src="' + escHTML(logo) + '" alt="">' : '<i class=' + d.icone + '></i>') + '</span><span><b>' + escHTML(nome) + '</b><small>' + escHTML(sub) + '</small></span></div>' +
@@ -147,25 +246,52 @@ function _cfgPreviewHtml(){
 function _cfgMarcaRedesenhar(){
   const p = $('cfg-marca-prev'); if(p) p.innerHTML = _cfgPreviewHtml();
   document.querySelectorAll('.mc-sw').forEach((b, i) => b.classList.toggle('on', MARCA_CORES[i] && MARCA_CORES[i].hex === _cfgMarca.cor.toLowerCase()));
-  document.querySelectorAll('.mc-ic').forEach((b, i) => b.classList.toggle('on', MARCA_ICONES[i] === _cfgMarca.icone));
+  const logoOn = _cfgLogoSelecionada();
+  document.querySelectorAll('.mc-ic[data-ic]').forEach(b => b.classList.toggle('on', !logoOn && b.dataset.ic === _cfgMarca.icone));
+  document.querySelectorAll('.mc-ic-logo:not(.vazia)').forEach(b => b.classList.toggle('on', logoOn));
   const livre = $('cfg-cor-livre'); if(livre) livre.value = _cfgMarca.cor;
 }
 function cfgMarcaNome(v){ _cfgMarca.nomeApp = v; _cfgMarcaRedesenhar(); }
 function cfgMarcaCor(hex){ if(marcaHexOk(hex)){ _cfgMarca.cor = hex.toLowerCase(); _cfgMarcaRedesenhar(); } }
-function cfgMarcaIcone(n){ if(marcaIconeOk(n)){ _cfgMarca.icone = n; _cfgMarcaRedesenhar(); } }
-function cfgMarcaRestaurar(){ _cfgMarca = { nomeApp:'', cor:MARCA_COR_PADRAO, icone:'ph-barbell' }; renderConfigCRM(); }
+function cfgMarcaIcone(n){ if(marcaIconeOk(n)){ _cfgMarca.icone = n; _cfgMarca.logo = false; _cfgMarcaRedesenhar(); } }
+function cfgMarcaLogo(){ if(_cfgLogoUrl()){ _cfgMarca.logo = true; _cfgMarcaRedesenhar(); } }
+function cfgMarcaRestaurar(){ _cfgMarca = { nomeApp:'', cor:MARCA_COR_PADRAO, icone:'ph-barbell', logo:false }; renderConfigCRM(); }
 
 async function cfgSalvarMarca(){
-  const d = _cfgMarca;
+  const d = _cfgMarca, c = DB.config;
   if(!marcaHexOk(d.cor) || !marcaIconeOk(d.icone)){ crmToast('Cor ou ícone inválido', 'err'); return; }
-  DB.config.marca = { nomeApp:marcaNomeLimpo(d.nomeApp), cor:d.cor.toLowerCase(), icone:d.icone };
+  // Campos de texto: se a tela não os mostra, mantém o valor salvo.
+  const v = (id, atual) => ($(id) ? $(id).value.trim() : (atual || ''));
+  const email = v('cfg-email', c.email);
+  if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ crmToast('E-mail inválido', 'err'); return; }
+  const wa = v('cfg-wa', c.whatsapp);
+  if(wa && wa.replace(/\D/g, '').length < 10){ crmToast('WhatsApp incompleto: informe o DDD e o número', 'err'); return; }
+  const end = _cfgEnderecoLer('st', c.enderecoStudio), erroEnd = _cfgEnderecoErro(end);
+  if(erroEnd){ crmToast(erroEnd, 'err'); return; }
+  const ddi = ($('cfg-ddi') && $('cfg-ddi').value) || c.waCountryCode || '55';
+  const pais = CRM_DDI_LIST.find(p => p.code === ddi) || CRM_DDI_LIST[0];
+  Object.assign(c, {
+    studioName: v('cfg-studio', c.studioName === 'FitCPX Lite' ? '' : c.studioName) || 'FitCPX Lite', personalName: v('cfg-name', c.personalName),
+    whatsapp: wa, waCountryCode: pais.code, waCountryFlag: pais.flag, waCountryName: pais.name,
+    email, instagram: v('cfg-insta', c.instagram), bio: v('cfg-bio', c.bio), enderecoStudio: end,
+  });
+  // Mescla: logoUrl (a logo enviada) não faz parte do rascunho e precisa sobreviver ao salvar.
+  c.marca = Object.assign({}, c.marca, { nomeApp:marcaNomeLimpo(d.nomeApp), cor:d.cor.toLowerCase(), icone:d.icone, usarLogo:_cfgLogoSelecionada() });
   _cfgCarimbo();
   crmSave();
   marcaAplicarConfig();
-  let r = { ok:true };
-  await Carregando.durante('Salvando a marca...', async () => { r = await marcaPublicar(); });
+  if(typeof updateBadges === 'function') updateBadges();
+  let r = { ok:true }, aviso = '';
+  await Carregando.durante('Salvando a marca...', async () => {
+    if(c.personalName && c.personalName !== _portalNomeExibicao && typeof chamarTrainerFn === 'function' && _supaUser){
+      try{ await chamarTrainerFn('definir-nome', { nome:c.personalName }); _portalNomeExibicao = c.personalName; }
+      catch(e){ aviso = 'O nome ainda não foi atualizado para os alunos: ' + e.message; }
+    }
+    r = await marcaPublicar();
+  });
   const el = $('cfg-saved-at'); if(el) el.textContent = _cfgSalvoEm();
-  crmToast(r.ok ? (r.semLink ? 'Marca salva. Ela vai para o portal quando você gerar o seu link de cadastro.' : 'Marca salva!') : 'Marca salva no painel. ' + r.msg, r.ok ? undefined : 'err');
+  if(aviso || !r.ok) crmToast('Marca salva no painel. ' + (aviso || r.msg), 'err');
+  else crmToast(r.semLink ? 'Marca salva. Ela vai para o portal quando você gerar o seu link de cadastro.' : 'Marca salva!');
 }
 
 // Aplica a configuração ao painel: cor do sistema e nome do studio na lateral.
@@ -187,7 +313,7 @@ async function marcaPublicar(){
     marca_icone: marcaIconeOk(m.icone) ? m.icone : null,
     marca_studio: (c.studioName && c.studioName !== 'FitCPX Lite') ? c.studioName.slice(0, 60) : null,
   };
-  const imagens = { marca_logo_url: marcaUrlImagemOk(m.logoUrl) ? m.logoUrl : null, foto_url: marcaUrlImagemOk(c.fotoUrl) ? c.fotoUrl : null };
+  const imagens = { marca_logo_url: (m.usarLogo && marcaUrlImagemOk(m.logoUrl)) ? m.logoUrl : null, foto_url: marcaUrlImagemOk(c.fotoUrl) ? c.fotoUrl : null };
   try{
     const gravar = linha => supa.from('personal_links').update(linha).eq('trainer_user_id', _supaUser.id).select('trainer_user_id');
     let { data, error } = await gravar(Object.assign({}, base, imagens));
@@ -214,12 +340,12 @@ const MARCA_IMG_MAX_BYTES = 200 * 1024;
 function _cfgImagemUrl(tipo){ return tipo === 'logo' ? ((DB.config.marca || {}).logoUrl || '') : (DB.config.fotoUrl || ''); }
 function _cfgImagemHtml(tipo){
   const url = marcaUrlImagemOk(_cfgImagemUrl(tipo)) ? _cfgImagemUrl(tipo) : '';
-  const prev = url ? '<img src="' + escHTML(url) + '" alt="">' : '<i class=' + (tipo === 'logo' ? 'ph-image' : 'ph-user') + '></i>';
+  const prev = url ? '<img src="' + escHTML(url) + '" alt="">' : '<i class=ph-user></i>';
   return '<div class="cfg-img"><span class="cfg-img-prev cfg-img-' + tipo + '">' + prev + '</span><div class="cfg-img-acoes">' +
-    '<div class="cfg-img-btns"><button type="button" class="btn btn-ghost btn-sm" onclick="cfgEscolherArquivo(\'' + tipo + '\')"><i class=ph-upload-simple></i> ' + (url ? 'Trocar' : 'Enviar') + (tipo === 'logo' ? ' logo' : ' foto') + '</button>' +
+    '<div class="cfg-img-btns"><button type="button" class="btn btn-ghost btn-sm" onclick="cfgEscolherArquivo(\'' + tipo + '\')"><i class=ph-upload-simple></i> ' + (url ? 'Trocar' : 'Enviar') + ' foto</button>' +
     (url ? '<button type="button" class="btn btn-ghost btn-sm btn-del" onclick="cfgRemoverImagem(\'' + tipo + '\')"><i class=ph-trash></i> Remover</button>' : '') + '</div>' +
     '<input type="file" id="cfg-file-' + tipo + '" accept="image/png,image/jpeg,image/webp" hidden onchange="cfgEnviarImagem(\'' + tipo + '\', this)">' +
-    '<div class="field-sub">' + (tipo === 'logo' ? 'Aparece no portal do aluno no lugar do ícone, e no ícone de instalação. ' : 'Aparece para o aluno no portal. ') + 'PNG, JPEG ou WebP; o sistema reduz e comprime sozinho.</div></div></div>';
+    '<div class="field-sub">Aparece para o aluno no portal, no cartão do personal. Não entra nas mensagens. PNG, JPEG ou WebP; o sistema reduz e comprime sozinho.</div></div></div>';
 }
 
 // Devolve { blob, ext } pronto para enviar, ou lança Error com mensagem para o personal.
@@ -266,8 +392,13 @@ function _cfgErroImagem(e){
 }
 
 async function _cfgGuardarImagem(tipo, url){
-  if(tipo === 'logo') DB.config.marca.logoUrl = url; else DB.config.fotoUrl = url;
+  if(tipo === 'logo'){
+    // logo nova entra selecionada; removida volta ao ícone escolhido
+    DB.config.marca.logoUrl = url; DB.config.marca.usarLogo = !!url;
+    if(_cfgMarca) _cfgMarca.logo = !!url;
+  } else DB.config.fotoUrl = url;
   _cfgCarimbo(); crmSave();
+  try{ shellAtualizarAvatar(); }catch(e){}
   return marcaPublicar();
 }
 

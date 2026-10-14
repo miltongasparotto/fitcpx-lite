@@ -27,6 +27,7 @@ import {
 import {
   pepperCpf, depsDecisao, nomeDoPersonal, transferenciaAbertaDoAluno,
   transferenciaAbertaDaIdentidade, processarPrazosVencidos, aplicarCadastro, snapshotCadastro,
+  pendenteAbertoDoAluno, legadosRecusadosDaConta, registrarPendente,
 } from '../_shared/vinculo-db.ts';
 
 Deno.serve(async (req: Request) => {
@@ -144,7 +145,7 @@ async function studentDaConta(admin: any, alunoUserId: string, trainerId: string
 async function decidir(admin: any, caller: any, perfil: ReturnType<typeof limparPerfil>, trainerAlvo: string, trainerDoAcesso: string | null): Promise<Decisao> {
   return decidirCadastro(
     { ator: 'aluno', cpf: perfil.cpf, nome: perfil.nome, email: caller.email, trainerAlvo, contaId: caller.id },
-    depsDecisao(admin, () => studentDaConta(admin, caller.id, trainerDoAcesso)),
+    depsDecisao(admin, () => studentDaConta(admin, caller.id, trainerDoAcesso), () => legadosRecusadosDaConta(admin, caller.id)),
     pepperCpf(),
   );
 }
@@ -185,6 +186,9 @@ async function resolverVinculo(admin: any, caller: any, codigo: string | null) {
 
   const acesso = await acessoDoAluno(admin, caller.id);
   if (!acesso) {
+    // Pediu acesso como aluno antigo e o personal ainda não respondeu.
+    const pend = await pendenteAbertoDoAluno(admin, caller.id);
+    if (pend) return { status: 'aguardando-aprovacao', personalNome: await nomeDoPersonal(admin, pend.trainer_user_id) };
     if (!codigo) return { status: 'desconhecido' };
     const alvo = await trainerPorCodigo(admin, codigo);
     if (!alvo) return { status: 'codigo-invalido' };
@@ -262,16 +266,11 @@ async function aplicarDecisao(admin: any, caller: any, perfil: ReturnType<typeof
     }
 
     case 'legado': {
-      // Aluno antigo do personal (sem CPF): completa o registro que já existe.
-      const ident = await criarIdentidade(admin, { hash: d.hash, nome: perfil.nome, email: caller.email, trainerId: trainerAlvo, alunoUserId: caller.id, studentId: d.studentId });
-      const { students } = await loadStudents(admin, trainerAlvo);
-      const s = students.find((x: any) => x.id === d.studentId);
-      if (!s) throw new ErroUsuario('Seu cadastro não foi encontrado. Fale com seu personal.');
-      aplicarCadastro(s, { ...perfil, email: caller.email, alunoUserId: caller.id, identidadeId: ident.id });
-      await saveStudents(admin, trainerAlvo, students);
-      await inserirAcesso(admin, trainerAlvo, caller.id);
-      await registrarRastro(admin, trainerAlvo, caller.id, 'cadastro_inicial', { perfil: { ...perfil, cpf: undefined } });
-      return { status: 'ok', tipo: 'atualizado' };
+      // Aluno antigo do personal (sem CPF) que bate em nome + e-mail. O e-mail não é confirmado:
+      // NADA é ligado nem sobrescrito aqui. Vira um pedido que o personal aprova no painel
+      // (trainer-transferencia, ação 'responder-pendente').
+      await registrarPendente(admin, { trainerId: trainerAlvo, studentId: d.studentId, alunoUserId: caller.id, email: caller.email, perfil });
+      return { status: 'aguardando-aprovacao', personalNome: await nomeDoPersonal(admin, trainerAlvo) };
     }
 
     case 'vincular-conta': {

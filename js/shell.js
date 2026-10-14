@@ -39,13 +39,35 @@ function shellRotularMenu(){
   };
 })();
 
-// ── Ferramentas do cabeçalho: tema (lua) e sino ────────────────────────────
+// ── Ferramentas do cabeçalho: instalar, tema (lua), sino e avatar da conta ──────────
+// Ordem fixa em todas as telas (no celular a barra superior leva sino e avatar; o menu da conta traz tema e instalar).
+function shellIniciais(){
+  const nome = (typeof DB !== 'undefined' && DB.config && DB.config.personalName) || '';
+  const p = String(nome).split(/s+/).filter(w => w.length > 1).slice(0, 2);
+  if(p.length) return p.map(w => w[0]).join('').toUpperCase();
+  const em = (typeof _supaUser !== 'undefined' && _supaUser && _supaUser.email) || '';
+  return (em.charAt(0) || '?').toUpperCase();
+}
+function shellFotoUrl(){
+  const u = (typeof DB !== 'undefined' && DB.config && DB.config.fotoUrl) || '';
+  return (u && typeof marcaUrlImagemOk === 'function' && marcaUrlImagemOk(u)) ? u : '';
+}
+function shellAvatarInner(){
+  const f = shellFotoUrl();
+  return f ? '<img src="' + escHTML(f) + '" alt="">' : escHTML(shellIniciais());
+}
 function shellFerramentasHTML(){
   const escuro = document.documentElement.classList.contains('dark');
   return '<div class="ph-tools">' +
+    '<button class="icon-btn" type="button" data-instalar onclick="instalarApp()" aria-label="Instalar aplicativo" title="Instalar aplicativo"><i class=ph-download-simple></i></button>' +
     '<button class="icon-btn" type="button" data-tema-btn onclick="toggleTema()" aria-label="Alternar modo escuro" title="Alternar modo escuro"><i class=' + (escuro ? 'ph-sun' : 'ph-moon') + '></i></button>' +
     '<button class="icon-btn sino-btn" type="button" onclick="shellToggleSino(event)" aria-label="Notificações" title="Notificações"><i class=ph-bell></i><span class="sino-dot"></span></button>' +
+    '<button class="ph-avatar" type="button" data-avatar onclick="shellToggleConta(event)" aria-label="Minha conta" title="Minha conta" aria-haspopup="menu">' + shellAvatarInner() + '</button>' +
     '</div>';
+}
+function shellAtualizarAvatar(){
+  const html = shellAvatarInner();
+  document.querySelectorAll('[data-avatar]').forEach(b => { b.innerHTML = html; });
 }
 
 function shellInjetarFerramentas(){
@@ -57,6 +79,7 @@ function shellInjetarFerramentas(){
     else h.insertAdjacentHTML('beforeend', shellFerramentasHTML());
   });
   shellAtualizarSino();
+  if(typeof instalarAtualizarBotoes === 'function') instalarAtualizarBotoes();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -103,8 +126,7 @@ function shellSinoItens(){
 function shellAtualizarSino(){
   const tem = shellSinoItens().length > 0;
   document.querySelectorAll('.sino-dot').forEach(d => { d.style.display = tem ? '' : 'none'; });
-  const av = document.getElementById('supa-user-avatar'), mb = document.getElementById('mb-avatar');
-  if(av && mb) mb.textContent = av.textContent || '';
+  shellAtualizarAvatar();
 }
 
 function shellFecharSino(){
@@ -114,6 +136,7 @@ function shellFecharSino(){
 function shellToggleSino(ev){
   if(ev) ev.stopPropagation();
   if(document.getElementById('sino-pop')){ shellFecharSino(); return; }
+  shellFecharConta();
   const itens = shellSinoItens();
   const corpo = itens.length
     ? itens.map(i => '<div class="sino-item" role="button" tabindex="0" onclick="shellFecharSino();' + i.go + '">' +
@@ -136,16 +159,51 @@ function shellToggleSino(ev){
   requestAnimationFrame(() => pop.classList.add('on'));
 }
 
+// ── Menu da conta (avatar): nome, e-mail, tema e instalar (celular), Configurações, Sair ──────────
+function shellFecharConta(){
+  const p = document.getElementById('conta-pop'); if(p) p.remove();
+  const b = document.getElementById('conta-bk'); if(b) b.remove();
+}
+function shellToggleConta(ev){
+  if(ev) ev.stopPropagation();
+  if(document.getElementById('conta-pop')){ shellFecharConta(); return; }
+  shellFecharSino();
+  const email = (typeof _supaUser !== 'undefined' && _supaUser && _supaUser.email) || '';
+  const nome = (typeof DB !== 'undefined' && DB.config && DB.config.personalName) || '';
+  const escuro = document.documentElement.classList.contains('dark');
+  const it = (cls, ic, t, fn) => '<div class="sino-item ' + cls + '" role="menuitem" tabindex="0" onclick="shellFecharConta();' + fn + '"><span class="sino-ic tom-gray"><i class=' + ic + '></i></span><span class="sino-t">' + t + '</span></div>';
+  const bk = document.createElement('div');
+  bk.id = 'conta-bk'; bk.className = 'sino-bk'; bk.onclick = shellFecharConta;
+  const pop = document.createElement('div');
+  pop.id = 'conta-pop'; pop.className = 'sino-pop conta-pop'; pop.setAttribute('role', 'menu');
+  pop.innerHTML = '<div class="conta-h"><span class="ph-avatar is-big">' + shellAvatarInner() + '</span><div class="conta-id"><b>' + escHTML(nome || email) + '</b>' +
+      (nome ? '<small>' + escHTML(email) + '</small>' : '') + '<small id="sync-status" class="sb-sync" style="display:none"></small></div></div>' +
+    it('so-mob', escuro ? 'ph-sun' : 'ph-moon', escuro ? 'Modo claro' : 'Modo escuro', 'toggleTema()') +
+    '<div data-instalar>' + it('so-mob', 'ph-download-simple', 'Instalar aplicativo', 'instalarApp()') + '</div>' +
+    it('', 'ph-gear', 'Configurações', "navGo('config')") +
+    it('', 'ph-sign-out', 'Sair', 'authSair()');
+  document.body.appendChild(bk);
+  document.body.appendChild(pop);
+  const alvo = ev && (ev.currentTarget || ev.target);
+  if(alvo && alvo.getBoundingClientRect && shellModo() !== 'mob'){
+    const r = alvo.getBoundingClientRect();
+    pop.style.top = (r.bottom + 8) + 'px';
+    pop.style.right = Math.max(12, window.innerWidth - r.right) + 'px';
+  }
+  if(typeof instalarAtualizarBotoes === 'function') instalarAtualizarBotoes();
+  requestAnimationFrame(() => pop.classList.add('on'));
+}
+
 // ── Teclado e redimensionamento ─────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if(e.key !== 'Escape') return;
-  shellFecharSino();
+  shellFecharSino(); shellFecharConta();
   if(typeof toggleNavMobile === 'function') toggleNavMobile(false);
   if(typeof dashFecharMenus === 'function') dashFecharMenus();
 });
 window.addEventListener('resize', () => {
   if(shellModo() === 'desk' && typeof toggleNavMobile === 'function') toggleNavMobile(false);
-  shellFecharSino();
+  shellFecharSino(); shellFecharConta();
 });
 
 // O updateBadges() do CRM só cuida da Agenda; o selo do Financeiro e o sino pegam carona.

@@ -100,7 +100,7 @@ function _waMontarTexto(tipo, aluno, extra){
   return waTextoDeModelo(waTextoModelo(tipo), aluno, extra);
 }
 
-// DDI do studio (Configurações > Perfil), usado quando o telefone do aluno vem sem código do país.
+// DDI do studio (Configurações > Marca), usado quando o telefone do aluno vem sem código do país.
 function waDdiPadrao(){
   return String((typeof DB !== 'undefined' && DB.config && DB.config.waCountryCode) || '55').replace(/\D/g, '') || '55';
 }

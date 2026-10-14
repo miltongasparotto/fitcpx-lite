@@ -139,12 +139,12 @@ const results=[];const ok=(n,c,info)=>results.push((c?'PASS ':'FAIL ')+n+(info?'
   ok('whatsapp: remover template', !(await ev(()=>DB.waTpls.some(t=>t.nome==='Lembrete'))));
 
   // 10) tema claro/escuro persiste
-  await page.click('#btn-tema');await page.waitForTimeout(100);
+  await page.click('[data-tema-btn] >> visible=true');await page.waitForTimeout(100);
   ok('tema: alterna para escuro', await ev(()=>document.documentElement.classList.contains('dark')));
-  ok('tema: rótulo muda', (await ev(()=>document.getElementById('tema-label').textContent))==='Modo claro');
+  ok('tema: ícone muda para sol', (await ev(()=>document.querySelector('[data-tema-btn] i').className))==='ph-sun');
   await boot(false);
   ok('tema: lembra após recarregar', await ev(()=>document.documentElement.classList.contains('dark')));
-  await page.click('#btn-tema');
+  await page.click('[data-tema-btn] >> visible=true');
 
   // 11) persistência real: recarrega SEM seed e confere dados
   const temAm=await ev(()=>students.some(s=>s.perfil.nome==='Amanda Silva'));

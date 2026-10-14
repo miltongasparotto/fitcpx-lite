@@ -96,7 +96,8 @@ export interface Identidade {
 export interface DepsDecisao {
   identidadePorCpf(hash: string): Promise<Identidade | null>;
   identidadePorConta(userId: string): Promise<Identidade | null>;
-  // Aluno antigo (sem CPF) do mesmo personal: casa por nome + e-mail.
+  // Aluno antigo (sem CPF) do mesmo personal: casa por nome + e-mail. O e-mail não é confirmado,
+  // então o casamento só gera um PEDIDO que o personal aprova (vinculos_pendentes), nunca liga sozinho.
   legadoNoPersonal(trainerId: string, nomeNorm: string, emailNorm: string): Promise<number | null>;
 }
 

@@ -49,6 +49,13 @@ const montarCenario = () => {
     const page = await ctx.newPage();
     // Nuvem simulada: grava o que o painel enviaria ao Storage e a personal_links.
     const nuvem = { subidas: [], apagados: [], patches: [] };
+    const viacep = { falhar: false, consultas: [] };
+    await ctx.route('**/viacep.com.br/**', route => {
+      const cep = route.request().url().split('/ws/')[1].split('/')[0]; viacep.consultas.push(cep);
+      if (viacep.falhar) return route.fulfill({ status: 500, headers: JSON_H, body: '{}' });
+      if (cep === '01310100') return route.fulfill({ status: 200, headers: JSON_H, body: JSON.stringify({ cep: '01310-100', logradouro: 'Avenida Paulista', bairro: 'Bela Vista', localidade: 'São Paulo', uf: 'SP' }) });
+      return route.fulfill({ status: 200, headers: JSON_H, body: '{"erro":true}' });
+    });
     await ctx.route('**/*.supabase.co/**', async route => {
       const u = route.request().url(), m = route.request().method();
       if (m === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS, body: '' });
@@ -92,42 +99,85 @@ const montarCenario = () => {
     chk(P('config: não tem mais "Dados/backup" nem WhatsApp além do telefone'), await call(page, `!/Backup|Exportar|Importar/.test(document.getElementById('screen-config-body').textContent) && !document.querySelector('#screen-config-body #wt-msg')`));
     await shot(page, `cfg-${W}-perfil`);
 
-    // Perfil: validação
-    await call(page, `document.getElementById('cfg-email').value='isso-nao-e-email'; cfgSalvarPerfil()`); await page.waitForTimeout(300);
-    chk(P('perfil: e-mail inválido não salva'), await call(page, `DB.config.email===''`));
-    await call(page, `document.getElementById('cfg-email').value=''; document.getElementById('cfg-wa').value='123'; cfgSalvarPerfil()`); await page.waitForTimeout(300);
-    chk(P('perfil: telefone curto não salva'), await call(page, `DB.config.whatsapp===''`));
+    // Perfil: estrutura (cadastro da pessoa física; nada do que o aluno vê)
+    chk(P('perfil: 3 seções (dados pessoais, contato, endereço)'), await call(page, `document.querySelectorAll('#screen-config-body .cfg-sec').length===3`));
+    chk(P('perfil: não tem os campos da marca (nome de exibição, studio, WhatsApp, bio, foto)'), await call(page, `!document.getElementById('cfg-studio') && !document.getElementById('cfg-name') && !document.getElementById('cfg-wa') && !document.getElementById('cfg-bio') && !document.getElementById('cfg-file-foto')`));
+    chk(P('perfil: CEP é o primeiro campo do endereço'), await call(page, `document.querySelector('.cfg-end input').id==='cfg-pf-cep' && document.querySelectorAll('.cfg-end input, .cfg-end select').length===7`));
+    chk(P('perfil: campos explicam que não entram nas mensagens nem aparecem ao aluno'), await call(page, `['cfg-nome-completo','cfg-email-pf','cfg-tel-pf'].every(id=>/Não entra nas mensagens/.test(document.getElementById(id).closest('.field').textContent))`));
+    chk(P('perfil: CREF cita a variável {cref}'), await call(page, `document.getElementById('cfg-cref').closest('.field').textContent.includes('{cref}')`));
+    chk(P('perfil: UF é uma lista com os 27 estados'), await call(page, `document.querySelectorAll('#cfg-pf-uf option').length===28`));
+
+    // Perfil: máscaras e validação
+    chk(P('perfil: máscara de CEP e de telefone'), await call(page, `_cfgCepMask('01310100')==='01310-100' && _cfgTelMask('21988887777')==='(21) 98888-7777' && _cfgTelMask('2133334444')==='(21) 3333-4444' && _cfgTelMask('+351912345678')==='+351912345678'`));
+    await call(page, `document.getElementById('cfg-email-pf').value='isso-nao-e-email'; cfgSalvarPerfil()`); await page.waitForTimeout(200);
+    chk(P('perfil: e-mail inválido não salva'), await call(page, `DB.config.emailPessoal===''`));
+    await call(page, `document.getElementById('cfg-email-pf').value=''; document.getElementById('cfg-tel-pf').value='123'; cfgSalvarPerfil()`); await page.waitForTimeout(200);
+    chk(P('perfil: telefone curto não salva'), await call(page, `DB.config.telefonePessoal===''`));
+    await call(page, `document.getElementById('cfg-tel-pf').value=''; document.getElementById('cfg-pf-cep').value='12345'; cfgSalvarPerfil()`); await page.waitForTimeout(200);
+    chk(P('perfil: CEP incompleto não salva'), await call(page, `DB.config.enderecoPessoal.cep===''`) && await call(page, `!!document.querySelector('.toast.err')`));
+    await call(page, `document.querySelectorAll('.toast').forEach(t=>t.remove()); document.getElementById('cfg-pf-cep').value=''`);
+
+    // Perfil: CEP preenche o endereço (ViaCEP simulado)
+    await call(page, `(()=>{ const e=document.getElementById('cfg-pf-cep'); e.value='01310100'; cfgCepDigitou('pf', e); })()`); await page.waitForTimeout(500);
+    chk(P('cep: máscara aplicada e consulta feita só com o CEP'), await call(page, `document.getElementById('cfg-pf-cep').value==='01310-100'`) && viacep.consultas.join()==='01310100', viacep.consultas.join());
+    chk(P('cep: preenche rua, bairro, cidade e UF e leva o foco ao número'), await call(page, `(g=>g('rua')==='Avenida Paulista'&&g('bairro')==='Bela Vista'&&g('cidade')==='São Paulo'&&g('uf')==='SP'&&document.activeElement.id==='cfg-pf-numero')(k=>document.getElementById('cfg-pf-'+k).value)`));
+    await call(page, `document.querySelectorAll('.toast').forEach(t=>t.remove()); (()=>{ const e=document.getElementById('cfg-pf-cep'); e.value='99999999'; cfgCepDigitou('pf', e); })()`); await page.waitForTimeout(500);
+    chk(P('cep: não encontrado avisa e deixa os campos como estavam'), await call(page, `[...document.querySelectorAll('.toast.err')].some(t=>/CEP não encontrado/.test(t.textContent)) && document.getElementById('cfg-pf-rua').value==='Avenida Paulista'`));
+    viacep.falhar = true;
+    await call(page, `document.querySelectorAll('.toast').forEach(t=>t.remove()); (()=>{ const e=document.getElementById('cfg-pf-cep'); e.value='01310200'; cfgCepDigitou('pf', e); })()`); await page.waitForTimeout(500);
+    chk(P('cep: serviço fora do ar avisa, não trava a tela e os campos seguem editáveis'), await call(page, `[...document.querySelectorAll('.toast.err')].some(t=>/CEP não encontrado/.test(t.textContent)) && !document.getElementById('cfg-pf-rua').disabled && !document.documentElement.hasAttribute('aria-busy')`));
+    viacep.falhar = false;
+
     // Perfil: salvar
     await call(page, `document.querySelectorAll('.toast').forEach(t=>t.remove())`);
     await call(page, `
-      document.getElementById('cfg-studio').value='Studio Vida'; document.getElementById('cfg-name').value='Marina Costa';
-      document.getElementById('cfg-cref').value='012345-G/SP'; document.getElementById('cfg-ddi').value='351';
-      document.getElementById('cfg-wa').value='(21) 98888-7777'; document.getElementById('cfg-email').value='marina@exemplo.com';
-      document.getElementById('cfg-insta').value='@studiovida'; document.getElementById('cfg-cidade').value='Rio de Janeiro - RJ';
-      document.getElementById('cfg-end').value='Rua Fictícia, 100'; document.getElementById('cfg-bio').value='Treino com ciência.';
+      document.getElementById('cfg-nome-completo').value='Marina Souza Costa'; document.getElementById('cfg-cref').value='012345-G/SP';
+      document.getElementById('cfg-email-pf').value='marina.pessoal@exemplo.com'; document.getElementById('cfg-tel-pf').value='(21) 97777-6666';
+      document.getElementById('cfg-pf-cep').value='01310-100'; document.getElementById('cfg-pf-numero').value='1000'; document.getElementById('cfg-pf-complemento').value='Sala 5';
       cfgSalvarPerfil()`);
-    await page.waitForTimeout(500);
-    chk(P('perfil: campos gravados em DB.config'), await call(page, `(c=>c.studioName==='Studio Vida'&&c.personalName==='Marina Costa'&&c.cref==='012345-G/SP'&&c.waCountryCode==='351'&&c.cidade==='Rio de Janeiro - RJ'&&c.bio==='Treino com ciência.')(DB.config)`));
-    chk(P('perfil: sem aviso de erro (nuvem ausente)'), await call(page, `!document.querySelector('.toast.err')`));
-    chk(P('perfil: persiste no armazenamento local'), await call(page, `JSON.parse(localStorage.getItem(lsKey('crm'))).config.cref==='012345-G/SP'`));
-    chk(P('perfil: nome do studio na lateral'), await call(page, `[...document.querySelectorAll('.sb-role')].every(e=>e.textContent==='Studio Vida')`));
-    chk(P('perfil: variáveis do studio nas mensagens'), await call(page, `waTextoDeModelo('{studio}|{personal}|{cref}|{whatsappStudio}', null, {})==='Studio Vida|Marina Costa|012345-G/SP|(21) 98888-7777'`));
-    chk(P('perfil: DDI do studio vira o padrão dos envios'), await call(page, `waLinkPara({perfil:{whatsapp:'(11) 91234-5678'}}, 'oi').startsWith('https://wa.me/351')`));
+    await page.waitForTimeout(300);
+    chk(P('perfil: campos gravados em DB.config'), await call(page, `(c=>c.nomeCompleto==='Marina Souza Costa'&&c.cref==='012345-G/SP'&&c.emailPessoal==='marina.pessoal@exemplo.com'&&c.telefonePessoal==='(21) 97777-6666'&&c.enderecoPessoal.cep==='01310-100'&&c.enderecoPessoal.rua==='Avenida Paulista'&&c.enderecoPessoal.numero==='1000'&&c.enderecoPessoal.complemento==='Sala 5'&&c.enderecoPessoal.cidade==='São Paulo'&&c.enderecoPessoal.uf==='SP')(DB.config)`));
+    chk(P('perfil: sem aviso de erro'), await call(page, `!document.querySelector('.toast.err')`));
+    chk(P('perfil: persiste no armazenamento local'), await call(page, `JSON.parse(localStorage.getItem(lsKey('crm'))).config.enderecoPessoal.numero==='1000'`));
+    chk(P('perfil: não mexe na marca (nome de exibição e studio continuam vazios)'), await call(page, `DB.config.personalName==='' && DB.config.studioName==='FitCPX Lite'`));
+    chk(P('perfil: CREF continua nas mensagens'), await call(page, `waTextoDeModelo('{cref}', null, {})==='012345-G/SP'`));
     await call(page, `renderConfigCRM()`);
-    chk(P('perfil: reabrir mostra o salvo'), await call(page, `document.getElementById('cfg-studio').value==='Studio Vida' && document.getElementById('cfg-ddi').value==='351'`));
+    chk(P('perfil: reabrir mostra o salvo'), await call(page, `document.getElementById('cfg-nome-completo').value==='Marina Souza Costa' && document.getElementById('cfg-pf-uf').value==='SP' && document.getElementById('cfg-tel-pf').value==='(21) 97777-6666'`));
 
     // ── Marca ──
     await call(page, `_cfgAba('marca')`); await page.waitForTimeout(200);
-    chk(P('marca: 10 cores prontas + cor livre + 24 ícones'), await call(page, `document.querySelectorAll('.mc-sw').length===10 && !!document.getElementById('cfg-cor-livre') && document.querySelectorAll('.mc-ic').length===24`));
+    chk(P('marca: 10 cores prontas + cor livre + 24 ícones + vaga vazia da logo'), await call(page, `document.querySelectorAll('.mc-sw').length===10 && !!document.getElementById('cfg-cor-livre') && document.querySelectorAll('.mc-ic[data-ic]').length===24 && document.querySelectorAll('.mc-ic').length===25 && document.querySelector('.mc-icons').firstElementChild.matches('.mc-ic-logo.vazia')`));
     chk(P('marca: pré-visualização claro e escuro'), await call(page, `document.querySelectorAll('.mc-prev').length===2`));
+    chk(P('marca: 4 seções (identidade, contato, endereço de atendimento, app)'), await call(page, `document.querySelectorAll('#screen-config-body .cfg-sec').length===4`));
+    chk(P('marca: não tem os campos do Perfil'), await call(page, `!document.getElementById('cfg-nome-completo') && !document.getElementById('cfg-cref') && !document.getElementById('cfg-tel-pf') && !document.getElementById('cfg-email-pf')`));
+    chk(P('marca: campos do aluno têm descrição'), await call(page, `(t=>t('cfg-name').includes('{personal}')&&t('cfg-studio').includes('{studio}')&&t('cfg-wa').includes('{whatsappStudio}')&&/Não tem variável/.test(t('cfg-email'))&&/Não tem variável/.test(t('cfg-insta')))(id=>document.getElementById(id).closest('.field').textContent)`));
+    chk(P('marca: endereço de atendimento tem CEP primeiro'), await call(page, `document.querySelector('#cfg-st-cep')===document.querySelector('.cfg-end #cfg-st-cep') && !!document.getElementById('cfg-st-uf')`));
+    await call(page, `document.getElementById('cfg-email').value='x'; cfgSalvarMarca()`); await page.waitForTimeout(200);
+    chk(P('marca: e-mail inválido não salva'), await call(page, `DB.config.email==='' && DB.config.marca.cor==='#3dbb6e'`));
+    await call(page, `document.getElementById('cfg-email').value=''; document.getElementById('cfg-wa').value='123'; cfgSalvarMarca()`); await page.waitForTimeout(200);
+    chk(P('marca: WhatsApp curto não salva'), await call(page, `DB.config.whatsapp===''`));
+    await call(page, `document.getElementById('cfg-wa').value=''; document.querySelectorAll('.toast').forEach(t=>t.remove()); cfgEnderecoCopiar()`);
+    chk(P('marca: "Usar o endereço do Perfil" copia os campos'), await call(page, `document.getElementById('cfg-st-cep').value==='01310-100' && document.getElementById('cfg-st-numero').value==='1000' && document.getElementById('cfg-st-cidade').value==='São Paulo' && document.getElementById('cfg-st-uf').value==='SP'`));
+    await call(page, `
+      document.getElementById('cfg-studio').value='Studio Vida'; document.getElementById('cfg-name').value='Marina Costa'; document.getElementById('cfg-ddi').value='351';
+      document.getElementById('cfg-wa').value='(21) 98888-7777'; document.getElementById('cfg-email').value='contato@studiovida.com'; document.getElementById('cfg-insta').value='@studiovida';
+      document.getElementById('cfg-bio').value='Treino com ciência.'; document.getElementById('cfg-st-complemento').value='Loja 2'`);
     await call(page, `cfgMarcaCor('#3b82f6'); cfgMarcaIcone('ph-heartbeat'); cfgMarcaNome('Vida Fit')`); await page.waitForTimeout(150);
     chk(P('marca: rascunho não muda o sistema antes de salvar'), await call(page, `!document.getElementById('marca-vars')`));
     chk(P('marca: pré-visualização usa a cor escolhida'), await call(page, `getComputedStyle(document.querySelector('.mc-prev-mark')).backgroundColor===(h=>{const n=parseInt(h.slice(1),16);return 'rgb('+(n>>16)+', '+((n>>8)&255)+', '+(n&255)+')'})(marcaCalcular('#3b82f6').claro['--primary']) && document.querySelector('.mc-prev-nome, .mc-prev-topo b').textContent==='Vida Fit'`));
     await shot(page, `cfg-${W}-marca`);
     await call(page, `cfgSalvarMarca()`); await page.waitForTimeout(400);
+    chk(P('marca: identidade, contato e endereço gravados em DB.config'), await call(page, `(c=>c.studioName==='Studio Vida'&&c.personalName==='Marina Costa'&&c.waCountryCode==='351'&&c.whatsapp==='(21) 98888-7777'&&c.email==='contato@studiovida.com'&&c.instagram==='@studiovida'&&c.bio==='Treino com ciência.'&&c.enderecoStudio.rua==='Avenida Paulista'&&c.enderecoStudio.complemento==='Loja 2'&&c.enderecoStudio.uf==='SP')(DB.config)`));
+    chk(P('marca: sem aviso de erro (nuvem ausente)'), await call(page, `!document.querySelector('.toast.err')`));
+    chk(P('marca: nome do studio na lateral'), await call(page, `[...document.querySelectorAll('.sb-role')].every(e=>e.textContent==='Studio Vida')`));
+    chk(P('marca: variáveis nas mensagens'), await call(page, `waTextoDeModelo('{studio}|{personal}|{cref}|{whatsappStudio}', null, {})==='Studio Vida|Marina Costa|012345-G/SP|(21) 98888-7777'`));
+    chk(P('marca: DDI do studio vira o padrão dos envios'), await call(page, `waLinkPara({perfil:{whatsapp:'(11) 91234-5678'}}, 'oi').startsWith('https://wa.me/351')`));
+    chk(P('marca: o Perfil não foi alterado ao salvar a marca'), await call(page, `DB.config.nomeCompleto==='Marina Souza Costa' && DB.config.enderecoPessoal.numero==='1000'`));
+    await call(page, `renderConfigCRM()`);
+    chk(P('marca: reabrir mostra o salvo'), await call(page, `document.getElementById('cfg-studio').value==='Studio Vida' && document.getElementById('cfg-ddi').value==='351' && document.getElementById('cfg-st-uf').value==='SP'`));
     chk(P('marca: salvar aplica a cor ao sistema'), await call(page, `!!document.getElementById('marca-vars') && getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()===marcaCalcular('#3b82f6').claro['--primary']`));
     chk(P('marca: botão principal usa a cor'), await call(page, `(()=>{ const b=document.createElement('button'); b.className='btn btn-primary'; document.body.appendChild(b); const c=getComputedStyle(b).backgroundColor; b.remove(); return c===(h=>{const n=parseInt(h.slice(1),16);return 'rgb('+(n>>16)+', '+((n>>8)&255)+', '+(n&255)+')'})(marcaCalcular('#3b82f6').claro['--primary']); })()`));
-    chk(P('marca: guardada em DB.config.marca'), await call(page, `JSON.stringify(DB.config.marca)==='{"nomeApp":"Vida Fit","cor":"#3b82f6","icone":"ph-heartbeat"}'`));
+    chk(P('marca: guardada em DB.config.marca'), await call(page, `(m=>m.nomeApp==='Vida Fit'&&m.cor==='#3b82f6'&&m.icone==='ph-heartbeat'&&m.usarLogo===false)(DB.config.marca)`));
     await call(page, `document.documentElement.classList.add('dark')`); await page.waitForTimeout(100);
     chk(P('marca: tema escuro recebe tons próprios'), await call(page, `getComputedStyle(document.documentElement).getPropertyValue('--primary-ink').trim()!==''&&getComputedStyle(document.documentElement).getPropertyValue('--primary-ink').trim()!=='#4ade80'`));
     await shot(page, `cfg-${W}-marca-escuro`);
@@ -137,6 +187,13 @@ const montarCenario = () => {
     chk(P('marca: cor e ícone inválidos são recusados'), await call(page, `_cfgMarca.cor==='#3b82f6' && _cfgMarca.icone==='ph-heartbeat'`));
     await call(page, `cfgMarcaRestaurar(); cfgSalvarMarca()`); await page.waitForTimeout(400);
     chk(P('marca: voltar ao padrão remove o estilo'), await call(page, `!document.getElementById('marca-vars') && DB.config.marca.cor==='#3dbb6e'`));
+
+    // Migração: endereço e cidade antigos (texto solto do studio) viram o endereço de atendimento
+    await call(page, `DB.config.enderecoStudio=_cfgEnderecoPadrao(); DB.config.endereco='Rua Velha, 5'; DB.config.cidade='Curitiba - PR'; crmSave(); crmLoad()`);
+    chk(P('migração: endereço antigo vai para a Rua e "Cidade - UF" é separada'), await call(page, `(e=>e.rua==='Rua Velha, 5'&&e.cidade==='Curitiba'&&e.uf==='PR'&&DB.config.endereco===undefined&&DB.config.cidade===undefined)(DB.config.enderecoStudio)`));
+    await call(page, `DB.config.enderecoStudio={rua:'<img src=x onerror=alert(1)>',cep:42,uf:'SP',extra:'x'}; crmSave(); crmLoad()`);
+    chk(P('endereço vindo de dado salvo: só chaves conhecidas e texto'), await call(page, `(e=>e.rua.startsWith('<img')&&e.cep===''&&e.uf==='SP'&&e.extra===undefined&&Object.keys(e).length===7)(DB.config.enderecoStudio)`));
+    await call(page, `DB.config.enderecoStudio=_cfgEnderecoPadrao(); crmSave()`);
 
     // ── Logo e foto (Storage simulado) ──
     if (W === 1440) {
@@ -153,11 +210,23 @@ const montarCenario = () => {
       const url1 = await call(page, `DB.config.marca.logoUrl`);
       chk('logo: URL pública válida guardada no config', await call(page, `marcaUrlImagemOk(DB.config.marca.logoUrl) && DB.config.marca.logoUrl.endsWith('${nuvem.subidas[0] && nuvem.subidas[0].caminho}')`), url1);
       chk('logo: publicada em personal_links', nuvem.patches.length > 0 && nuvem.patches[nuvem.patches.length - 1].marca_logo_url === url1, JSON.stringify(nuvem.patches.slice(-1)));
-      chk('logo: aparece na tela e na pré-visualização', await call(page, `!!document.querySelector('.cfg-img-logo img') && !!document.querySelector('.mc-prev-mark.com-logo img')`));
+      chk('logo: aparece na tela e na pré-visualização', await call(page, `!!document.querySelector('.mc-icons .mc-ic-logo.on img') && !document.querySelector('.mc-ic[data-ic].on') && !!document.querySelector('.mc-prev-mark.com-logo img') && DB.config.marca.usarLogo===true`));
       await shot(page, 'cfg-logo');
 
       await enviar('#cfg-file-logo', 'outra.png', 'image/png', Buffer.from(png, 'base64'));
       chk('logo: trocar apaga o arquivo anterior', nuvem.subidas.length === 2 && nuvem.apagados.includes(nuvem.subidas[0].caminho) && nuvem.subidas[1].caminho !== nuvem.subidas[0].caminho, JSON.stringify(nuvem.apagados));
+
+      // logo é uma opção da grade: salvar a marca NÃO pode perder a logo (bug: sumia ao recarregar)
+      await call(page, `cfgMarcaCor('#3b82f6'); cfgSalvarMarca()`); await page.waitForTimeout(400);
+      const urlLogo = await call(page, `DB.config.marca.logoUrl`);
+      chk('logo: salvar a marca mantém logoUrl e usarLogo', await call(page, `marcaUrlImagemOk(DB.config.marca.logoUrl) && DB.config.marca.usarLogo===true`), urlLogo);
+      chk('logo: salvar a marca publica a logo (não null)', nuvem.patches[nuvem.patches.length - 1].marca_logo_url === urlLogo, JSON.stringify(nuvem.patches.slice(-1)));
+      await call(page, `_cfgMarca=null; crmLoad(); renderConfigCRM()`); await page.waitForTimeout(200);
+      chk('logo: depois de recarregar continua selecionada na grade', await call(page, `!!document.querySelector('.mc-ic-logo.on img') && DB.config.marca.logoUrl===${JSON.stringify(urlLogo)}`));
+      await call(page, `cfgMarcaIcone('ph-fire'); cfgSalvarMarca()`); await page.waitForTimeout(400);
+      chk('logo: escolher ícone desmarca a logo, guarda o arquivo e publica null', await call(page, `DB.config.marca.usarLogo===false && DB.config.marca.logoUrl===${JSON.stringify(urlLogo)} && !document.querySelector('.mc-ic-logo.on') && document.querySelector('.mc-ic[data-ic="ph-fire"]').classList.contains('on') && !document.querySelector('.mc-prev-mark.com-logo')`) && nuvem.patches[nuvem.patches.length - 1].marca_logo_url === null);
+      await call(page, `cfgMarcaLogo(); cfgSalvarMarca()`); await page.waitForTimeout(400);
+      chk('logo: clicar na vaga seleciona de novo e publica a URL', await call(page, `DB.config.marca.usarLogo===true && !!document.querySelector('.mc-ic-logo.on')`) && nuvem.patches[nuvem.patches.length - 1].marca_logo_url === urlLogo);
 
       await call(page, `document.querySelectorAll('.toast').forEach(t=>t.remove())`);
       await enviar('#cfg-file-logo', 'texto.png', 'image/png', Buffer.from('isto não é uma imagem, só texto disfarçado'));
@@ -165,7 +234,7 @@ const montarCenario = () => {
       await enviar('#cfg-file-logo', 'x.svg', 'image/svg+xml', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'));
       chk('envio recusa SVG', nuvem.subidas.length === 2);
 
-      await call(page, `_cfgAba('perfil')`); await page.waitForTimeout(200);
+      await call(page, `_cfgAba('marca')`); await page.waitForTimeout(200);
       await enviar('#cfg-file-foto', 'foto.png', 'image/png', Buffer.from(png, 'base64'));
       chk('foto: enviada como foto-... e guardada', nuvem.subidas.length === 3 && RE('foto').test(nuvem.subidas[2].caminho) && await call(page, `marcaUrlImagemOk(DB.config.fotoUrl)`), JSON.stringify(nuvem.subidas[2]));
       chk('foto: publicada em personal_links', nuvem.patches[nuvem.patches.length - 1].foto_url === await call(page, `DB.config.fotoUrl`));
@@ -212,7 +281,8 @@ const montarCenario = () => {
     chk(P('menu: selo com a contagem'), await call(page, `(()=>{ updateBadges(); const b=document.getElementById('nav-whatsapp-badge'); return b.textContent==='7' && b.style.display!=='none'; })()`));
     chk(P('sino: lista as mensagens a enviar'), await call(page, `shellSinoItens().some(i=>/mensagens a enviar/.test(i.t)&&i.n===7)`));
     await call(page, `navGo('dashboard')`); await page.waitForTimeout(400);
-    chk(P('painel: card Mensagens a enviar'), await call(page, `/Mensagens a enviar/.test(document.querySelector('.dp-side').textContent) && /7 mensagens prontas/.test(document.querySelector('.dp-side').textContent)`));
+    chk(P('painel: card Mensagens a enviar abre sozinho, com a contagem e 3 avisos'), await call(page, `(()=>{ const m=document.querySelector('.dp-acc[data-acc="msg"]'), pa=document.querySelector('.dp-acc[data-acc="passos"]'); return !!m && m.classList.contains('open') && !pa.classList.contains('open') && m.querySelector('.dp-acc-n').textContent==='7' && m.querySelectorAll('.dp-msg').length===3 && /Ver todas as 7/.test(m.textContent); })()`));
+    chk(P('painel: abrir Primeiros passos recolhe Mensagens (nunca os dois abertos)'), await call(page, `(()=>{ dashAcc('passos'); const m=document.querySelector('.dp-acc[data-acc="msg"]'), pa=document.querySelector('.dp-acc[data-acc="passos"]'), at=document.querySelector('.dp-acc[data-acc="ativ"]'); return pa.classList.contains('open') && !m.classList.contains('open') && at.classList.contains('open'); })()`));
     await shot(page, `painel-${W}-wa`);
     await call(page, `waAbrirFila()`); await page.waitForTimeout(400);
     chk(P('tela A enviar: abre na aba certa com os grupos'), await call(page, `_waTab==='enviar' && document.querySelectorAll('#screen-whatsapp-body .card .card-title').length>=5`));

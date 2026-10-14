@@ -227,6 +227,7 @@ async function alunoCadastrar(){
     if(r.jaHaPedido && !r.pedidoParaOutro){ await aoAutenticarSemCadastro(); return; }
     _alunoConflito = r; abrirConflito(r); return;
   }
+  if(r.status === 'aguardando-aprovacao'){ avisarAguardandoAprovacao(r.personalNome); return; }   // conta fica: o pedido é dela
   await _desfazerConta();
   if(r.status === 'email-diferente'){
     return _erroCadastro('Esse CPF já está cadastrado com o e-mail ' + (r.emailMascarado || '') + '. Toque em "Entrar" e use esse e-mail, ou peça ao seu personal para corrigir.');
@@ -444,6 +445,7 @@ async function aoAutenticar(user, opcoes){
   catch(e){ mostrarAviso('Erro ao entrar: ' + e.message); return; }
   if(data.status === 'bloqueado'){ irPara('tela-bloqueado'); return; }
   if(data.status === 'codigo-invalido'){ mostrarAviso('Esse link de cadastro não é válido. Peça um link novo pro seu personal.'); return; }
+  if(data.status === 'aguardando-aprovacao'){ avisarAguardandoAprovacao(data.personalNome); return; }
   if(data.status === 'desconhecido'){ mostrarAviso('Não encontramos um cadastro com esse e-mail. Peça o link de cadastro pra quem vai te acompanhar.'); return; }
 
   _alunoCadastroNovo = data.status === 'precisa-cadastro';
@@ -466,6 +468,11 @@ async function aoAutenticar(user, opcoes){
 function mostrarAviso(msg){
   $('aviso-corpo').textContent = msg;
   irPara('tela-aviso');
+}
+
+// Aluno antigo (cadastrado à mão pelo personal): o e-mail não prova quem é, então o personal aprova.
+function avisarAguardandoAprovacao(personalNome){
+  mostrarAviso('Encontramos um cadastro seu com ' + (personalNome || 'seu personal') + '. Ele precisa confirmar que é você. Quando aprovar, entre de novo com o mesmo e-mail e a mesma senha.');
 }
 
 function abrirCadastroBasico(data){
@@ -514,6 +521,7 @@ async function salvarCadastroBasico(){
     if(r.jaHaPedido && !r.pedidoParaOutro){ await aoAutenticarSemCadastro(); return; }   // pedido deste mesmo link já existe
     _alunoConflito = r; abrirConflito(r); return;
   }
+  if(r.status === 'aguardando-aprovacao'){ avisarAguardandoAprovacao(r.personalNome); return; }
   _erro('cb-erro', _MSG_CADASTRO[r.status] || 'Não foi possível salvar o cadastro.');
 }
 
@@ -551,6 +559,7 @@ async function solicitarTroca(){
   catch(e){ btn.disabled = false; mostrarAviso(e.message || 'Não foi possível pedir a transferência.'); return; }
   btn.disabled = false;
   if(r.status === 'troca-solicitada'){ await aoAutenticarSemCadastro(); return; }
+  if(r.status === 'aguardando-aprovacao'){ avisarAguardandoAprovacao(r.personalNome); return; }
   if(r.status === 'ja-ha-pedido'){ mostrarAviso('Já existe um pedido de transferência seu para ' + (r.paraNome || 'outro personal') + '.'); return; }
   irPara('tela-cadastro-basico');
   _erro('cb-erro', _MSG_CADASTRO[r.status] || 'Não foi possível pedir a transferência.');
@@ -954,17 +963,22 @@ async function vincularLocalTreino(localTreino){
       trainer_user_id: _alunoAcesso.trainer_user_id,
     }, { onConflict: 'local_id,aluno_user_id', ignoreDuplicates: true });
   } else {
-    const { data: novoLocalRow, error } = await supa.from('locais_treino').insert({
+    // id gerado aqui e insert sem .select(): a policy de leitura só libera local
+    // compartilhado ou já vinculado, então a linha nova não pode ser lida de volta.
+    const novoLocalId = crypto.randomUUID();
+    const { error } = await supa.from('locais_treino').insert({
+      id: novoLocalId,
       trainer_user_id: _alunoAcesso.trainer_user_id, nome: localTreino.nome,
       cidade: localTreino.cidade, estado: localTreino.estado, pais: localTreino.pais,
       tipo: localTreino.tipo, equipamentos: localTreino.equipamentos, obs: localTreino.obs,
       criado_por: 'aluno',
-    }).select('id').single();
-    if(error) throw error;
-    await supa.from('locais_treino_alunos').insert({
-      local_id: novoLocalRow.id, aluno_user_id: _alunoUser.id, trainer_user_id: _alunoAcesso.trainer_user_id,
     });
-    _localEscolha = { modo:'existente', localId: novoLocalRow.id, nome: localTreino.nome, cidade: localTreino.cidade, estado: localTreino.estado, pais: localTreino.pais };
+    if(error) throw error;
+    const { error: errVinc } = await supa.from('locais_treino_alunos').insert({
+      local_id: novoLocalId, aluno_user_id: _alunoUser.id, trainer_user_id: _alunoAcesso.trainer_user_id,
+    });
+    if(errVinc) throw errVinc;
+    _localEscolha = { modo:'existente', localId: novoLocalId, nome: localTreino.nome, cidade: localTreino.cidade, estado: localTreino.estado, pais: localTreino.pais };
     _localModo = null;
     hide('an-local-novo-wrap');
     renderLocalSelecionado();

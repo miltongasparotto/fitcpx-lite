@@ -95,6 +95,21 @@ async function painel(browser){
   const c4=(await ev(()=>window.__calls)).find(c=>c.acao==='responder-novo');
   ok('responder-novo: aceitar=true', c4&&c4.id==='c-1'&&c4.aceitar===true);
 
+  // pedido de acesso de aluno antigo (e-mail não confirmado: o personal aprova)
+  await ev(()=>{window.__resp['listar']={status:'ok',executadas:0,saindo:[],chegando:[],pendentes:[{id:'p-1',studentId:5,criadoEm:new Date().toISOString(),email:'carla@teste.com',cpfMascarado:'***.982.***-25',nomeInformado:'Carla <img src=x onerror=window.__xss=1>',nomeCadastrado:'Carla Teste Silva',emailCadastrado:'carla@teste.com'}]};window.__resp['responder-pendente']={status:'ok'};});
+  await ev(()=>{_formDirty=false;navGo('portal-aluno');switchPortalSubtab('transferencias');});await page.waitForTimeout(500);
+  const lp=await ev(()=>document.getElementById('portal-transferencias-lista').innerText);
+  ok('pedido de acesso: card com nome cadastrado, CPF mascarado e e-mail da conta', /pedidos de acesso/i.test(lp)&&lp.includes('Carla Teste Silva')&&lp.includes('***.982.***-25')&&lp.includes('carla@teste.com'), lp.slice(0,120));
+  ok('pedido de acesso: nome informado entra como texto, sem executar HTML', !(await ev(()=>window.__xss))&&!(await ev(()=>!!document.querySelector('.pedido-acesso img'))));
+  ok('pedido de acesso: contador da aba e da faixa contam o pedido', (await ev(()=>document.getElementById('portal-transferencias-count').textContent))==='1'&&(await ev(()=>document.getElementById('alunos-transf-strip').textContent)).includes('pedido de acesso'));
+  await page.click('.pedido-acesso button:has-text("aprovar")');await page.waitForTimeout(400);
+  const cPed1=(await ev(()=>window.__calls)).find(c=>c.acao==='responder-pendente');
+  ok('pedido de acesso: aprovar chama responder-pendente com aprovar=true', cPed1&&cPed1.id==='p-1'&&cPed1.aprovar===true, JSON.stringify(cPed1));
+  await ev(()=>{_formDirty=false;navGo('portal-aluno');switchPortalSubtab('transferencias');});await page.waitForTimeout(500);
+  await page.click('.pedido-acesso button:has-text("recusar")');await page.waitForTimeout(400);
+  const cPed2=(await ev(()=>window.__calls)).filter(c=>c.acao==='responder-pendente').pop();
+  ok('pedido de acesso: recusar chama responder-pendente com aprovar=false', cPed2&&cPed2.aprovar===false, JSON.stringify(cPed2));
+
   // e-mail só com botão quando tem conta
   await ev(()=>{window.__resp['listar']={status:'ok',saindo:[],chegando:[],executadas:0};});
   await ev(()=>{let s=students.find(x=>x.perfil.nome==='Carla Teste Silva');if(!s){s={id:777,perfil:{nome:'Carla Teste Silva',email:'carla@teste.com'},anamnese:{},treinos:[],avaliacoesAntro:[]};students.push(s);}s.perfil.alunoUserId='u-1';selectStudent(s.id);});
@@ -113,9 +128,9 @@ async function painel(browser){
   // nome de exibição do personal
   await ev(()=>{_formDirty=false;navGo('portal-aluno');switchPortalSubtab('link');_portalNomeExibicao='';renderPortalLinkBox();});await page.waitForTimeout(300);
   ok('nome: aviso quando vazio', (await ev(()=>document.getElementById('portal-link-wrap').innerText)).includes('Defina seu nome'));
-  // o nome agora é editado em Configurações > Perfil (mesmo nome que o aluno vê)
-  await page.click('#portal-link-wrap button:has-text("Editar no Perfil")');await page.waitForTimeout(300);
-  await page.fill('#cfg-name','Rafael Souza');await page.click('#screen-config-body button:has-text("Salvar perfil")');await page.waitForTimeout(500);
+  // o nome agora é editado em Configurações > Marca (nome de exibição; mesmo nome que o aluno vê)
+  await page.click('#portal-link-wrap button:has-text("Editar na Marca")');await page.waitForTimeout(300);
+  await page.fill('#cfg-name','Rafael Souza');await page.click('#screen-config-body button:has-text("Salvar marca")');await page.waitForTimeout(500);
   const cn=(await ev(()=>window.__calls)).find(c=>c.acao==='definir-nome');
   ok('nome: chama definir-nome', cn&&cn.nome==='Rafael Souza');
   // aviso sem CPF no dashboard

@@ -99,12 +99,59 @@ const FORA = () => {
       if (OUT) await page.screenshot({ path: `${OUT}/${nome}-${passo}.png` });
     }
 
-    // Instalar aplicativo: botão no menu (painel)
-    await page.evaluate("navGo('dashboard')");
-    if (nome === 'celular') await page.evaluate("toggleNavMobile(true)");
+    // Cabeçalho do Painel: instalar, modo escuro, sino e avatar (nessa ordem); no celular ficam na barra superior + menu da conta
+    await page.evaluate("navGo('dashboard');dashTrocarArea('ciclo')");
     await page.waitForTimeout(300);
-    chk(L('botão Instalar aplicativo existe e é clicável'), await page.evaluate(() => { const b = document.getElementById('btn-instalar'); if (!b || b.hidden) return false; const r = b.getBoundingClientRect(); return r.width > 20 && r.height > 20; }));
+    if (nome === 'celular') {
+      chk(L('barra do celular tem sino e avatar'), await page.evaluate(() => { const v = e => e && e.offsetParent !== null && e.getBoundingClientRect().right <= innerWidth; return v(document.querySelector('.mobile-bar .sino-btn')) && v(document.getElementById('mb-avatar')); }));
+      await page.click('#mb-avatar'); await page.waitForTimeout(300);
+      chk(L('menu da conta (celular): Modo escuro, Instalar, Configurações, Sair'), await page.evaluate(() => { const p = document.getElementById('conta-pop'); if (!p) return false; const t = [...p.querySelectorAll('.sino-item')].filter(e => e.offsetParent).map(e => e.innerText.trim()); return ['Modo escuro', 'Instalar aplicativo', 'Configurações', 'Sair'].every(x => t.includes(x)); }));
+      await page.keyboard.press('Escape');
+    } else {
+      chk(L('cabeçalho: instalar, tema, sino e avatar nessa ordem, visíveis'), await page.evaluate(() => {
+        const t = document.querySelector('.dp-head .ph-tools'); if (!t) return false;
+        const k = [...t.children]; const ord = k.map(e => e.hasAttribute('data-instalar') ? 'i' : e.hasAttribute('data-tema-btn') ? 't' : e.classList.contains('sino-btn') ? 's' : e.hasAttribute('data-avatar') ? 'a' : '?').join('');
+        return ord === 'itsa' && k.every(e => { const r = e.getBoundingClientRect(); return r.width > 20 && r.right <= innerWidth && r.top >= 0; });
+      }));
+      await page.click('.dp-head [data-avatar]'); await page.waitForTimeout(300);
+      chk(L('menu da conta (avatar): Configurações e Sair; tema e instalar só no celular'), await page.evaluate(() => { const p = document.getElementById('conta-pop'); if (!p) return false; const t = [...p.querySelectorAll('.sino-item')].filter(e => e.offsetParent).map(e => e.innerText.trim()); return t.includes('Configurações') && t.includes('Sair') && !t.includes('Modo escuro'); }));
+      await page.keyboard.press('Escape');
+    }
+    chk(L('menu lateral sem login/instalar/modo escuro no rodapé'), await page.evaluate(() => !document.querySelector('.sidebar #btn-tema, .sidebar #btn-instalar, .sidebar .sb-user')));
+    // Painel: larguras iguais, altura fixa, nada atrás dos cartões, abas sem rolagem
+    const pn = await page.evaluate(() => {
+      const R = e => e.getBoundingClientRect(), over = [...document.querySelectorAll('.dp-over > *')], p = R(document.getElementById('dp-main')), sd = R(document.querySelector('.dp-side'));
+      const seg = document.querySelector('.dp-seg'), ov = getComputedStyle(document.querySelector('.dp-segs')).overflowX;
+      let vaza = 0; document.querySelectorAll('#dp-main .dp-c-acoes .dp-btn').forEach(b => { if (R(b).right > p.right - 1) vaza++; });
+      return { span3: R(over[2]).right - R(over[0]).left, pw: p.width, hojeW: R(over[3]).width, sw: sd.width, pb: p.bottom, sb: sd.bottom, vaza, segOk: seg.scrollWidth <= seg.clientWidth + 1 && ov !== 'auto' && ov !== 'scroll', cabe: p.bottom <= innerHeight + 1 };
+    });
+    chk(L('abas do painel (Todos/Avaliar/...) sem barra de rolagem'), pn.segOk, JSON.stringify(pn));
+    chk(L('botões de ação das linhas dentro do painel'), pn.vaza === 0, JSON.stringify(pn));
+    if (nome === 'notebook' || nome === 'ultrawide') {
+      chk(L('painel principal tem a largura dos 3 cartões de cima'), Math.abs(pn.span3 - pn.pw) <= 2, JSON.stringify(pn));
+      chk(L('coluna lateral tem a largura do cartão Hoje'), Math.abs(pn.hojeW - pn.sw) <= 2, JSON.stringify(pn));
+      chk(L('painel e coluna lateral terminam na mesma altura'), Math.abs(pn.pb - pn.sb) <= 2, JSON.stringify(pn));
+    }
+    // Acordeão lateral: Primeiros passos aberto (tutorial incompleto), Mensagens recolhida, Atividades sempre aberta
+    chk(L('acordeão: passos aberto, mensagens recolhida, atividades aberta'), await page.evaluate(() => { const o = id => document.querySelector('.dp-acc[data-acc="' + id + '"]'); return o('passos').classList.contains('open') && !o('msg').classList.contains('open') && o('ativ').classList.contains('open'); }));
     chk(L('sem erros de página'), errs.length === 0, errs.join(' | '));
+    await ctx.close();
+  }
+  // Notebook em larguras intermediárias (o layout quebrava entre 1200 e 1460px): nada sobreposto, nada fora do painel
+  for (const w of [1200, 1280, 1366, 1536]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: 800 } }), page = await ctx.newPage();
+    await boot(page); await page.evaluate("navGo('dashboard')"); await page.waitForTimeout(300);
+    const m = await page.evaluate(() => {
+      const R = e => e.getBoundingClientRect(), p = R(document.getElementById('dp-main')), sd = R(document.querySelector('.dp-side'));
+      let vaza = 0; document.querySelectorAll('#dp-main .dp-c-acoes .dp-btn').forEach(b => { if (R(b).right > p.right - 1) vaza++; });
+      const rowOv = [...document.querySelectorAll('#dp-main .dp-row')].some(r => r.scrollWidth > r.clientWidth + 1);
+      const head = R(document.querySelector('.dp-hello h2')).height < 40;
+      return { vaza, rowOv, semSobrepor: p.right <= sd.left + 1, head, cabe: p.bottom <= innerHeight + 1, hscroll: document.documentElement.scrollWidth > innerWidth + 1 };
+    });
+    chk('notebook ' + w + ': botões de ação ficam dentro do painel', m.vaza === 0 && !m.rowOv, JSON.stringify(m));
+    chk('notebook ' + w + ': painel não invade a coluna lateral', m.semSobrepor, JSON.stringify(m));
+    chk('notebook ' + w + ': saudação em uma linha e sem rolagem lateral', m.head && !m.hscroll, JSON.stringify(m));
+    chk('notebook ' + w + ': painel termina dentro da tela', m.cabe, JSON.stringify(m));
     await ctx.close();
   }
   await browser.close();

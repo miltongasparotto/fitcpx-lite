@@ -13,7 +13,7 @@ function semIcone(s){ return typeof s==='string' ? s.replace(/<i class=(?:ph|sd)
 
 function setSyncStatus(msg, erro){
   const el = $('sync-status');
-  if(!el) return;
+  if(!el){ if(erro && msg && typeof crmToast === 'function') crmToast(semIcone(msg), 'err'); return; }
   if(!msg){ el.style.display='none'; el.textContent=''; return; }
   el.style.display = 'block';
   el.style.color = erro ? 'var(--red)' : 'var(--text3)';

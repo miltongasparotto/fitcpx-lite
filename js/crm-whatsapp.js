@@ -7,7 +7,8 @@
 // Flow — lista simples de templates com editar/excluir/enviar, e no modal de
 // envio um <select> agrupado por categoria no lugar do dropdown com busca.
 
-// Variáveis do studio (Configurações > Perfil), iguais para qualquer aluno.
+// Variáveis do personal e do studio, iguais para qualquer aluno: {studio}, {personal}, {whatsappStudio} vêm de
+// Configurações > Marca; {cref} vem de Configurações > Perfil.
 function waVarsStudio(txt){
   const c = (typeof DB !== 'undefined' && DB.config) || {};
   return String(txt || '')
@@ -92,7 +93,7 @@ function setupWA(al, msg, tplId){
   $('wa-phone').textContent=alunoTel(al)||'Sem telefone';
   $('wa-tpl-sel').innerHTML=_buildWATplOptions(tplId||null);
   $('wa-msg').value=msg;
-  $('wa-ddi').innerHTML=crmDdiOptions(waDdiPadrao());   // padrão = DDI do studio (Configurações > Perfil)
+  $('wa-ddi').innerHTML=crmDdiOptions(waDdiPadrao());   // padrão = DDI do studio (Configurações > Marca)
   crmOpenModal('m-crm-wa');
 }
 function openWA(alunoId){

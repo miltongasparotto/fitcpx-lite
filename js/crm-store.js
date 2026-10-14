@@ -68,15 +68,26 @@ function crmSave(){
 }
 
 // Configurações do personal (aba Configurações). Cada chave tem um motor que a lê:
-//   perfil  -> variáveis {studio} {personal} {cref} {whatsappStudio} das mensagens; saudação do Painel
+//   perfil  -> cadastro do personal (pessoa física; o aluno não vê): nomeCompleto, cref ({cref}), emailPessoal,
+//              telefonePessoal, enderecoPessoal
+//   marca   -> o que o aluno vê: personalName ({personal}, saudação do Painel), studioName ({studio}), whatsapp
+//              ({whatsappStudio}), email, instagram, bio, fotoUrl, enderecoStudio
 //   regras  -> urgencyDays (tarefas), janelaProximo/janelaAgendar/validadeSemanas (treino),
 //              diasRevisao (pausado/inativo), diasAlunoNovo (Painel e fila de mensagens)
-//   marca   -> cor do sistema (css/tokens.css via js/marca.js) e nome/cor/ícone do portal do aluno
+//   marca.* -> cor do sistema (css/tokens.css via js/marca.js) e nome/cor/ícone/logo do app do aluno
+function _cfgEnderecoPadrao(){ return { cep:'', rua:'', numero:'', complemento:'', bairro:'', cidade:'', uf:'' }; }
+// Endereço vindo de dado salvo: só as chaves conhecidas, só texto, com limite de tamanho.
+function _cfgEnderecoLimpo(e){
+  const o = _cfgEnderecoPadrao();
+  if(e && typeof e === 'object') Object.keys(o).forEach(k => { if(typeof e[k] === 'string') o[k] = e[k].slice(0, k === 'rua' ? 120 : 60); });
+  return o;
+}
 function _cfgPadrao(){
   return {
     studioName:'FitCPX Lite', personalName:'', cref:'', whatsapp:'',
     waCountryCode:'55', waCountryFlag:'🇧🇷', waCountryName:'Brasil',
-    email:'', instagram:'', cidade:'', endereco:'', bio:'',
+    email:'', instagram:'', bio:'', enderecoStudio:_cfgEnderecoPadrao(),
+    nomeCompleto:'', emailPessoal:'', telefonePessoal:'', enderecoPessoal:_cfgEnderecoPadrao(),
     urgencyDays:3, janelaProximo:7, janelaAgendar:14, validadeSemanas:12, diasRevisao:30, diasAlunoNovo:14,
     marca:{ nomeApp:'', cor:'#3dbb6e', icone:'ph-barbell', logoUrl:'' }, fotoUrl:'',
   };
@@ -111,6 +122,22 @@ function corSegura(c, padrao){
 function _crmNormalizar(){
   const cfgBase = _cfgPadrao();
   DB.config = Object.assign(cfgBase, DB.config || {});
+  // Endereço: antes eram dois textos soltos (endereco, cidade) do studio. Passam ao endereço de atendimento:
+  // o texto antigo vai para a Rua e "Cidade - UF" é separada em Cidade e UF.
+  if(DB.config.endereco !== undefined || DB.config.cidade !== undefined){
+    const ant = _cfgEnderecoLimpo(DB.config.enderecoStudio);
+    if(!Object.keys(ant).some(k => ant[k])){
+      const mUf = String(DB.config.cidade || '').match(/^(.*?)\s*[-\/,]\s*([A-Za-z]{2})\s*$/);
+      ant.rua = String(DB.config.endereco || '').slice(0, 120);
+      ant.cidade = (mUf ? mUf[1] : String(DB.config.cidade || '')).trim().slice(0, 60);
+      ant.uf = mUf ? mUf[2].toUpperCase() : '';
+      DB.config.enderecoStudio = ant;
+    }
+    delete DB.config.endereco; delete DB.config.cidade;
+  }
+  DB.config.enderecoStudio = _cfgEnderecoLimpo(DB.config.enderecoStudio);
+  DB.config.enderecoPessoal = _cfgEnderecoLimpo(DB.config.enderecoPessoal);
+  ['nomeCompleto','emailPessoal','telefonePessoal'].forEach(k => { if(typeof DB.config[k] !== 'string') DB.config[k] = ''; });
   DB.config.marca = Object.assign(cfgBase.marca, (DB.config.marca && typeof DB.config.marca==='object') ? DB.config.marca : {});
   ['urgencyDays','janelaProximo','janelaAgendar','validadeSemanas','diasRevisao','diasAlunoNovo'].forEach(k=>{
     if(!(Number(DB.config[k]) > 0)) DB.config[k] = _cfgPadrao()[k];
@@ -121,6 +148,10 @@ function _crmNormalizar(){
     if(!marcaUrlImagemOk(DB.config.marca.logoUrl)) DB.config.marca.logoUrl = '';
     if(!marcaUrlImagemOk(DB.config.fotoUrl)) DB.config.fotoUrl = '';
   }
+  // usarLogo: a logo enviada é uma opção da grade de ícones; só vai ao portal se estiver selecionada.
+  // Conta antiga (sem o campo) com logo já enviada continua usando a logo.
+  if(typeof DB.config.marca.usarLogo !== 'boolean') DB.config.marca.usarLogo = !!DB.config.marca.logoUrl;
+  if(!DB.config.marca.logoUrl) DB.config.marca.usarLogo = false;
   if(!DB.waFeitas || typeof DB.waFeitas !== 'object') DB.waFeitas = {};
   (DB.customCats||[]).forEach(c=>{ c.color = corSegura(c.color); });
   semearIds(DB.tasks, DB.fluxos, DB.modalidades, DB.waTpls, DB.customCats);

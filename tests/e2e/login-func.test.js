@@ -29,7 +29,7 @@ const UID='aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb';
   console.log('antes do login',JSON.stringify(tela0));
   await page.fill('#auth-email','personal@teste.com');await page.fill('#auth-senha','senha123');
   await page.click('#auth-screen .btn-primary');await page.waitForTimeout(1500);
-  const r=await page.evaluate(()=>({auth:getComputedStyle(document.getElementById('auth-screen')).display,app:getComputedStyle(document.getElementById('app-root')).display,email:document.getElementById('supa-user-email').textContent,av:document.getElementById('supa-user-avatar').textContent,alunos:students.map(s=>s.perfil.nome),painel:!document.getElementById('screen-dashboard').classList.contains('hidden'),erroLogin:document.getElementById('auth-erro').textContent}));
+  const r=await page.evaluate(()=>({auth:getComputedStyle(document.getElementById('auth-screen')).display,app:getComputedStyle(document.getElementById('app-root')).display,email:_supaUser.email,av:document.querySelector('[data-avatar]').textContent,alunos:students.map(s=>s.perfil.nome),painel:!document.getElementById('screen-dashboard').classList.contains('hidden'),erroLogin:document.getElementById('auth-erro').textContent}));
   console.log('depois do login',JSON.stringify(r));
   // erro de senha mostra mensagem
   console.log('requisicoes',[...new Set(reqs)].slice(0,12).join(' | '));

@@ -2,7 +2,7 @@
 // isto (service_role). Tabelas: supabase/sql/vinculo-cpf.sql.
 import {
   type DepsDecisao, type DepsExec, type Identidade, type Transferencia,
-  normalizaNome, normalizaEmail, processarPrazos, soDigitos,
+  decidirCadastro, mascaraCpf, normalizaNome, normalizaEmail, processarPrazos, soDigitos,
 } from './vinculo.ts';
 import { loadStudents, saveStudents, novoId } from './students.ts';
 
@@ -12,7 +12,11 @@ export function pepperCpf(): string {
   return p;
 }
 
-export function depsDecisao(admin: any, studentDaConta?: () => Promise<{ trainerId: string; studentId: number } | null>): DepsDecisao {
+export function depsDecisao(
+  admin: any,
+  studentDaConta?: () => Promise<{ trainerId: string; studentId: number } | null>,
+  legadosRecusados?: () => Promise<number[]>,
+): DepsDecisao {
   return {
     identidadePorCpf: async (hash) => {
       const { data, error } = await admin.from('alunos_identidade').select('*').eq('cpf_hash', hash).maybeSingle();
@@ -31,10 +35,13 @@ export function depsDecisao(admin: any, studentDaConta?: () => Promise<{ trainer
         const proprio = await studentDaConta();
         if (proprio && proprio.trainerId === trainerId) return proprio.studentId;
       }
-      // 2) aluno antigo do personal, ainda sem CPF, que bate em nome + e-mail.
+      // 2) aluno antigo do personal, ainda sem CPF, que bate em nome + e-mail. O e-mail NÃO é
+      //    confirmado, então isto só gera um PEDIDO que o personal aprova (vinculos_pendentes);
+      //    quem o personal já recusou para esta conta não casa de novo (vira aluno novo).
+      const recusados = legadosRecusados ? await legadosRecusados() : [];
       const { students } = await loadStudents(admin, trainerId);
       const achado = students.find((s: any) =>
-        !soDigitos(s?.perfil?.cpf) && s?.perfil?.email &&
+        !soDigitos(s?.perfil?.cpf) && s?.perfil?.email && !recusados.includes(s?.id) &&
         normalizaNome(s.perfil.nome) === nomeNorm && normalizaEmail(s.perfil.email) === emailNorm);
       return achado ? achado.id : null;
     },
@@ -115,6 +122,94 @@ export function aplicarCadastro(s: any, c: {
   s.perfil.email = c.email; s.perfil.alunoUserId = c.alunoUserId; s.perfil.identidadeId = c.identidadeId;
   s.perfil.portalStatus = s.perfil.portalStatus || 'ativo';
   return s;
+}
+
+// ── Pedido de acesso de aluno antigo: o personal aprova ─────────────────────
+// Tabela: supabase/sql/vinculos-pendentes.sql (só service_role).
+
+export interface Pendente {
+  id: string; trainer_user_id: string; student_id: number; aluno_user_id: string;
+  email: string; perfil: any; cpf_mascarado: string; status: 'pendente' | 'aprovado' | 'recusado'; criado_em: string;
+}
+
+export async function pendenteAbertoDoAluno(admin: any, alunoUserId: string): Promise<Pendente | null> {
+  const { data, error } = await admin.from('vinculos_pendentes').select('*')
+    .eq('aluno_user_id', alunoUserId).eq('status', 'pendente').maybeSingle();
+  if (error) throw error;
+  return (data as Pendente) || null;
+}
+
+export async function legadosRecusadosDaConta(admin: any, alunoUserId: string): Promise<number[]> {
+  const { data, error } = await admin.from('vinculos_pendentes').select('student_id')
+    .eq('aluno_user_id', alunoUserId).eq('status', 'recusado');
+  if (error) throw error;
+  return ((data || []) as any[]).map((r) => Number(r.student_id));
+}
+
+// Um pedido aberto por conta: repetir o cadastro só atualiza o que já está esperando.
+export async function registrarPendente(admin: any, p: {
+  trainerId: string; studentId: number; alunoUserId: string; email: string; perfil: Record<string, unknown>;
+}): Promise<Pendente> {
+  const linha = {
+    trainer_user_id: p.trainerId, student_id: p.studentId, aluno_user_id: p.alunoUserId,
+    email: normalizaEmail(p.email), perfil: p.perfil, cpf_mascarado: mascaraCpf(String(p.perfil.cpf || '')), status: 'pendente',
+  };
+  const aberto = await pendenteAbertoDoAluno(admin, p.alunoUserId);
+  const q = aberto
+    ? admin.from('vinculos_pendentes').update(linha).eq('id', aberto.id).select('*').single()
+    : admin.from('vinculos_pendentes').insert(linha).select('*').single();
+  const { data, error } = await q;
+  if (error) throw error;
+  return data as Pendente;
+}
+
+// Aprova (liga a conta ao registro antigo) ou recusa. Na aprovação reconfere tudo, porque
+// passou tempo desde o pedido: se algo mudou devolve 'mudou' e não toca em nada.
+export async function resolverPendente(admin: any, p: Pendente, aprovar: boolean): Promise<{ status: 'ok' | 'mudou' }> {
+  const agora = new Date().toISOString();
+  const fechar = async (status: 'aprovado' | 'recusado') => {
+    const { error } = await admin.from('vinculos_pendentes').update({ status, resolvido_em: agora }).eq('id', p.id);
+    if (error) throw error;
+  };
+  if (!aprovar) { await fechar('recusado'); return { status: 'ok' }; }
+
+  const { data: u } = await admin.auth.admin.getUserById(p.aluno_user_id);
+  const email = normalizaEmail(u?.user?.email);
+  if (!email) return { status: 'mudou' };
+  const { data: jaTem } = await admin.from('alunos_acesso').select('id').eq('aluno_user_id', p.aluno_user_id).maybeSingle();
+  if (jaTem) return { status: 'mudou' };
+
+  const perfil = p.perfil || {};
+  const d = await decidirCadastro(
+    { ator: 'aluno', cpf: perfil.cpf, nome: perfil.nome, email, trainerAlvo: p.trainer_user_id, contaId: p.aluno_user_id },
+    depsDecisao(admin), pepperCpf(),
+  );
+  if (d.tipo !== 'legado' || d.studentId !== Number(p.student_id)) return { status: 'mudou' };
+
+  const { students } = await loadStudents(admin, p.trainer_user_id);
+  const s = students.find((x: any) => x?.id === d.studentId);
+  if (!s) return { status: 'mudou' };
+
+  const { data: ident, error: eIdent } = await admin.from('alunos_identidade').insert({
+    cpf_hash: d.hash, nome_norm: normalizaNome(perfil.nome), email_norm: email,
+    trainer_user_id: p.trainer_user_id, aluno_user_id: p.aluno_user_id, student_id: d.studentId,
+  }).select('*').single();
+  if (eIdent) throw eIdent;
+  aplicarCadastro(s, { ...perfil, email, alunoUserId: p.aluno_user_id, identidadeId: ident.id });
+  await saveStudents(admin, p.trainer_user_id, students);
+  const { error: eAcesso } = await admin.from('alunos_acesso').insert({ trainer_user_id: p.trainer_user_id, aluno_user_id: p.aluno_user_id, status: 'ativo' });
+  if (eAcesso && (eAcesso as any).code !== '23505') throw eAcesso;
+  const { error: eRastro } = await admin.from('avaliacoes_pendentes').insert({
+    trainer_user_id: p.trainer_user_id, aluno_user_id: p.aluno_user_id, tipo: 'cadastro_inicial', status: 'aplicado',
+    dados: { perfil: { ...perfil, cpf: undefined } },
+  });
+  if (eRastro) console.error('Falha ao registrar rastro (cadastro_inicial):', eRastro);
+
+  await fechar('aprovado');
+  // Outras contas que pediram o mesmo registro ficam recusadas: só uma conta por aluno.
+  await admin.from('vinculos_pendentes').update({ status: 'recusado', resolvido_em: agora })
+    .eq('trainer_user_id', p.trainer_user_id).eq('student_id', p.student_id).eq('status', 'pendente');
+  return { status: 'ok' };
 }
 
 export function snapshotCadastro(c: { nome: string; cpf: string; nascimento?: string; sexo?: string; whatsapp?: string; profissao?: string; email: string }, extra: Record<string, unknown> = {}) {

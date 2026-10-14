@@ -461,6 +461,9 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:5px}
 .mc-icons{display:grid;grid-template-columns:repeat(auto-fill,minmax(48px,1fr));gap:8px;max-width:560px}
 .mc-ic{height:44px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:20px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
 .mc-ic.on{border-color:var(--primary);background:var(--primary-tint);color:var(--primary-ink)}
+.mc-ic-logo{padding:4px;overflow:hidden}
+.mc-ic-logo img{width:100%;height:100%;object-fit:contain;border-radius:6px}
+.mc-ic-logo.vazia{border-style:dashed;border-color:var(--border-strong);background:var(--surface-muted)}
 .mc-prevs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .mc-prev{border:1px solid var(--border);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px}
 .mc-prev-topo{display:flex;align-items:center;gap:10px}
@@ -482,11 +485,28 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:5px}
 .cfg-marca-side{position:sticky;top:16px}
 .cfg-marca-side .mc-prevs{grid-template-columns:1fr}
 @media (max-width:1100px){
-  .cfg-marca{grid-template-columns:1fr}
+  .cfg-marca{grid-template-columns:minmax(0,1fr)}
   .cfg-marca-side{position:static}
   .cfg-marca-side .mc-prevs{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (max-width:560px){.cfg-marca-side .mc-prevs{grid-template-columns:1fr}}
+
+/* Configurações: seções dentro do card (Perfil e Marca) */
+.cfg-sec{margin-top:20px;padding-top:18px;border-top:1px solid var(--border)}
+.cfg-sec-t{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px}
+.cfg-sec-s{margin-bottom:12px}
+.cfg-sec-t + .cfg-grid,.cfg-sec-t + .cfg-marca{margin-top:12px}
+.cfg-sec .cfg-marca{margin-top:0}
+/* Endereço (CEP, rua, número...): a largura da própria área decide as colunas (container query) */
+.cfg-end-wrap{container:cfgend/inline-size}
+.cfg-end{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:0 16px}
+.ce-cep{grid-column:span 3}.ce-rua{grid-column:span 6}.ce-numero{grid-column:span 3}
+.ce-complemento{grid-column:span 3}.ce-bairro{grid-column:span 3}.ce-cidade{grid-column:span 4}.ce-uf{grid-column:span 2}
+@container cfgend (max-width:620px){
+  .cfg-end{grid-template-columns:repeat(6,minmax(0,1fr))}
+  .ce-cep{grid-column:span 3}.ce-rua{grid-column:1/-1}.ce-numero{grid-column:span 3}.ce-complemento{grid-column:span 3}
+  .ce-bairro{grid-column:1/-1}.ce-cidade{grid-column:span 4}.ce-uf{grid-column:span 2}
+}
 
 /* Configurações: envio de logo e foto */
 .cfg-img{display:flex;align-items:center;gap:16px;flex-wrap:wrap}

@@ -379,15 +379,98 @@ test('aluno-api: personal já cadastrou (manual) e o aluno completa pelo link: v
   assert.notEqual(e.status, 'ok'); assert.equal(blob(A).length, 1);
 });
 
-test('aluno-api: aluno antigo sem CPF completa o cadastro pelo link (legado), sem duplicar', async () => {
+// Aluno antigo (cadastrado à mão, sem CPF): o e-mail não é confirmado, então nome + e-mail só geram
+// um PEDIDO. Quem liga a conta ao registro é o personal.
+function semeiaLegado() {
   resetar();
   const A = semeiaPersonal('a@x.com', 'Ana', [novoAluno(10, { nome: 'Carla Souza', email: 'carla@x.com' })]);
   const cod = tabela('personal_links')[0].codigo;
   usuario('carla@x.com');
-  const r = await aluno('carla@x.com', { acao: 'cadastro', codigo: cod, perfil: { nome: 'Carla Souza', cpf: CPF, nascimento: '1990-05-20' } });
-  assert.equal(r.status, 'ok'); assert.equal(r.tipo, 'atualizado');
-  assert.equal(blob(A).length, 1); assert.equal(blob(A)[0].perfil.cpf, CPF);
-  assert.equal(tabela('alunos_identidade').length, 1);
+  return { A, cod };
+}
+const pedirComoLegado = (cod: string, cpf = CPF) => aluno('carla@x.com', { acao: 'cadastro', codigo: cod, perfil: { nome: 'Carla Souza', cpf, nascimento: '1990-05-20' } });
+
+test('aluno antigo sem CPF pelo link (legado): vira PEDIDO, não liga nem sobrescreve nada', async () => {
+  const { A, cod } = semeiaLegado();
+  const r = await pedirComoLegado(cod);
+  assert.equal(r.status, 'aguardando-aprovacao'); assert.equal(r.personalNome, 'Ana');
+  assert.equal(blob(A).length, 1);
+  assert.equal(blob(A)[0].perfil.cpf, undefined, 'CPF digitado pelo desconhecido não entra no cadastro');
+  assert.equal(blob(A)[0].perfil.alunoUserId, undefined);
+  assert.equal(tabela('alunos_identidade').length, 0);
+  assert.equal(tabela('alunos_acesso').length, 0);
+  assert.equal(tabela('vinculos_pendentes').length, 1);
+  // repetir o cadastro atualiza o mesmo pedido (um aberto por conta)
+  assert.equal((await pedirComoLegado(cod)).status, 'aguardando-aprovacao');
+  assert.equal(tabela('vinculos_pendentes').length, 1);
+  // sem acesso ainda: o login só mostra "aguardando"
+  assert.equal((await aluno('carla@x.com', { acao: 'resolver-vinculo', codigo: null })).status, 'aguardando-aprovacao');
+});
+
+test('legado: personal vê o pedido (CPF mascarado), aprova, e só então a conta entra', async () => {
+  const { A, cod } = semeiaLegado();
+  await pedirComoLegado(cod);
+  const l = await personal('a@x.com', { acao: 'listar' });
+  assert.equal(l.pendentes.length, 1);
+  assert.equal(l.pendentes[0].nomeCadastrado, 'Carla Souza'); assert.equal(l.pendentes[0].email, 'carla@x.com');
+  assert.ok(!JSON.stringify(l).includes(CPF), 'CPF em claro na resposta do painel');
+  assert.match(l.pendentes[0].cpfMascarado, /^\*\*\*\.\d{3}\.\*\*\*-\d{2}$/);
+
+  const r = await personal('a@x.com', { acao: 'responder-pendente', id: l.pendentes[0].id, aprovar: true });
+  assert.equal(r.status, 'ok');
+  assert.equal(blob(A).length, 1); assert.equal(blob(A)[0].id, 10);
+  assert.equal(blob(A)[0].perfil.cpf, CPF); assert.ok(blob(A)[0].perfil.alunoUserId);
+  assert.equal(tabela('alunos_identidade').length, 1); assert.equal(tabela('alunos_acesso').length, 1);
+  assert.equal(tabela('vinculos_pendentes')[0].status, 'aprovado');
+  assert.equal((await aluno('carla@x.com', { acao: 'resolver-vinculo', codigo: null })).status, 'ok');
+  assert.equal((await personal('a@x.com', { acao: 'listar' })).pendentes.length, 0);
+  // responder duas vezes não vale
+  assert.equal((await personal('a@x.com', { acao: 'responder-pendente', id: l.pendentes[0].id, aprovar: true })).http, 400);
+});
+
+test('legado: só o personal dono responde; recusar não liga e a mesma conta vira aluno NOVO, sem tocar no antigo', async () => {
+  const { A, cod } = semeiaLegado();
+  semeiaPersonal('b@x.com', 'Bruno');
+  await pedirComoLegado(cod);
+  const id = tabela('vinculos_pendentes')[0].id;
+  assert.equal((await personal('b@x.com', { acao: 'responder-pendente', id, aprovar: true })).http, 400, 'outro personal não aprova');
+  assert.equal(tabela('vinculos_pendentes')[0].status, 'pendente');
+
+  assert.equal((await personal('a@x.com', { acao: 'responder-pendente', id, aprovar: false })).status, 'ok');
+  assert.equal(tabela('vinculos_pendentes')[0].status, 'recusado');
+  assert.equal(tabela('alunos_identidade').length, 0); assert.equal(tabela('alunos_acesso').length, 0);
+  assert.equal(blob(A)[0].perfil.cpf, undefined);
+
+  const r = await pedirComoLegado(cod);
+  assert.equal(r.status, 'ok'); assert.equal(r.tipo, 'novo');
+  assert.equal(blob(A).length, 2); assert.equal(blob(A)[0].perfil.alunoUserId, undefined, 'registro antigo continua intacto');
+});
+
+test('legado: se o cadastro mudou depois do pedido (CPF preenchido pelo personal), aprovar não liga nada', async () => {
+  const { A, cod } = semeiaLegado();
+  await pedirComoLegado(cod);
+  blob(A)[0].perfil.cpf = '11144477735';   // o personal preencheu o CPF do aluno antigo nesse meio tempo
+  const id = tabela('vinculos_pendentes')[0].id;
+  assert.equal((await personal('a@x.com', { acao: 'responder-pendente', id, aprovar: true })).status, 'mudou');
+  assert.equal(tabela('alunos_identidade').length, 0); assert.equal(tabela('alunos_acesso').length, 0);
+  assert.equal(blob(A)[0].perfil.cpf, '11144477735'); assert.equal(blob(A)[0].perfil.alunoUserId, undefined);
+  assert.equal(tabela('vinculos_pendentes')[0].status, 'pendente', 'o personal ainda pode recusar');
+});
+
+test('legado: duas contas pedindo o mesmo registro; aprovar uma recusa a outra', async () => {
+  const { A, cod } = semeiaLegado();
+  await pedirComoLegado(cod);
+  const idLegit = Object.keys(users).find((k) => users[k].email === 'carla@x.com')!;
+  // outra conta com o mesmo e-mail digitado (sem confirmação o sistema não distingue)
+  const idOutra = randomUUID(); users[idOutra] = { id: idOutra, email: 'carla@x.com' }; tokens['tok-outra'] = idOutra;
+  const r2 = await chamar(handlerAluno, 'outra', { acao: 'cadastro', codigo: cod, perfil: { nome: 'Carla Souza', cpf: '11144477735' } });
+  assert.equal(r2.status, 'aguardando-aprovacao');
+  assert.equal(tabela('vinculos_pendentes').length, 2);
+  assert.equal((await personal('a@x.com', { acao: 'listar' })).pendentes.length, 2);
+  const legit = tabela('vinculos_pendentes').find((p) => p.aluno_user_id === idLegit)!;
+  assert.equal((await personal('a@x.com', { acao: 'responder-pendente', id: legit.id, aprovar: true })).status, 'ok');
+  assert.equal(tabela('vinculos_pendentes').find((p) => p.aluno_user_id === idOutra)!.status, 'recusado');
+  assert.equal(blob(A)[0].perfil.alunoUserId, idLegit);
 });
 
 // ── Esqueci a senha, redefinição pelo personal, troca de senha e e-mail pelo aluno ──────────

@@ -21,6 +21,12 @@
 .page-header-actions+.ph-tools{margin-left:4px}
 .ph-tools .icon-btn{width:36px;height:36px;color:var(--text-muted)}
 .ph-tools .icon-btn i{font-size:20px}
+.ph-avatar{width:34px;height:34px;border-radius:50%;border:0;padding:0;overflow:hidden;background:var(--primary-soft);color:var(--primary-ink);font:700 13px/1 var(--sans);
+  display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-left:6px;text-transform:uppercase;transition:box-shadow .15s,transform .1s}
+.ph-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.ph-avatar:active{transform:scale(.94)}
+@media (hover:hover) and (pointer:fine){.ph-avatar:hover{box-shadow:0 0 0 3px var(--primary-ring)}}
+.ph-avatar.is-big{width:44px;height:44px;margin:0;font-size:16px;cursor:default}
 .sino-btn{position:relative}
 .sino-dot{position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--danger);border:2px solid var(--surface)}
 .sino-bk{position:fixed;inset:0;z-index:2999}
@@ -31,6 +37,13 @@
 .sino-h{font-size:13px;font-weight:700;padding:8px 10px 6px}
 .sino-item{display:flex;align-items:center;gap:12px;padding:8px 10px;min-height:44px;border-radius:9px;cursor:pointer;font-size:13.5px;transition:background-color .12s}
 .sino-item>i{color:var(--text-faint);font-size:15px}
+.sino-item.so-mob{display:none}
+.sino-ic.tom-gray{background:var(--neutral-soft);color:var(--text-2)}
+.conta-pop{width:280px}
+.conta-h{display:flex;align-items:center;gap:12px;padding:10px 10px 12px;border-bottom:1px solid var(--divider);margin-bottom:4px}
+.conta-id{min-width:0}
+.conta-id b{display:block;font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conta-id small{display:block;font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (hover:hover) and (pointer:fine){.sino-item:hover{background:var(--primary-tint)}}
 .sino-ic{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:17px}
 .sino-ic.tom-red{background:var(--danger-soft);color:var(--danger-ink)}
@@ -66,12 +79,20 @@
    PAINEL v2
    ══════════════════════════════════════════════════════════════════════════ */
 .dp{padding:22px 32px 32px;display:flex;flex-direction:column;gap:18px;width:100%}
-.dp-head{position:relative;z-index:20;display:flex;align-items:center;gap:10px}
-.dp-hello{flex:1;min-width:0}
+.dp-head{position:relative;z-index:20;display:flex;align-items:center;gap:10px;flex-wrap:wrap;row-gap:10px}
+.dp-hello{flex:1 1 150px;min-width:0}
+.dp-hello h2,.dp-hello p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dp-hello h2{font-size:24px;font-weight:700;letter-spacing:-.015em;line-height:1.2}
 .dp-hello p{font-size:13.5px;color:var(--text-muted);margin-top:3px}
 .dp-acts{display:flex;align-items:center;gap:10px}
-.dp-head .ph-tools{margin-left:8px}
+.dp-head .ph-tools{margin-left:auto}
+.dp-act-s{display:none}
+/* notebook estreito (1200–1439px): rótulos curtos para o título não quebrar */
+@media (min-width:1200px) and (max-width:1439px){
+  .dp-act:has(.dp-act-s) .dp-act-l{display:none}
+  .dp-act .dp-act-s{display:inline}
+  .dp-acts{gap:8px}
+}
 .dp-tiles{display:none}
 .dp-backdrop{display:none}
 
@@ -128,15 +149,22 @@
 .dp-l-short{display:none}
 
 /* Painel principal + coluna lateral */
-.dp-grid{display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,22vw,420px);gap:18px;align-items:start}
-.dp-panel{min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);box-shadow:var(--shadow-card);padding:20px;min-height:560px;
+/* Notebook/ultrawide: o painel ocupa a largura dos 3 primeiros cartões do resumo, a coluna lateral a do 4º ("Hoje"),
+   e os dois têm altura fixa até o fim da tela (rolagem interna). Tablet e celular empilham (ver mais abaixo). */
+.dp-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:minmax(0,1fr);gap:14px;align-items:stretch;flex:1 1 0;min-height:560px}
+.dp-panel{grid-column:span 3;min-width:0;min-height:0;overflow-y:auto;container:dpp/inline-size;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);box-shadow:var(--shadow-card);padding:20px;
   transition:opacity .22s ease,transform .3s var(--ease)}
+@media (min-width:1200px){
+  #screen-dashboard:not(.hidden){display:flex;flex-direction:column}
+  #dash-conteudo{flex:1 0 auto;display:flex;flex-direction:column;min-height:0}
+  .dp{flex:1 1 auto;min-height:0}
+}
 .dp-panel.fade-out{opacity:0;transform:translateY(10px)}
 .dp-panel h3{font-size:17px;font-weight:700}
 .dp-p{font-size:12.5px;color:var(--text-muted);margin:2px 0 16px}
 .dp-ph{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
 .dp-ph p{font-size:12.5px;color:var(--text-muted);margin-top:2px}
-.dp-segs{max-width:100%;overflow-x:auto}
+.dp-segs{max-width:100%}
 .dp-seg{display:flex;gap:2px;background:var(--neutral-soft);padding:3px;border-radius:10px;width:max-content}
 .dp-seg-b{border:0;background:transparent;color:var(--text-muted);font-size:12.5px;font-weight:500;padding:6px 10px;border-radius:8px;display:flex;align-items:center;gap:6px;white-space:nowrap;transition:background-color .18s,color .18s}
 .dp-seg-b span{color:var(--text-faint)}
@@ -144,7 +172,7 @@
 .dp-seg-b.on span{color:var(--primary-ink)}
 
 /* Linhas da área Avaliação e treino */
-.dp-thead,.dp-row{display:grid;grid-template-columns:minmax(220px,1.6fr) minmax(104px,.7fr) minmax(130px,.8fr) minmax(104px,.7fr) 212px;grid-template-areas:"aluno aval treino sit acoes";gap:12px;align-items:center}
+.dp-thead,.dp-row{display:grid;grid-template-columns:minmax(170px,1.6fr) minmax(90px,.7fr) minmax(110px,.8fr) minmax(90px,.7fr) 212px;grid-template-areas:"aluno aval treino sit acoes";gap:12px;align-items:center}
 .dp-thead{padding:10px 0;font-size:12px;color:var(--text-faint);border-bottom:1px solid var(--divider)}
 .dp-thead span:nth-child(n+2):nth-child(-n+4){text-align:center}
 .dp-row{padding:12px 0;border-bottom:1px solid var(--divider);transition:background-color .15s}
@@ -218,12 +246,43 @@
 .dp-tar-b{flex:1;min-width:0}
 .dp-tar-t{font-size:13.5px;font-weight:500}
 
-/* Coluna lateral */
-.dp-side{display:flex;flex-direction:column;gap:18px;min-width:0}
-.dp-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);box-shadow:var(--shadow-card);padding:16px}
-.dp-card-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-.dp-card-h b{font-size:14px;font-weight:700}
-.dp-card-h span{font-size:12px;color:var(--text-muted)}
+/* Coluna lateral: acordeão. Primeiros passos e Mensagens nunca ficam abertos juntos; Últimas atividades fica sempre aberta e ocupa o que sobrar. */
+.dp-side{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;grid-column:4;container:side/inline-size}
+.dp-acc{display:flex;flex-direction:column;min-height:0;flex:0 1 auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);box-shadow:var(--shadow-card)}
+.dp-acc.fill{flex:1 1 0;min-height:150px}
+.dp-acc-h{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:10px 14px;border:0;background:transparent;border-radius:var(--r-card);font-family:var(--sans);color:var(--text);text-align:left;cursor:pointer;flex:0 0 auto}
+.dp-acc-h.is-fixo{cursor:default}
+.dp-acc-h b{flex:1;min-width:0;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dp-acc-ic{width:28px;height:28px;border-radius:8px;background:var(--primary-soft);color:var(--primary-ink);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px}
+.dp-acc-ic i{vertical-align:0}
+.dp-acc-r{font-size:12px;color:var(--text-muted);white-space:nowrap}
+.dp-acc-n{min-width:22px;height:22px;padding:0 7px;border-radius:11px;background:var(--primary);color:var(--on-primary);font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.dp-acc-car{font-size:14px;color:var(--text-faint);flex-shrink:0;transition:transform .22s var(--ease)}
+.dp-acc.open .dp-acc-car{transform:rotate(180deg)}
+@media (hover:hover) and (pointer:fine){.dp-acc-h:not(.is-fixo):hover .dp-acc-car{color:var(--primary-ink)}}
+.dp-acc-b{display:grid;grid-template-rows:0fr;visibility:hidden;min-height:0;flex:1 1 auto;transition:grid-template-rows .28s var(--ease),visibility 0s .28s}
+.dp-acc.open>.dp-acc-b{grid-template-rows:1fr;visibility:visible;transition-delay:0s}
+.dp-acc-in{overflow-y:auto;overflow-x:hidden;min-height:0;padding:0 14px}
+.dp-acc:not(.open) .dp-acc-in{overflow:hidden}
+.dp-acc-in::after{content:"";display:block;height:12px}
+.dp-acc.fill>.dp-acc-b{flex:1 1 0;grid-template-rows:minmax(0,1fr)}
+/* coluna estreita (notebook pequeno): sem ícone e com o resumo embaixo do título, para o nome não ser cortado */
+@container side (max-width:259px){
+  .dp-acc-h{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:8px;row-gap:0;padding:8px 12px;align-items:center}
+  .dp-acc-ic{display:none}
+  .dp-passo-b small{display:none}
+  .dp-acc-h b{grid-column:1;white-space:normal;overflow:visible}
+  .dp-acc-r,.dp-acc-n{grid-column:1;grid-row:2;justify-self:start;font-size:11.5px}
+  .dp-acc-n{min-width:20px;height:18px;font-size:11px}
+  .dp-acc-car{grid-column:2;grid-row:1/3}
+}
+.dp-msg{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--divider)}
+.dp-msg:first-child{border-top:0}
+.dp-msg-b{flex:1;min-width:0}
+.dp-msg-b b{display:block;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dp-msg-b small{display:block;font-size:11.5px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dp-msg .dp-btn{height:32px;flex:0 0 auto}
+.dp-ver-todas{width:100%;margin-top:8px}
 .dp-prog{height:5px;border-radius:5px;background:var(--track);margin-bottom:4px}
 .dp-prog i{display:block;height:100%;border-radius:5px;background:var(--primary);transition:width .4s var(--ease)}
 .dp-passo{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 10px;border-radius:10px;border:1px solid var(--border-strong);margin-top:8px;cursor:pointer;background:var(--surface);transition:border-color .25s}
@@ -238,12 +297,6 @@
 .dp-passo.done .dp-passo-b b{color:var(--text-faint);text-decoration:line-through}
 .dp-passo>i{font-size:14px;color:var(--primary-ink)}
 .dp-passo.done>i{color:var(--text-faint)}
-.dp-welcome{background:linear-gradient(150deg,var(--primary),var(--primary-hover));color:var(--on-primary);border-radius:var(--r-card);padding:18px;display:flex;flex-direction:column;gap:8px}
-.dp-welcome-h{display:flex;justify-content:space-between;align-items:flex-start}
-.dp-welcome-h>i{font-size:24px}
-.dp-welcome-h button{border:0;background:transparent;color:inherit;font-size:17px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px}
-.dp-welcome b{font-size:16px;font-weight:700}
-.dp-welcome p{font-size:13px;color:inherit;opacity:.92}
 .dp-at{display:flex;gap:10px;padding:8px 6px;margin:0 -6px;border-radius:8px;transition:background-color .6s}
 .dp-at.novo{background:var(--primary-tint)}
 .dp-at-ic{width:28px;height:28px;border-radius:8px;background:var(--neutral-soft);color:var(--text-2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px}
@@ -251,6 +304,42 @@
 .dp-at-b{flex:1;min-width:0}
 .dp-at-b b{display:block;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dp-at-b small{display:block;font-size:12px;color:var(--text-muted)}
+
+/* ── Painel principal responde à PRÓPRIA largura (container "dpp"), não à da janela ──
+   Notebook estreito (~1200–1365px) deixa o painel com menos de 740px: a tabela não cabe, então as linhas
+   viram cartões (mesmo desenho do tablet) e os botões de ação nunca ficam atrás da coluna lateral. */
+@container dpp (max-width:739px){
+  .dp-thead{display:none}
+  .dp-row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"aluno sit" "dados dados" "acoes acoes";gap:12px;padding:14px 0;border-top:1px solid var(--divider);border-bottom:0}
+  .dp-c-dados{display:grid;grid-area:dados;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;background:var(--surface-muted);border-radius:var(--r-block);padding:10px 12px}
+  .dp-c-aval,.dp-c-treino,.dp-c-mod{grid-area:auto;min-width:0;text-align:left}
+  .dp-c-mod{display:block}
+  .dp-k{display:block}
+  .dp-v{margin-top:2px}
+  .dp-mod{display:none}
+  .dp-status{display:block;font-size:12.5px;margin-top:2px}
+  .dp-c-sit{align-items:flex-end}
+  .dp-tag{display:none}
+  .dp-c-acoes{justify-content:stretch}
+  .dp-c-acoes .dp-btn.is-primary{width:auto;flex:1 1 0}
+  .dp-c-acoes .dp-btn.is-icon{width:124px;padding:0 10px}
+  .dp-btn.is-icon .dp-btn-l{display:inline}
+}
+/* Abas (Todos, Avaliar, Prescrever...) sempre visíveis, sem barra de rolagem: abaixo de 640px ficam abaixo do título,
+   em 5 colunas iguais; abaixo de 420px o número vai para baixo do nome. */
+@container dpp (max-width:639px){
+  .dp-ph{flex-direction:column;align-items:stretch;gap:10px}
+  .dp-segs{width:100%}
+  .dp-seg{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));width:100%}
+  .dp-seg .dp-seg-b{justify-content:center;padding:8px 4px}
+}
+@container dpp (max-width:419px){
+  .dp-seg .dp-seg-b{flex-direction:column;gap:1px;padding:6px 2px;font-size:11.5px}
+  .dp-seg .dp-seg-b span{font-size:11px}
+}
+@container dpp (max-width:559px){
+  .dp-2col{grid-template-columns:minmax(0,1fr)}
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    LAYOUT 2 — TABLET (768 a 1199px): menu em ícones + gaveta
@@ -330,8 +419,13 @@
   .dp-stat{padding:14px 16px}
   .dp-stat-n{font-size:24px}
   .dp-grid{grid-template-columns:minmax(0,1fr)}
-  .dp-panel{padding:18px;min-height:0}
-  .dp-side{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+  .dp-grid{grid-template-rows:none;min-height:0;flex:0 0 auto}
+  .dp-panel{grid-column:auto;padding:18px;min-height:0;overflow:visible}
+  .dp-side{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start;grid-column:auto}
+  .dp-acc{flex:0 0 auto}
+  .dp-acc.fill{grid-column:1/-1;flex:none;min-height:0}
+  .dp-acc-in{overflow:visible}
+  .dp-acc:not(.open) .dp-acc-in{overflow:hidden}
 
   /* linhas viram cartões */
   .dp-thead{display:none}
@@ -356,6 +450,7 @@
   .dp-btn.is-icon .dp-btn-l{display:inline}
   .dp-btn.is-icon i{font-size:18px}
   .dp-seg-b{padding:9px 12px}
+  .dp-seg .dp-seg-b{min-height:40px}
   .dp-pag-a .dp-btn{flex:1}
   .dp-con .dp-btn{flex-shrink:0}
   .dp-passo,.dp-tar{min-height:44px}
@@ -447,6 +542,7 @@
   .dp-ph{flex-direction:column;align-items:flex-start}
   .dp-2col{grid-template-columns:minmax(0,1fr)}
   .dp-side{grid-template-columns:minmax(0,1fr)}
+  .sino-item.so-mob{display:flex}
   .dp-c-dados{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px}
   .dp-c-mod .dp-v{font-size:12.5px}
   .dp-c-acoes .dp-btn.is-icon{width:48px;padding:0}

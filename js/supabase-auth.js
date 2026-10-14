@@ -91,7 +91,6 @@ async function authSair(){
 
   document.getElementById('app-root').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
-  document.getElementById('supa-user-info').style.display = 'none';
   document.getElementById('auth-email').value = '';
   document.getElementById('auth-senha').value = '';
 }
@@ -102,9 +101,6 @@ async function onLoginSucesso(user){
   setLsUser(user.id);
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app-root').style.display = 'grid';
-  document.getElementById('supa-user-info').style.display = 'flex';
-  document.getElementById('supa-user-email').textContent = user.email;
-  const _av = document.getElementById('supa-user-avatar'); if(_av) _av.textContent = (user.email||'?').charAt(0);
   // CRM (js/crm-store.js) — carrega o DB local desta conta (chave sufixada
   // por user_id via lsKey). Sync com Supabase fica pra uma etapa futura
   // (crmAgendarSyncSupabase); por ora é local, como o resto do app era antes
@@ -112,6 +108,7 @@ async function onLoginSucesso(user){
   if(typeof crmLoad==='function') crmLoad();
   if(typeof seedPresetCats==='function') seedPresetCats();
   await supaCarregarDados();
+  try{ shellAtualizarAvatar(); }catch(e){}
 }
 
 // ── Carregar dados do usuário logado ─────────────────────────────────────────

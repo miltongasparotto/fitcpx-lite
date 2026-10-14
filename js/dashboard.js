@@ -335,7 +335,7 @@ function dashAtividades(){
     (DB.atividades || []).forEach(a => ev.push({ ts:a.ts, ic:a.ic, nome:a.nome, what:a.what, exato:true, novo:Date.now() - a.ts < 120000 }));
   }
   ev.sort((a, b) => b.ts - a.ts);
-  return ev.slice(0, 6).map(e => {
+  return ev.slice(0, 12).map(e => {
     const d = new Date(e.ts), h0 = new Date(); h0.setHours(0, 0, 0, 0);
     const dias = Math.round((h0 - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
     let quando = dias <= 0 ? (e.exato ? d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }) : 'hoje')
@@ -392,6 +392,7 @@ function _dashAcaoHTML(a, tile){
   return '<div class="dp-actwrap" data-menu="1" data-act="' + a.id + '">' +
     '<button type="button" class="' + cls + '" onclick="' + click + '"' + (a.itens ? ' aria-haspopup="menu"' : '') + '>' +
       '<i class=' + a.ic + '></i><span class="dp-act-l">' + (tile ? a.curto : a.label) + '</span>' +
+      (!tile && a.curto !== a.label ? '<span class="dp-act-s">' + a.curto + '</span>' : '') +
       (a.itens && !tile ? '<i class="ph-caret-down dp-chev"></i>' : '') + '</button>' + menu + '</div>';
 }
 
@@ -481,7 +482,17 @@ function dashTarefa(id){
   if(vaiConcluir) crmToast('Tarefa concluída');
   renderDashboard();
 }
-function dashDispensarBoasVindas(){ _dashLS('fitcpx-dash-welcome-off', '1'); renderDashboard(); }
+// Acordeão lateral: abre um dos dois cards (Primeiros passos / Mensagens) e recolhe o outro; clicar no aberto recolhe.
+function dashAcc(id){
+  const el = document.querySelector('.dp-acc[data-acc="' + id + '"]'); if(!el) return;
+  const abrir = !el.classList.contains('open');
+  document.querySelectorAll('.dp-acc[data-acc="passos"],.dp-acc[data-acc="msg"]').forEach(x => {
+    const on = abrir && x === el;
+    x.classList.toggle('open', on);
+    const h = x.querySelector('.dp-acc-h'); if(h) h.setAttribute('aria-expanded', on ? 'true' : 'false');
+  });
+  window._dashAccEscolha = abrir ? id : '';
+}
 function dashCobrar(id){
   const p = FinanceiroAdapter.listarPagamentosVencidos().find(x => x.id === id); if(!p) return;
   abrirWhatsApp('cobranca', p.alunoId, { valor:_dashMoney(p.valor), vencimento:_dashFmtISO(p.vencimento) });
@@ -642,28 +653,46 @@ function renderDashboard(){
 
   const passos = _dashPassos();
   const feitos = passos.filter(p => p.done).length;
-  let lateral = '';
-  if(passos.length && feitos < passos.length){
-    lateral += '<div class="dp-card dp-passos"><div class="dp-card-h"><b>Primeiros passos</b><span>' + feitos + ' de ' + passos.length + '</span></div>' +
-      '<div class="dp-prog"><i style="width:' + Math.round(feitos / passos.length * 100) + '%"></i></div>' +
-      passos.map(p => '<div class="dp-passo' + (p.done ? ' done' : '') + '" role="button" tabindex="0"' + (p.done ? '' : ' onclick="' + p.go + '"') + '>' +
-        '<span class="dp-passo-ic"><i class=' + (p.done ? 'ph-check-circle' : p.ic) + '></i></span>' +
-        '<div class="dp-passo-b"><b>' + p.t + '</b><small>' + p.s + '</small></div><i class="ph-caret-right"></i></div>').join('') + '</div>';
-  } else if(passos.length && _dashLS('fitcpx-dash-welcome-off') !== '1'){
-    lateral += '<div class="dp-welcome"><div class="dp-welcome-h"><i class=ph-confetti></i><button type="button" onclick="dashDispensarBoasVindas()" aria-label="Dispensar"><i class=ph-x></i></button></div>' +
-      '<b>Tudo configurado!</b><p>Seu espaço está pronto. Os fluxos já estão cuidando dos prazos por você.</p></div>';
-  }
-  let nWa = 0; try{ nWa = waPendentes().length; }catch(e){}
-  if(nWa){
-    lateral += '<div class="dp-card"><div class="dp-card-h"><b>Mensagens a enviar</b><span>' + nWa + '</span></div>' +
-      '<div class="dp-passo" role="button" tabindex="0" onclick="waAbrirFila()"><span class="dp-passo-ic"><i class=ph-whatsapp-logo></i></span>' +
-      '<div class="dp-passo-b"><b>' + nWa + (nWa === 1 ? ' mensagem pronta' : ' mensagens prontas') + '</b><small>Abra a fila e envie pelo WhatsApp</small></div><i class="ph-caret-right"></i></div></div>';
-  }
+  let pend = []; try{ pend = waPendentes(); }catch(e){}
+  const nWa = pend.length;
+  // Acordeão lateral: Primeiros passos e Mensagens nunca abrem juntos. Mensagens tem prioridade;
+  // Últimas atividades fica sempre aberta e ocupa o que sobrar da altura.
+  const sig = nWa + ':' + feitos + ':' + passos.length;
+  if(window._dashAccSig !== sig){ window._dashAccSig = sig; window._dashAccEscolha = undefined; }
+  const abre = window._dashAccEscolha !== undefined ? window._dashAccEscolha
+             : nWa ? 'msg' : (passos.length && feitos < passos.length) ? 'passos' : '';
+
+  const corpoPassos = '<div class="dp-prog"><i style="width:' + (passos.length ? Math.round(feitos / passos.length * 100) : 0) + '%"></i></div>' +
+    passos.map(p => '<div class="dp-passo' + (p.done ? ' done' : '') + '" role="button" tabindex="0"' + (p.done ? '' : ' onclick="' + p.go + '"') + '>' +
+      '<span class="dp-passo-ic"><i class=' + (p.done ? 'ph-check-circle' : p.ic) + '></i></span>' +
+      '<div class="dp-passo-b"><b>' + p.t + '</b><small>' + p.s + '</small></div><i class="ph-caret-right"></i></div>').join('');
+  const corpoMsg = pend.slice(0, 3).map(it => {
+    const al = findAluno(it.alunoId), nome = alunoNome(al);
+    const tel = !!(al && typeof alunoTel === 'function' && String(alunoTel(al) || '').replace(/\D/g, ''));
+    return '<div class="dp-msg">' + _dashAvatar(_dashIniciais(nome)) +
+      '<div class="dp-msg-b"><b>' + escHTML(nome) + '</b><small>' + escHTML(it.detalhe || '') + '</small></div>' +
+      (tel ? '<button type="button" class="dp-btn is-primary" onclick="waAbrirItem(\'' + it.chave + '\')"><i class=ph-whatsapp-logo></i><span>Abrir</span></button>'
+           : '<span class="dp-chip tom-amber" title="Cadastre o WhatsApp do aluno">Sem telefone</span>') + '</div>';
+  }).join('') + (nWa > 3 ? '<button type="button" class="dp-btn dp-ver-todas" onclick="waAbrirFila()">Ver todas as ' + nWa + '</button>' : '');
+
+  const acc = (id, ic, titulo, resumo, corpo, bolha) =>
+    '<section class="dp-acc' + (abre === id ? ' open' : '') + '" data-acc="' + id + '">' +
+      '<button type="button" class="dp-acc-h" aria-expanded="' + (abre === id) + '" onclick="dashAcc(\'' + id + '\')">' +
+        '<span class="dp-acc-ic"><i class=' + ic + '></i></span><b>' + titulo + '</b>' +
+        (bolha ? '<span class="dp-acc-n">' + resumo + '</span>' : '<span class="dp-acc-r">' + resumo + '</span>') +
+        '<i class="ph-caret-down dp-acc-car"></i></button>' +
+      '<div class="dp-acc-b"><div class="dp-acc-in">' + corpo + '</div></div></section>';
+
   const ativ = dashAtividades();
-  lateral +='<div class="dp-card dp-ativ"><div class="dp-card-h"><b>Últimas atividades</b></div>' +
-    (ativ.length ? ativ.map(a => '<div class="dp-at' + (a.novo ? ' novo' : '') + '"><span class="dp-at-ic"><i class=' + a.ic + '></i></span>' +
+  const corpoAtiv = ativ.length ? ativ.map(a => '<div class="dp-at' + (a.novo ? ' novo' : '') + '"><span class="dp-at-ic"><i class=' + a.ic + '></i></span>' +
       '<div class="dp-at-b"><b>' + escHTML(a.nome) + '</b><small>' + escHTML(a.what) + ' · ' + a.quando + '</small></div></div>').join('')
-      : '<div class="dp-vazio dp-vazio-s"><i class=ph-clock></i>Nada por aqui ainda</div>') + '</div>';
+    : '<div class="dp-vazio dp-vazio-s"><i class=ph-clock></i>Nada por aqui ainda</div>';
+  const lateral =
+    (passos.length ? acc('passos', 'ph-rocket-launch', 'Primeiros passos', feitos === passos.length ? 'Tudo feito ✓' : feitos + ' de ' + passos.length, corpoPassos) : '') +
+    acc('msg', 'ph-whatsapp-logo', 'Mensagens a enviar', nWa ? nWa : 'Nenhuma', corpoMsg || '<div class="dp-vazio dp-vazio-s"><i class=ph-check-circle></i>Nada para enviar agora</div>', !!nWa) +
+    '<section class="dp-acc open fill" data-acc="ativ"><div class="dp-acc-h is-fixo"><span class="dp-acc-ic"><i class=ph-clock-counter-clockwise></i></span><b>Últimas atividades</b>' +
+      '<span class="dp-acc-r">' + (ativ.length ? ativ.length + ' recentes' : '') + '</span></div>' +
+      '<div class="dp-acc-b"><div class="dp-acc-in">' + corpoAtiv + '</div></div></section>';
 
   el.innerHTML = '<div class="dp">' +
     '<div class="dp-head"><div class="dp-hello"><h2>' + escHTML(_dashSaudacao()) + '</h2><p>' + _dashDataExtenso() + '</p></div>' +
@@ -674,5 +703,5 @@ function renderDashboard(){
     '<div class="dp-backdrop" onclick="dashFecharMenus()"></div></div>';
 
   _dashRenderPainel(false);
-  try{ financeiroAtualizarBadge(); shellAtualizarSino(); }catch(e){}
+  try{ financeiroAtualizarBadge(); shellAtualizarSino(); instalarAtualizarBotoes(); }catch(e){}
 }
