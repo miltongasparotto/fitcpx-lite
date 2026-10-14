@@ -882,7 +882,9 @@ async function salvarAnamnese(){
     const { error } = await supa.functions.invoke('aluno-api', { body: { acao: 'anamnese', anamnese } });
     if(error) throw error;
     show('an-banner');
-    setTimeout(()=>hide('an-banner'), 3000);
+    // O aviso fica no topo da aba e o botão no fim de uma lista longa: sem rolar, o aluno não via nada acontecer.
+    $('an-banner').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(()=>hide('an-banner'), 5000);
   } catch(e){
     alert('Erro ao salvar anamnese: ' + (e.message||e));
   } finally {

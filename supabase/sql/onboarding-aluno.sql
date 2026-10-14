@@ -161,19 +161,16 @@ create policy "trainer_gerencia_locais_treino" on locais_treino
   using (trainer_user_id = auth.uid())
   with check (trainer_user_id = auth.uid());
 
--- Aluno só vê locais do PRÓPRIO trainer E só os compartilhados (pra buscar
--- academia já cadastrada por outro aluno do mesmo lugar) ou aqueles a que ele
--- mesmo está vinculado. Local privado de outro aluno ("Casa") nunca aparece.
+-- Aluno só vê locais do PRÓPRIO trainer (pra buscar/selecionar academia já
+-- cadastrada por outro aluno do mesmo lugar).
+-- ATENÇÃO: esta versão deixa o local PRIVADO de um aluno visível aos outros alunos do mesmo
+-- personal. A versão correta (compartilhado OU vinculado a ele) está em seguranca-v3-locais-privados.sql,
+-- que precisa rodar DEPOIS deste arquivo e do seguranca-v2.sql (usa função SECURITY DEFINER
+-- para não dar recursão infinita entre as policies de locais_treino e locais_treino_alunos).
 drop policy if exists "aluno_ve_locais_do_seu_trainer" on locais_treino;
 create policy "aluno_ve_locais_do_seu_trainer" on locais_treino
   for select to authenticated
-  using (
-    exists (select 1 from alunos_acesso aa where aa.aluno_user_id = auth.uid() and aa.trainer_user_id = locais_treino.trainer_user_id)
-    and (
-      compartilhado
-      or exists (select 1 from locais_treino_alunos v where v.local_id = locais_treino.id and v.aluno_user_id = auth.uid())
-    )
-  );
+  using (exists (select 1 from alunos_acesso aa where aa.aluno_user_id = auth.uid() and aa.trainer_user_id = locais_treino.trainer_user_id));
 
 -- Aluno pode criar um local novo (academia que não achou, ou "treino em
 -- casa") — já disponível pra ELE na hora; `compartilhado` só decide se
