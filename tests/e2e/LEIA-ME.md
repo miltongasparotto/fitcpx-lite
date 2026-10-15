@@ -18,6 +18,8 @@ Como rodar (cmd ou bash), com o servidor local na porta 5178:
 | portal-v2.test.js | Portal v2: telas de entrada e do app em 390/360/430/834 px, claro e escuro, sem rolagem horizontal, lua e lembrança do tema, Agenda e Pagamentos com dados simulados (abrir em `/aluno/`, com a barra final) |
 | config-marca.test.js | Configurações (Perfil, Marca, Regras), kit de fluxos, modelos de WhatsApp com evento, fila "A enviar" (eventos, linha de base, enviar/dispensar/reabrir, validade, virada do dia com relógio simulado), selo, sino e Painel, marca no portal (?p=, ?c=, sem marca, marca removida, texto malicioso, logado sem código) (227 checagens, inclui Perfil e Marca separados, CEP com ViaCEP simulado, migração do endereço antigo, logo na grade de ícones e foto com Storage simulado; `SHOTS_DIR=pasta` salva capturas) |
 | layouts.test.js | Os 4 layouts do painel (notebook 1440, ultrawide 2560, tablet 834, celular 390) em todas as telas e abas: erro de JS, rolagem horizontal, elemento fora da tela, menu de cada layout, largura máxima no ultrawide e botão Instalar (488 checagens; `SHOTS_DIR=pasta` salva uma captura por tela e layout). Regra em documentos/LAYOUTS.md |
+| alunos-lista.test.js | Lista de Alunos: status, abas, filtros e ordem por coluna (com —), 3 quebras por largura, painel de filtros |
+| alunos-paginacao.test.js | Lista de Alunos: 10/20/30/Tudo por página, setas, volta à página 1, escolha lembrada |
 | func.test.js | Menus, novo aluno, perfil, busca, arquivar, CRM, mobile |
 | portal-func.test.js | Portal: o que é enviado a aluno-api |
 | login-func.test.js | Login e logout do painel com Supabase simulado |

@@ -66,7 +66,7 @@ const results=[];const ok=(n,c,info)=>results.push((c?'PASS ':'FAIL ')+n+(info?'
   ok('lista: filtro sexo reduz', soM<await ev(()=>students.length), String(soM));
   await page.click('button[title="Limpar filtros"]');await page.waitForTimeout(150);
   ok('lista: limpar filtros restaura', (await ev(()=>document.querySelectorAll('#alunos-grid tr').length))===await ev(()=>students.length));
-  await page.click('th.sortable >> nth=0');await page.waitForTimeout(100);
+  await page.click('[data-al-sort="treino"]');await page.waitForTimeout(100);
   ok('lista: ordenar por coluna não quebra', (await ev(()=>document.querySelectorAll('#alunos-grid tr').length))>0);
 
   // 4) abas do aluno + salvar anamnese básica

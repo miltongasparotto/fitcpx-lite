@@ -455,21 +455,6 @@
   .dp-con .dp-btn{flex-shrink:0}
   .dp-passo,.dp-tar{min-height:44px}
 
-  /* lista de Alunos: tabela vira cartões (filtros no topo) */
-  .alunos-table,.alunos-table tbody{display:block}
-  .alunos-table thead{display:block;border-bottom:1px solid var(--divider)}
-  .alunos-table thead tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:14px 16px;align-items:end}
-  .alunos-table th{display:block;min-width:0!important;width:auto!important;padding:0;border:0}
-  .alunos-table th:first-child{grid-column:1/-1}
-  .alunos-table th.sortable{display:none}
-  .alunos-table th:last-child{text-align:right}
-  .alunos-table tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px;padding:14px 16px;border-bottom:1px solid var(--divider);position:relative}
-  .alunos-table td{display:block;border:0;padding:0;min-width:0}
-  .alunos-table td:first-child{grid-column:1/-1;padding-right:48px}
-  .alunos-table td[data-label]::before{content:attr(data-label);display:block;font-size:11px;color:var(--text-faint);margin-bottom:2px}
-  .alunos-table td.al-acoes{position:absolute;top:8px;right:8px}
-  .al-nome{flex-wrap:wrap}
-  .al-n{white-space:normal}
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

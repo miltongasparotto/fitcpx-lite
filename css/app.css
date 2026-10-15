@@ -232,24 +232,22 @@ select,input[type=text],input[type=search],input[type=date],input[type=email],in
 /* Lista de alunos */
 .alunos-table{width:100%;border-collapse:collapse}
 .alunos-table th{padding:10px 12px;text-align:left;vertical-align:bottom;font-weight:400;font-size:12px;color:var(--text-faint);border-bottom:1px solid var(--divider);white-space:nowrap}
-.alunos-table th .th-label{font-size:12px;font-weight:500;color:var(--text3);margin-bottom:6px;display:flex;align-items:center;gap:4px}
+.alunos-table th .th-label{font-size:12px;font-weight:400;color:var(--text-faint);height:24px;margin-bottom:4px;display:flex;align-items:center;gap:2px}
 .alunos-table th input,.alunos-table th select{height:32px;font-size:13px;font-weight:400;padding:0 10px;width:100%;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);outline:none}
 .alunos-table th input:focus,.alunos-table th select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
-.alunos-table th.sortable{cursor:pointer;user-select:none}
-.alunos-table th.sortable:hover .th-label{color:var(--text)}
 .th-search{position:relative}
 .th-search>i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none}
 .th-search input{padding-left:32px!important}
-.alunos-table td{padding:12px;border-bottom:1px solid var(--border-subtle);font-size:13.5px;vertical-align:middle}
+.alunos-table td{padding:12px;border-bottom:1px solid var(--divider);font-size:13.5px;vertical-align:middle}
 .alunos-table tbody tr{cursor:pointer;transition:background-color var(--t-fast) var(--ease-out)}
 @media (hover:hover) and (pointer:fine){.alunos-table tbody tr:hover td{background:var(--surface-muted)}}
 
-.al-nome{display:flex;align-items:center;gap:10px;min-width:0}
-.al-av{width:34px;height:34px;border-radius:50%;background:var(--primary-soft);color:var(--primary-ink);display:inline-flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;flex-shrink:0}
+.al-nome{display:flex;align-items:center;gap:4px 10px}
+.al-av{--st:var(--primary);width:38px;height:38px;border-radius:50%;border:2px solid var(--st);box-shadow:inset 0 0 0 2px var(--surface);background:var(--primary-soft);background-clip:padding-box;color:var(--primary-ink);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.al-st-ativo{--st:var(--primary)}.al-st-novo{--st:var(--info-ink)}.al-st-pendente{--st:var(--warning)}.al-st-transf{--st:var(--text3)}.al-st-bloq{--st:var(--danger)}
 .al-nome-txt{display:flex;flex-direction:column;min-width:0}
-.al-n{font-size:13.5px;font-weight:500;color:var(--text);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.al-n{font-size:13.5px;font-weight:500;color:var(--text);line-height:1.3;white-space:nowrap}
 .al-sub{font-size:12px;color:var(--text3);line-height:1.3}
-.al-flag{color:var(--amber);font-size:14px;display:inline-flex}
 .al-sexo,.al-data{font-size:13px;color:var(--text2);white-space:nowrap;font-variant-numeric:tabular-nums}
 .al-dash{color:var(--text3)}
 .al-acoes{text-align:right;white-space:nowrap}
@@ -518,3 +516,130 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:5px}
 .cfg-img-btns{display:flex;gap:8px;flex-wrap:wrap}
 .mc-prev-mark.com-logo{background:transparent;overflow:hidden}
 .mc-prev-mark img{width:100%;height:100%;object-fit:contain;border-radius:inherit}
+
+/* ── Lista de Alunos: status em círculo, filtro e ordem por coluna, layout compacto ───────── */
+/* Cartão no padrão do Painel (.dp-panel): padding 20 (tablet 18, celular 16), título 17/700, abas com contagem */
+.al-card{padding:20px;box-shadow:var(--shadow-card)}
+.al-ph h3{font-size:17px;font-weight:700}
+/* Paginação (componente compartilhado): contagem à esquerda; por página (.dp-seg) e anterior/próxima à direita */
+.al-pag{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px 16px;padding-top:14px}
+.al-pag[hidden]{display:none}
+.al-pag-info{font-size:12.5px;color:var(--text-muted)}
+.al-pag-ctl{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
+.al-pag-l{font-size:12.5px;color:var(--text-muted)}
+.al-pag-nav{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2);font-variant-numeric:tabular-nums}
+.al-pag-nav .icon-btn{border:1px solid var(--border2);background:var(--bg2);color:var(--text-2)}
+.al-pag-nav .icon-btn:disabled{opacity:.4;cursor:not-allowed}
+@media (max-width:1199px){.al-pag-nav .icon-btn{width:44px;height:44px}}
+@media (max-width:599px){.al-pag,.al-pag-ctl{width:100%}.al-pag-ctl{justify-content:space-between}}
+.al-ph{flex-wrap:wrap;margin-bottom:14px}
+.al-segs .dp-seg{max-width:100%;flex-wrap:wrap}
+.al-dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--st,var(--primary));box-sizing:border-box;flex-shrink:0}
+.al-body{container:alunos/inline-size}
+.alunos-table th:first-child,.alunos-table td:first-child{padding-left:0}
+.alunos-table th:last-child,.alunos-table td:last-child{padding-right:0}
+@media (max-width:599px){
+  .al-segs{width:100%}
+  .al-segs .dp-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}
+  .al-segs .dp-seg-b{justify-content:center;padding:8px 4px}
+}
+@media (max-width:1199px){.al-card{padding:18px}}
+@media (max-width:767px){.al-card{padding:16px}}
+.al-toolbar{display:none;align-items:center;gap:8px;padding:0 0 12px}
+.al-toolbar .th-search{flex:1;min-width:0}
+.al-toolbar .th-search input{width:100%;height:40px;font-size:14px;padding:0 12px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);outline:none;box-sizing:border-box}
+.al-toolbar .th-search>i{left:12px;font-size:17px}
+.al-toolbar .th-search input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-ring)}
+.al-fil-btn{position:relative;width:40px;height:40px;padding:0;justify-content:center;flex-shrink:0}
+.al-fil-btn i{font-size:18px}
+.al-fil-btn.active{border-color:var(--primary-line);background:var(--primary-tint);color:var(--primary-ink)}
+.al-fil-n{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--primary);color:var(--on-primary);font-size:11px;font-weight:700;line-height:18px;text-align:center;box-sizing:border-box}
+.al-fil-n:empty{display:none}
+.al-th-ac{width:64px;text-align:right;vertical-align:bottom}
+
+.al-sortbtn{width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--text3);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;transition:background-color var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out),transform 120ms var(--ease-out)}
+.al-sortbtn i{font-size:14px}
+.al-sortbtn:hover{background:var(--surface-muted);color:var(--text)}
+.al-sortbtn:active{transform:scale(.92)}
+.al-sortbtn.on{color:var(--primary-ink);background:var(--primary-soft)}
+.al-sortbtn:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+.alunos-table th select,.al-grp select{appearance:none;-webkit-appearance:none;padding-right:26px;background-repeat:no-repeat;background-position:right 9px center;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 256 256'%3E%3Cpath fill='%238a8f98' d='M213.7 101.7l-80 80a8 8 0 0 1-11.4 0l-80-80a8 8 0 0 1 11.4-11.4L128 164.7l74.3-74.4a8 8 0 0 1 11.4 11.4z'/%3E%3C/svg%3E")}
+.al-fld{display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;height:32px;padding:0 10px;font:inherit;font-size:13px;color:var(--text);border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);text-align:left;cursor:pointer;box-sizing:border-box;transition:border-color var(--t-fast) var(--ease-out),background-color var(--t-fast) var(--ease-out)}
+.al-fld span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.al-fld i{font-size:12px;color:var(--text3);flex-shrink:0}
+.al-fld:focus-visible{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-ring)}
+.al-fld.active,.alunos-table th select.active,.al-grp select.active{border-color:var(--primary-line);background-color:var(--primary-tint);color:var(--primary-ink)}
+.al-fld.active i{color:var(--primary-ink)}
+
+/* célula do aluno: [triângulo] nome ........ tags (pendências) */
+.al-id{display:flex;align-items:center;gap:6px;flex:1 1 auto}
+.al-warn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:var(--warning);color:var(--on-warning);font-size:16px;flex-shrink:0}
+.al-tags{display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-left:auto;flex-shrink:0;white-space:nowrap}
+
+/* colunas que não são o nome: legenda, filtro e conteúdo centralizados */
+.alunos-table .al-ct{text-align:center}
+.alunos-table th.al-ct .th-label{justify-content:center}
+.alunos-table th.al-ct select{text-align:center;text-align-last:center;padding:0 20px 0 10px}
+.al-ct .al-fld{justify-content:center;position:relative;padding:0 20px}
+.al-ct .al-fld i{position:absolute;right:7px}
+.al-tags:empty{display:none}
+
+/* popover de filtro (idade e datas) e painel de filtros (tablet/celular) */
+.al-pop{position:fixed;z-index:900;width:288px;background:var(--surface);border:1px solid var(--border2);border-radius:12px;box-shadow:var(--shadow-pop);padding:12px;transform-origin:top left;animation:al-pop var(--t-fast) var(--ease-out)}
+@keyframes al-pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+@keyframes al-up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+.al-pop-t,.al-grp-t,.al-sub-t{font-size:12px;font-weight:500;color:var(--text3);margin-bottom:8px}
+.al-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.al-chip{height:28px;padding:0 11px;border-radius:999px;border:1px solid var(--border2);background:var(--bg2);font:inherit;font-size:12.5px;color:var(--text);cursor:pointer;transition:background-color var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out),transform 120ms var(--ease-out)}
+.al-chip:active{transform:scale(.96)}
+.al-chip.on{background:var(--primary-soft);border-color:var(--primary-line);color:var(--primary-ink);font-weight:500}
+.al-seg{display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:2px;border-radius:9px;background:var(--neutral-soft);margin-bottom:12px}
+.al-seg3{grid-template-columns:1fr 1fr 34px}
+.al-seg button{height:28px;border:0;border-radius:7px;background:transparent;font:inherit;font-size:12.5px;color:var(--text2);cursor:pointer;transition:background-color var(--t-fast) var(--ease-out)}
+.al-seg button.on{background:var(--surface);color:var(--text);font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.al-row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-bottom:12px}
+.al-lab{display:block;min-width:0;font-size:11.5px;color:var(--text3);margin-bottom:12px}
+.al-row2 .al-lab{margin-bottom:0}
+.al-lab input{display:block;margin-top:3px;min-width:0;width:100%;box-sizing:border-box;height:32px;padding:0 8px;font:inherit;font-size:13px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);text-align:left}
+.al-lab input:focus-visible{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-ring)}
+.al-pop-foot{display:flex;justify-content:space-between;align-items:center}
+.al-lnk{border:0;background:none;color:var(--primary-ink);font:inherit;font-size:12.5px;cursor:pointer;padding:4px 0}
+
+.al-painel-bg{position:fixed;inset:0;z-index:1000}
+.al-painel{position:fixed;top:var(--al-top,60px);right:var(--al-right,16px);width:340px;max-width:calc(100vw - 16px);max-height:calc(100dvh - var(--al-top,60px) - 12px);display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border2);border-radius:14px;box-shadow:var(--shadow-pop);transform-origin:top right;animation:al-pop var(--t-fast) var(--ease-out)}
+.al-painel-h{display:flex;align-items:center;justify-content:space-between;padding:12px 12px 8px 16px;font-size:15px}
+.al-painel-b{overflow-y:auto;padding:4px 16px 8px;flex:1;min-height:0}
+.al-grp{margin-bottom:14px}
+.al-grp select{width:100%;height:40px;padding:0 26px 0 10px;font-size:14px}
+.al-painel .al-chip{height:32px}
+.al-painel .al-lab input{height:40px;font-size:16px}
+.al-painel-f{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--divider)}
+.al-painel-f .btn{flex:1;height:44px;justify-content:center}
+@media (max-width:767px){
+  .al-painel-bg{background:var(--backdrop)}
+  .al-painel{top:auto;right:0;left:0;bottom:0;width:auto;max-width:none;max-height:86dvh;border-radius:16px 16px 0 0;border-bottom:0;transform-origin:bottom;animation:al-up var(--t-base) var(--ease-out)}
+  .al-fil-btn{width:44px;height:44px}
+  .al-toolbar .th-search input{height:44px}
+}
+@media (prefers-reduced-motion:reduce){.al-pop,.al-painel{animation:none}}
+
+/* 3 quebras (largura do cartão da lista):
+   >= 1260px  completa: todas as colunas, com ordenar e filtro no cabeçalho
+   880–1259   intermediária: nome (com avatar), idade, nível e atendimento; só a legenda no cabeçalho; filtros no painel, sem ordenação
+   < 880      mínima: só nome (com avatar) com pendências; filtros no painel, sem ordenação
+   < 600      celular: o nome e as tags podem quebrar de linha (não há largura) */
+@container alunos (max-width:1259px){
+  .al-toolbar{display:flex}
+  .alunos-table thead th>:not(.th-label),.al-sortbtn{display:none}
+  .alunos-table .al-c1{display:none}
+}
+@container alunos (max-width:879px){
+  .alunos-table thead{display:none}
+  .alunos-table .al-c2{display:none}
+}
+@container alunos (max-width:599px){
+  .al-nome{flex-wrap:wrap}
+  .al-id{flex:1 1 150px;min-width:0}
+  .al-n{white-space:normal;min-width:0;overflow-wrap:break-word}
+  .al-tags{flex-direction:row;flex-wrap:wrap;justify-content:flex-start;margin-left:0}
+}

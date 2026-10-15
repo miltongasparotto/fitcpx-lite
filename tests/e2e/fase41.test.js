@@ -71,7 +71,7 @@ async function painel(browser){
   const idTrav=await ev(()=>getActive().id);
   await ev((id)=>confirmarDeletarAluno(id),idTrav);
   ok('trava: excluir bloqueado', dialogs.some(d=>d.includes('só visualização'))&&await ev((id)=>students.some(s=>s.id===id),idTrav));
-  ok('trava: lista mostra badge Transferência', await ev(()=>document.getElementById('alunos-grid').textContent.includes('Transferência')));
+  ok('trava: lista mostra status Transferência', await ev(()=>!!document.querySelector('#alunos-grid .al-st-transf')));
   ok('trava: lixeira desabilitada', await ev(()=>[...document.querySelectorAll('#alunos-grid .icon-btn')].some(b=>b.disabled)));
 
   // aba Transferências

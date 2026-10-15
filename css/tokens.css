@@ -38,6 +38,7 @@
 
   /* ── Status (cor = estado; nunca decoração) ──────────────────────────── */
   --danger:#dc2626;     --danger-ink:#b42318;   --danger-soft:#fdeeee;
+  --on-warning:#2a1a00;         /* texto sobre fundo --warning (selo de alerta de saude) */
   --on-danger:#ffffff;          /* texto sobre fundo --danger (botão Excluir, selo de alerta, aviso de erro) */
   --warning:#f59e0b;    --warning-ink:#a35a00;  --warning-soft:#fff4e0;
   --info-ink:#1d4ed8;   --info-soft:#eaf2ff;

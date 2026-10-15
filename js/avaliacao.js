@@ -207,161 +207,413 @@ function _nivelColor(n){
   return {Iniciante:'badge-green',Intermediário:'badge-amber',Avançado:'badge-red'}[n]||'badge-gray';
 }
 
-// Estado de ordenação das colunas da tabela de alunos
-let _alunosSortCol = null;
-let _alunosSortDir = 1; // 1=asc, -1=desc
+// ─── Lista de Alunos: status (abas + anel do avatar), filtros por coluna, ordenação e layout ───────
+// 3 quebras pela largura do cartão (container query em css/app.css):
+//   >= 1260px: tabela completa, com seta de ordenar e filtro em cada coluna.
+//   880–1259px: nome (com avatar), idade, nível e atendimento; filtros no painel, sem ordenação.
+//   < 880px: só o nome (com avatar e pendências); filtros no painel, sem ordenação.
+// O status aparece na borda colorida do avatar e nas abas do cartão (filtro); não tem coluna própria.
+// Regra fixa: alunos novos no topo e, dentro de cada grupo, ordem alfabética (a coluna clicada vem antes do nome).
+const ALUNOS_TREINO_VENCIDO_DIAS = 56; // ciclo de 8 semanas
+const ALUNOS_COMPLETO_PX = 1260;       // largura do cartão abaixo da qual a lista perde o cabeçalho com ordenar/filtro (igual ao @container do app.css)
 
+const _alVazio = ()=>({busca:'',status:'',sexo:'',nivel:'',modal:'',
+  idade:{modo:'exata',a:'',b:''}, aval:{preset:'',de:'',ate:''}, treino:{preset:'',de:'',ate:''}});
+let _alF = _alVazio();
+let _alunosSortCol = null;
+let _alunosSortDir = 1; // 1=crescente, -1=decrescente
+
+// Paginação: mostra 10 por vez (padrão), 20, 30 ou tudo (n=0). A escolha fica lembrada neste navegador.
+const _AL_POR_PAG = [10,20,30,0];
+const _AL_PAG_LS = 'fitcpx-alunos-por-pagina';
+const _alPag = {n:(()=>{ try{ const v=parseInt(localStorage.getItem(_AL_PAG_LS),10); if(_AL_POR_PAG.includes(v)) return v; }catch(e){} return 10; })(), pg:1, sig:''};
+
+const _AL_STATUS = {novo:'Novo',ativo:'Ativo',pendente:'Pendente',transf:'Transferência',bloq:'Bloqueado'};
+const _AL_SEL = {
+  sexo:{lab:'Sexo',id:'alunos-filtro-sexo',opts:[['','Todos'],['F','Feminino'],['M','Masculino'],['__vazio','—']]},
+  nivel:{lab:'Nível',id:'alunos-filtro-nivel',opts:[['','Todos'],['Iniciante','Iniciante'],['Intermediário','Intermediário'],['Avançado','Avançado'],['__vazio','—']]},
+  modal:{lab:'Atendimento',id:'alunos-filtro-modal',opts:[['','Todos'],['presencial','Presencial'],['online','Online'],['hibrido','Híbrido'],['__vazio','—']]},
+};
+// Colunas do cabeçalho: tipo sel = lista de opções; idade/data = botão que abre o filtro.
+const _AL_COLS = [
+  {k:'nome',lab:'Nome',tipo:'busca',w:450},
+  {k:'sexo',lab:'Sexo',tipo:'sel',w:104,cls:'al-col al-c1 al-ct'},
+  {k:'idade',lab:'Idade',tipo:'idade',w:104,cls:'al-col al-c2 al-ct'},
+  {k:'nivel',lab:'Nível',tipo:'sel',w:122,cls:'al-col al-c2 al-ct'},
+  {k:'modal',lab:'Atendimento',tipo:'sel',w:116,cls:'al-col al-c2 al-ct'},
+  {k:'aval',lab:'Última avaliação',tipo:'data',w:134,cls:'al-col al-c1 al-ct'},
+  {k:'treino',lab:'Último treino',tipo:'data',w:132,cls:'al-col al-c1 al-ct'},
+];
+
+// ── dados de cada aluno ──────────────────────────────────────────────────
+function _alDia(s){ // texto de data -> Date local à meia-noite (nunca UTC), ou null
+  if(!s || s==='—') return null;
+  let m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return new Date(+m[1],+m[2]-1,+m[3]);
+  m=String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(m) return new Date(+m[3],+m[2]-1,+m[1]);
+  return null;
+}
+function _alFmt(d){ return d ? String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear() : ''; }
+function _alHoje(){ const h=new Date(); return new Date(h.getFullYear(),h.getMonth(),h.getDate()); }
+function _alDiasAtras(n){ const h=_alHoje(); return new Date(h.getFullYear(),h.getMonth(),h.getDate()-n); }
+function _alIni(nome){ // mesmas iniciais do Painel (_dashIniciais)
+  if(typeof _dashIniciais==='function') return _dashIniciais(nome);
+  return (String(nome||'?').trim().charAt(0)||'?').toUpperCase();
+}
+function _alHa(d){
+  const n=Math.round((_alHoje()-d)/864e5);
+  return n<=0 ? 'hoje' : n===1 ? 'ontem' : 'há '+n+' dias';
+}
+function _alAval(s){
+  const avs=s.avaliacoesAntro||[];
+  return _alDia((avs.length?avs[avs.length-1].data_avaliacao:null)||(s.anamnese||{}).data_avaliacao);
+}
+function _alTreino(s){
+  const pr=getUltimoTreino(s); if(!pr.aprovado) return null;
+  const d=_alDia(pr.dataAprovacao); if(d) return d;
+  if(!pr.id) return null;
+  const x=new Date(pr.id); return isNaN(x) ? null : new Date(x.getFullYear(),x.getMonth(),x.getDate());
+}
+// O nível é guardado abreviado (Inic/Inte/Avan); a lista mostra e filtra pelo nome completo
+const _AL_NIVEL = {Inic:'Iniciante',Inte:'Intermediário',Avan:'Avançado'};
+function _alNivel(s){ const n=(s.anamnese||{}).nivel||''; return _AL_NIVEL[n]||n; }
+function _alDadosPendentes(s){
+  const p=s.perfil||{};
+  return !!(p.alunoUserId && !(p.nascimento && p.sexo && String(p.whatsapp||'').replace(/\D/g,'').length>=10));
+}
+// Status (prioridade): transferência > novo > bloqueado > pendente > ativo
+function _alStatus(s){
+  const p=s.perfil||{};
+  if(typeof alunoTravado==='function' && alunoTravado(s)) return 'transf';
+  if(p.novoCadastro) return 'novo';
+  if(p.portalStatus==='bloqueado') return 'bloq';
+  if(_alDadosPendentes(s)) return 'pendente';
+  return 'ativo';
+}
+// Alerta de saúde (o detalhe aparece no Perfil e na prescrição): lesão, gestação ou cardiopatia
+function _alAtencao(s){
+  const p=s.perfil||{};
+  return !!((p.lesoes && p.lesoes!=='Nenhuma' && p.lesoes.length>2) || (p.condicoes||'').includes('Gestação') || (p.condicoes||'').includes('Cardiopatia'));
+}
+
+// ── estado dos filtros ───────────────────────────────────────────────────
+// "vazio" (—) = aluno sem a informação; é um filtro como os outros
+const _AL_VAZIO = '__vazio';
+const _alIdadeAtiva = f => f.modo==='vazio' || (f.modo==='exata' ? f.a!=='' : (f.a!==''||f.b!==''));
+const _alDataAtiva = f => !!f.preset || f.de!=='' || f.ate!=='';
+function _alAtivo(k){ return k==='idade' ? _alIdadeAtiva(_alF.idade) : _alDataAtiva(_alF[k]); }
+function _alQtdFiltros(){
+  return ['sexo','nivel','modal'].filter(k=>_alF[k]).length + (_alIdadeAtiva(_alF.idade)?1:0) + (_alDataAtiva(_alF.aval)?1:0) + (_alDataAtiva(_alF.treino)?1:0);
+}
+function _alDataOk(d,f){
+  if(!_alDataAtiva(f)) return true;
+  if(f.preset==='vazio') return !d;
+  if(!d) return false;
+  if(f.preset) return d>=_alDiasAtras(+f.preset) && d<=_alHoje();
+  if(f.de){ const x=_alDia(f.de); if(x && d<x) return false; }
+  if(f.ate){ const x=_alDia(f.ate); if(x && d>x) return false; }
+  return true;
+}
+function _alResumo(k){
+  if(k==='idade'){
+    const f=_alF.idade; if(!_alIdadeAtiva(f)) return 'Todas';
+    if(f.modo==='vazio') return '—';
+    if(f.modo==='exata') return f.a+' anos';
+    return f.a!==''&&f.b!=='' ? `${f.a} a ${f.b} anos` : f.a!=='' ? `${f.a}+ anos` : `até ${f.b} anos`;
+  }
+  const f=_alF[k]; if(!_alDataAtiva(f)) return 'Todas';
+  if(f.preset==='vazio') return '—';
+  if(f.preset) return 'Até '+f.preset+' dias';
+  const p=v=>v?v.split('-').reverse().slice(0,2).join('/'):'…';
+  return p(f.de)+' a '+p(f.ate);
+}
+function alunosSetFiltro(k,v){ _alF[k]=v; renderScreenAlunos(); }
+
+// Cada coluna ordena do menor ao maior e de volta; o 3º clique tira a ordem
 function sortAlunos(col){
-  if(_alunosSortCol===col) _alunosSortDir*=-1;
-  else { _alunosSortCol=col; _alunosSortDir=1; }
-  document.querySelectorAll('.alunos-sort-ind').forEach(el=>el.textContent='');
-  const ind=document.getElementById('alunos-sort-'+col);
-  if(ind) ind.innerHTML=_alunosSortDir===1?'<i class=ph-arrow-up></i>':'<i class=ph-arrow-down></i>';
+  if(_alunosSortCol!==col){ _alunosSortCol=col; _alunosSortDir=1; }
+  else if(_alunosSortDir===1) _alunosSortDir=-1;
+  else { _alunosSortCol=null; _alunosSortDir=1; }
   renderScreenAlunos();
 }
 
-function _parseDataBR(s){
-  if(!s||s==='—') return 0;
-  const pts=(s||'').split('/');
-  if(pts.length===3) return +new Date(pts[2],pts[1]-1,pts[0])||0;
-  return +new Date(s)||0;
+// ── layout: compacto quando o cartão é estreito ──────────────────────────
+function _alCompacto(){
+  const c=document.querySelector('.al-body');
+  return !!c && c.clientWidth>0 && c.clientWidth<ALUNOS_COMPLETO_PX;
+}
+let _alCompactoAnt=null, _alObs=null;
+function _alObserva(){
+  const c=document.querySelector('.al-body'); if(_alObs || !c || typeof ResizeObserver==='undefined') return;
+  _alObs=new ResizeObserver(()=>{
+    if(!c.clientWidth) return;
+    const x=_alCompacto(); if(x===_alCompactoAnt) return;
+    _alCompactoAnt=x; alunosFecharPop(); renderScreenAlunos();
+  });
+  _alObs.observe(c);
 }
 
+// ── cabeçalho (legenda + seta de ordenar, e o filtro logo abaixo) ────────
+function _alSelHTML(k,comId){
+  const c=_AL_SEL[k];
+  return `<select ${comId?`id="${c.id}" `:''}data-alf="${k}" onchange="alunosSetFiltro('${k}',this.value)" aria-label="Filtrar por ${c.lab}">${c.opts.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('')}</select>`;
+}
+function _alMontaCabecalho(){
+  const tr=$('alunos-thr'); if(!tr || tr.children.length) return;
+  tr.innerHTML=_AL_COLS.map(c=>{
+    const ord = c.k==='nome' ? '' : `<button type="button" class="al-sortbtn" data-al-sort="${c.k}" onclick="sortAlunos('${c.k}')" title="${c.tipo==='sel'?'Ordenar de A a Z e de Z a A':'Ordenar do menor ao maior e do maior ao menor'}" aria-label="Ordenar por ${c.lab}"><i class=ph-arrows-down-up></i></button>`;
+    let ctl;
+    if(c.tipo==='busca') ctl=`<div class="th-search"><i class=ph-magnifying-glass></i><input id="alunos-busca" data-al-busca placeholder="Buscar aluno" oninput="alunosSetFiltro('busca',this.value)" autocomplete="off"></div>`;
+    else if(c.tipo==='sel') ctl=_alSelHTML(c.k,true);
+    else ctl=`<button type="button" class="al-fld" data-al-fld="${c.k}" onclick="alunosAbrirPop(this,'${c.k}')" aria-haspopup="dialog"><span></span><i class=ph-caret-down></i></button>`;
+    return `<th class="${c.cls||''}" style="min-width:${c.w}px"><div class="th-label">${c.lab}${ord}</div>${ctl}</th>`;
+  }).join('')+`<th class="al-th-ac"><button class="icon-btn" onclick="limparFiltrosAlunos()" title="Limpar filtros" aria-label="Limpar filtros"><i class=ph-funnel-x></i></button></th>`;
+}
+function _alAbas(){
+  const el=$('alunos-tabs'); if(!el) return;
+  const cont={}; students.forEach(s=>{ const k=_alStatus(s); cont[k]=(cont[k]||0)+1; });
+  const abas=[['','Todos',students.length]].concat(Object.keys(_AL_STATUS).map(k=>[k,_AL_STATUS[k],cont[k]||0]));
+  el.innerHTML='<div class="dp-seg" role="group" aria-label="Filtrar por status">'+abas.map(a=>
+    '<button type="button" class="dp-seg-b'+(_alF.status===a[0]?' on':'')+'" onclick="alunosSetFiltro(\'status\',\''+a[0]+'\')">'
+    +(a[0]?'<i class="al-dot al-st-'+a[0]+'"></i>':'')+a[1]+'<span>'+a[2]+'</span></button>').join('')+'</div>';
+}
+function _alSync(){
+  document.querySelectorAll('[data-alf]').forEach(el=>{ const k=el.dataset.alf; el.value=_alF[k]; el.classList.toggle('active',!!_alF[k]); });
+  document.querySelectorAll('[data-al-busca]').forEach(el=>{ if(el.value!==_alF.busca) el.value=_alF.busca; });
+  document.querySelectorAll('[data-al-fld]').forEach(b=>{ const k=b.dataset.alFld; b.classList.toggle('active',_alAtivo(k)); b.querySelector('span').textContent=_alResumo(k); });
+  document.querySelectorAll('[data-al-sort]').forEach(b=>{
+    const on=_alunosSortCol===b.dataset.alSort;
+    b.classList.toggle('on',on);
+    b.innerHTML=on ? (_alunosSortDir===1?'<i class=ph-arrow-up></i>':'<i class=ph-arrow-down></i>') : '<i class=ph-arrows-down-up></i>';
+  });
+  const n=_alQtdFiltros(), fn=$('alunos-fil-n'), fb=$('alunos-fil-btn');
+  if(fn) fn.textContent=n||'';
+  if(fb) fb.classList.toggle('active',n>0);
+}
+
+// ── filtros de idade e de datas (janela do popover no notebook e do painel no tablet/celular) ──
+function _alBoxHTML(k){
+  if(k==='idade'){
+    const f=_alF.idade, ex=f.modo==='exata', vz=f.modo==='vazio';
+    return `<div class="al-seg al-seg3" role="group" aria-label="Tipo de filtro de idade">
+        <button type="button" class="${ex?'on':''}" onclick="alunosIdadeModo('exata',this)">Idade exata</button>
+        <button type="button" class="${f.modo==='int'?'on':''}" onclick="alunosIdadeModo('int',this)">Intervalo</button>
+        <button type="button" class="${vz?'on':''}" onclick="alunosIdadeModo('vazio',this)" title="Sem data de nascimento">—</button></div>`
+      +(vz ? `<div class="al-sub-t">Alunos sem idade (sem data de nascimento)</div>` : ex ? `<label class="al-lab">Idade (em anos)<input type="number" inputmode="numeric" min="0" max="120" value="${escHTML(f.a)}" placeholder="Ex.: 35" oninput="alunosIdadeVal('a',this.value)"></label>`
+           : `<div class="al-row2"><label class="al-lab">De (anos)<input type="number" inputmode="numeric" min="0" max="120" value="${escHTML(f.a)}" placeholder="Ex.: 30" oninput="alunosIdadeVal('a',this.value)"></label>
+              <label class="al-lab">Até (anos)<input type="number" inputmode="numeric" min="0" max="120" value="${escHTML(f.b)}" placeholder="Ex.: 45" oninput="alunosIdadeVal('b',this.value)"></label></div>`);
+  }
+  const f=_alF[k];
+  return `<div class="al-chips">${[7,15,30,60,90,120].map(n=>`<button type="button" class="al-chip${f.preset==n?' on':''}" onclick="alunosDataPreset('${k}',${n},this)">Até ${n} dias</button>`).join('')}<button type="button" class="al-chip${f.preset==='vazio'?' on':''}" onclick="alunosDataPreset('${k}','vazio',this)" title="Sem data">—</button></div>
+    <div class="al-sub-t">Ou intervalo personalizado</div>
+    <div class="al-row2"><label class="al-lab">Do dia<input type="date" value="${escHTML(f.de)}" oninput="alunosDataCustom('${k}','de',this.value,this)"></label>
+    <label class="al-lab">Ao dia<input type="date" value="${escHTML(f.ate)}" oninput="alunosDataCustom('${k}','ate',this.value,this)"></label></div>`;
+}
+function _alRefazBox(el){ const box=el.closest('[data-al-box]'); if(box) box.innerHTML=_alBoxHTML(box.dataset.alBox); return box; }
+function alunosIdadeModo(m,el){ _alF.idade={modo:m,a:'',b:''}; const box=_alRefazBox(el); const i=box&&box.querySelector('input'); if(i) i.focus(); renderScreenAlunos(); }
+function alunosIdadeVal(c,v){ _alF.idade[c]=v; renderScreenAlunos(); }
+function alunosDataPreset(k,n,el){ _alF[k]={preset:String(n),de:'',ate:''}; _alRefazBox(el); renderScreenAlunos(); }
+function alunosDataCustom(k,c,v,el){
+  _alF[k].preset=''; _alF[k][c]=v;
+  const box=el.closest('[data-al-box]'); if(box) box.querySelectorAll('.al-chip').forEach(b=>b.classList.remove('on'));
+  renderScreenAlunos();
+}
+function alunosLimparCampo(k){
+  _alF[k] = k==='idade' ? {modo:_alF.idade.modo==='vazio'?'exata':_alF.idade.modo,a:'',b:''} : {preset:'',de:'',ate:''};
+  document.querySelectorAll(`[data-al-box="${k}"]`).forEach(b=>{ b.innerHTML=_alBoxHTML(k); });
+  if($('alunos-painel')===null) alunosFecharPop();
+  renderScreenAlunos();
+}
+
+// ── popover (notebook) e painel de filtros (tablet/celular) ──────────────
+let _alPop=null, _alFoco=null;
+function alunosFecharPop(){
+  if(_alPop){ _alPop.remove(); _alPop=null; }
+  const p=$('alunos-painel'); if(p) p.remove();
+  if(_alFoco && document.contains(_alFoco)) _alFoco.focus({preventScroll:true});
+  _alFoco=null;
+}
+function alunosAbrirPop(btn,k){
+  const aberto=_alPop && _alPop.dataset.k===k;
+  alunosFecharPop(); if(aberto) return;
+  _alFoco=btn;
+  const p=document.createElement('div');
+  p.className='al-pop'; p.dataset.k=k; p.setAttribute('role','dialog');
+  const tit={idade:'Filtrar por idade',aval:'Última avaliação: janela fixa',treino:'Último treino: janela fixa'}[k];
+  p.setAttribute('aria-label',tit);
+  p.innerHTML=`<div class="al-pop-t">${tit}</div><div data-al-box="${k}">${_alBoxHTML(k)}</div>
+    <div class="al-pop-foot"><button type="button" class="al-lnk" onclick="alunosLimparCampo('${k}')">Limpar</button><button type="button" class="btn btn-primary btn-sm" onclick="alunosFecharPop()">Aplicar</button></div>`;
+  document.body.appendChild(p); _alPop=p;
+  const r=btn.getBoundingClientRect(), w=p.offsetWidth;
+  p.style.left=Math.max(8,Math.min(r.left,innerWidth-w-8))+'px';
+  let top=r.bottom+6; if(top+p.offsetHeight>innerHeight-8) top=Math.max(8,r.top-p.offsetHeight-6);
+  p.style.top=top+'px';
+  const i=p.querySelector('input'); if(i) i.focus({preventScroll:true});
+}
+function alunosAbrirPainel(btn){
+  const ja=$('alunos-painel'); alunosFecharPop(); if(ja) return;
+  _alFoco=btn;
+  const bg=document.createElement('div'); bg.id='alunos-painel'; bg.className='al-painel-bg';
+  bg.addEventListener('mousedown',e=>{ if(e.target===bg) alunosFecharPop(); });
+  const sec=(t,h)=>`<div class="al-grp"><div class="al-grp-t">${t}</div>${h}</div>`;
+  bg.innerHTML=`<div class="al-painel" role="dialog" aria-modal="true" aria-label="Filtros dos alunos">
+    <div class="al-painel-h"><b>Filtros</b><button class="icon-btn" type="button" onclick="alunosFecharPop()" aria-label="Fechar"><i class=ph-x></i></button></div>
+    <div class="al-painel-b">
+      ${sec('Sexo',_alSelHTML('sexo'))}
+      ${sec('Idade',`<div data-al-box="idade">${_alBoxHTML('idade')}</div>`)}
+      ${sec('Nível',_alSelHTML('nivel'))}${sec('Atendimento',_alSelHTML('modal'))}
+      ${sec('Última avaliação',`<div data-al-box="aval">${_alBoxHTML('aval')}</div>`)}
+      ${sec('Último treino',`<div data-al-box="treino">${_alBoxHTML('treino')}</div>`)}
+    </div>
+    <div class="al-painel-f"><button class="btn" type="button" onclick="limparFiltrosAlunos(true)">Limpar</button><button class="btn btn-primary" type="button" onclick="alunosFecharPop()">Ver alunos</button></div></div>`;
+  document.body.appendChild(bg);
+  const r=btn.getBoundingClientRect(), pn=bg.firstElementChild;
+  pn.style.setProperty('--al-top',(r.bottom+6)+'px');
+  pn.style.setProperty('--al-right',Math.max(8,innerWidth-r.right)+'px');
+  _alSync();
+}
+document.addEventListener('mousedown',e=>{ if(_alPop && !_alPop.contains(e.target) && !e.target.closest('[data-al-fld]')) alunosFecharPop(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && (_alPop||$('alunos-painel'))) alunosFecharPop(); });
+
+// ── lista ────────────────────────────────────────────────────────────────
 function renderScreenAlunos(){
   const grid=$('alunos-grid');
   const empty=$('alunos-empty');
   if(!grid) return;
+  _alMontaCabecalho(); _alObserva();
+  const compacto=_alCompacto(); _alCompactoAnt=compacto;
 
-  // Update count badge
-  const cb=$('alunos-count-badge');
-  if(cb) cb.textContent=students.length+' aluno'+(students.length!==1?'s':'');
-
-  const busca   = ($('alunos-busca')||{}).value?.toLowerCase().trim()||'';
-  const fSexo   = ($('alunos-filtro-sexo')||{}).value||'';
-  const fNivel  = ($('alunos-filtro-nivel')||{}).value||'';
-  const fObj    = ($('alunos-filtro-obj')||{}).value||'';
-  const fModal  = ($('alunos-filtro-modal')||{}).value||'';
-  const fPresc  = ($('alunos-filtro-presc')||{}).value||'';
-  const ordem   = ($('alunos-ordem')||{}).value||'nome';
-
+  const busca=_alF.busca.toLowerCase().trim();
+  const fi=_alF.idade;
   let lista = students.filter(s=>{
     const p=s.perfil||{}, a=s.anamnese||{};
-    if(busca && !matchTokens(busca, p.nome||'', a.nivel||'', getUltimoTreino(s).objetivo||'')) return false;
-    if(fSexo  && p.sexo!==fSexo) return false;
-    if(fNivel && a.nivel!==fNivel) return false;
-    if(fObj){
-      const obj = getUltimoTreino(s).objetivo || a.objetivo_ef || '';
-      if(obj!==fObj) return false;
+    if(busca && !matchTokens(busca, p.nome||'', _alNivel(s), getUltimoTreino(s).objetivo||'')) return false;
+    if(_alF.status && _alStatus(s)!==_alF.status) return false;
+    if(_alF.sexo===_AL_VAZIO){ if(p.sexo) return false; } else if(_alF.sexo && p.sexo!==_alF.sexo) return false;
+    if(_alF.nivel===_AL_VAZIO){ if(_alNivel(s)) return false; } else if(_alF.nivel && _alNivel(s)!==_alF.nivel) return false;
+    if(_alF.modal===_AL_VAZIO){ if(p.modalidade) return false; } else if(_alF.modal && !(p.modalidade||'').toLowerCase().includes(_alF.modal)) return false;
+    if(_alIdadeAtiva(fi)){
+      const id=_calcIdadeNum(p.nascimento);
+      if(fi.modo==='vazio'){ if(id!==null) return false; }
+      else if(id===null) return false;
+      else if(fi.modo==='exata'){ if(id!==+fi.a) return false; }
+      else { if(fi.a!=='' && id<+fi.a) return false; if(fi.b!=='' && id>+fi.b) return false; }
     }
-    if(fModal){
-      const mod = (p.modalidade||'').toLowerCase();
-      if(!mod.includes(fModal)) return false;
-    }
-    if(fPresc==='com' && !getUltimoTreino(s).aprovado) return false;
-    if(fPresc==='sem' && getUltimoTreino(s).aprovado) return false;
-    return true;
+    return _alDataOk(_alAval(s),_alF.aval) && _alDataOk(_alTreino(s),_alF.treino);
   });
 
-  // Ordenar — prioridade: aluno novo (autocadastro pelo link) > coluna clicada > select oculto
+  // Ordem: aluno novo no topo > coluna clicada (só no notebook) > alfabética. Sem informação (—) conta como o mais antigo/menor:
+  // fica no topo na ordem crescente e no fim na decrescente.
+  const val=(s,k)=>{
+    const p=s.perfil||{};
+    if(k==='sexo') return p.sexo||'';
+    if(k==='idade'){ const i=_calcIdadeNum(p.nascimento); return i===null ? -1 : i; }
+    if(k==='nivel') return ({Iniciante:1,Intermediário:2,Avançado:3})[_alNivel(s)]||0;
+    if(k==='modal') return p.modalidade ? _modalLabel(p.modalidade) : '';
+    if(k==='aval'){ const d=_alAval(s); return d ? +d : 0; }
+    if(k==='treino'){ const d=_alTreino(s); return d ? +d : 0; }
+    return 0;
+  };
+  const col = compacto ? null : _alunosSortCol;
   lista = [...lista].sort((a,b)=>{
-    const pa=a.perfil||{}, pb=b.perfil||{};
-    const aa=a.anamnese||{}, ab=b.anamnese||{};
-    if(!!pb.novoCadastro !== !!pa.novoCadastro) return pb.novoCadastro ? 1 : -1;
-    // Ordenação por coluna clicada (cabeçalho da tabela)
-    if(_alunosSortCol==='ultAval'){
-      const avA=a.avaliacoesAntro||[], avB=b.avaliacoesAntro||[];
-      const dA=_parseDataBR((avA.length?avA[avA.length-1].data_avaliacao:null)||aa.data_avaliacao||'—');
-      const dB=_parseDataBR((avB.length?avB[avB.length-1].data_avaliacao:null)||ab.data_avaliacao||'—');
-      return (dA-dB)*_alunosSortDir;
+    const na=!!(a.perfil||{}).novoCadastro, nb=!!(b.perfil||{}).novoCadastro;
+    if(na!==nb) return na ? -1 : 1;
+    if(col){
+      const va=val(a,col), vb=val(b,col);
+      const c = typeof va==='string' ? va.localeCompare(vb,'pt-BR') : va-vb;
+      if(c) return c*_alunosSortDir;
     }
-    if(_alunosSortCol==='ultTreino'){
-      const prA=getUltimoTreino(a), prB=getUltimoTreino(b);
-      const dA=prA.aprovado?_parseDataBR(prA.dataAprovacao||(prA.id?new Date(prA.id).toLocaleDateString('pt-BR'):'')):0;
-      const dB=prB.aprovado?_parseDataBR(prB.dataAprovacao||(prB.id?new Date(prB.id).toLocaleDateString('pt-BR'):'')):0;
-      return (dA-dB)*_alunosSortDir;
-    }
-    // Fallback: select oculto #alunos-ordem
-    if(ordem==='nome')      return (pa.nome||'').localeCompare(pb.nome||'');
-    if(ordem==='nome_desc') return (pb.nome||'').localeCompare(pa.nome||'');
-    if(ordem==='nivel'){
-      const ord={Iniciante:1,Intermediário:2,Avançado:3};
-      return (ord[aa.nivel]||0)-(ord[ab.nivel]||0);
-    }
-    if(ordem==='objetivo'){
-      const oa=getUltimoTreino(a).objetivo||aa.objetivo_ef||'';
-      const ob=getUltimoTreino(b).objetivo||ab.objetivo_ef||'';
-      return oa.localeCompare(ob);
-    }
-    if(ordem==='idade'){
-      return (_calcIdadeNum(pa.nascimento)||99)-(_calcIdadeNum(pb.nascimento)||99);
-    }
-    if(ordem==='recente') return (b.id||0)-(a.id||0);
-    return (pa.nome||'').localeCompare(pb.nome||'');
+    return ((a.perfil||{}).nome||'').localeCompare((b.perfil||{}).nome||'','pt-BR');
   });
+
+  // Paginação: volta pra página 1 quando filtro ou ordem mudam
+  const sig=JSON.stringify([_alF,_alunosSortCol,_alunosSortDir]);
+  if(sig!==_alPag.sig){ _alPag.sig=sig; _alPag.pg=1; }
+  const pp=_alPag.n, paginas=pp ? Math.max(1,Math.ceil(lista.length/pp)) : 1;
+  _alPag.pg=Math.min(Math.max(1,_alPag.pg),paginas);
+  const ini=pp ? (_alPag.pg-1)*pp : 0;
+  const visiveis=pp ? lista.slice(ini,ini+pp) : lista;
+
+  const cb=$('alunos-count-badge');
+  if(cb) cb.textContent=(lista.length===students.length ? students.length : lista.length+' de '+students.length)+' aluno'+(students.length!==1?'s':'');
 
   grid.innerHTML='';
-  if(empty) empty.classList.toggle('hidden', lista.length>0);
+  if(empty) empty.classList.toggle('hidden', lista.length>0 || students.length>0);
 
-  lista.forEach(s=>{
-    const p=s.perfil||{}, a=s.anamnese||{}, pr=getUltimoTreino(s);
+  const hoje=_alHoje();
+  visiveis.forEach(s=>{
+    const p=s.perfil||{}, a=s.anamnese||{};
     const tr=document.createElement('tr');
-
-    const idade = _calcIdadeNum(p.nascimento);
-    const modal = p.modalidade||'';
-    const nivel = a.nivel||'';
-    const temPresc = pr.aprovado;
-
-    // Flags
-    const flags = [];
-    if((p.condicoes||'').includes('Gestação')) flags.push('<i class=ph-baby></i>');
-    if(p.lesoes && p.lesoes!=='Nenhuma' && p.lesoes.length>2) flags.push('<i class=ph-warning></i>');
-    if((p.condicoes||'').includes('Cardiopatia')) flags.push('<i class=ph-heartbeat></i>');
-    const flagHtml = flags.map(f=>`<span class="al-flag">${f}</span>`).join('');
-
-    const avs = s.avaliacoesAntro||[];
-    const ultAval = (avs.length ? avs[avs.length-1].data_avaliacao : null) || a.data_avaliacao || '—';
-    const ultTreino = temPresc ? (pr.dataAprovacao || (pr.id ? new Date(pr.id).toLocaleDateString('pt-BR') : '—')) : '—';
-    const nome = p.nome||'—';
-    const ini = (nome.trim().charAt(0)||'?').toUpperCase();
-    const dash = '<span class="al-dash">—</span>';
+    const st=_alStatus(s), idade=_calcIdadeNum(p.nascimento), modal=p.modalidade||'', nivel=_alNivel(s);
+    const dAval=_alAval(s), dTreino=_alTreino(s);
+    const dash='<span class="al-dash">—</span>';
+    const nome=p.nome||'—';
+    const venc = dTreino && Math.round((hoje-dTreino)/864e5) > ALUNOS_TREINO_VENCIDO_DIAS;
+    const treino = !dTreino ? dash
+      : venc ? `<span class="badge badge-amber" title="Treino com mais de ${ALUNOS_TREINO_VENCIDO_DIAS} dias: ciclo de 8 semanas vencido"><i class=ph-clock-countdown></i>${_alFmt(dTreino)}</span>`
+             : `<span class="badge badge-green"><i class=ph-check></i>${_alFmt(dTreino)}</span>`;
+    const semCpf = String(p.cpf||'').replace(/\D/g,'').length!==11;
+    const tags = (semCpf?'<span class="badge badge-gray" title="Sem CPF: mande o link de cadastro pro aluno preencher"><i class=ph-identification-card></i>Sem CPF</span>':'')
+               + (_alDadosPendentes(s)?'<span class="badge badge-amber" title="Aluno com app bloqueado: faltam nascimento, sexo ou WhatsApp. Complete no Perfil ou espere o aluno preencher."><i class=ph-lock></i>Dados pendentes</span>':'');
+    const travado = typeof alunoTravado==='function' && alunoTravado(s);
 
     tr.innerHTML=`
       <td>
         <div class="al-nome">
-          <span class="al-av">${escHTML(ini)}</span>
-          <span class="al-nome-txt">
-            <span class="al-n">${escHTML(nome)}${flagHtml}</span>
-            ${idade!==null?`<span class="al-sub">${idade} anos</span>`:''}
-          </span>
-          ${p.novoCadastro?'<span class="badge badge-amber"><i class=ph-sparkle></i>Novo</span>':''}
-          ${typeof badgeTransferencia==='function'?badgeTransferencia(s):''}
-          ${(String(p.cpf||'').replace(/\D/g,'').length!==11)?'<span class="badge badge-gray" title="Sem CPF: mande o link de cadastro pro aluno preencher"><i class=ph-identification-card></i>Sem CPF</span>':''}
-          ${(p.alunoUserId && !(p.nascimento && p.sexo && String(p.whatsapp||'').replace(/\D/g,'').length>=10))?'<span class="badge badge-amber" title="Aluno com app bloqueado: faltam nascimento, sexo ou WhatsApp. Complete no Perfil ou espere o aluno preencher."><i class=ph-lock></i>Dados pendentes</span>':''}
+          <span class="al-av al-st-${st}" title="${_AL_STATUS[st]}" aria-label="Status: ${_AL_STATUS[st]}">${escHTML(_alIni(nome))}</span>
+          <span class="al-id">${_alAtencao(s)?'<span class="al-warn" title="Alerta de saúde: veja os detalhes no Perfil do aluno"><i class=ph-warning></i></span>':''}<span class="al-n">${escHTML(nome)}</span></span>
+          <span class="al-tags">${tags}</span>
         </div>
       </td>
-      <td class="al-sexo" data-label="Sexo">${p.sexo?(p.sexo==='M'?'Masc.':'Fem.'):dash}</td>
-      <td data-label="Nível">${nivel?`<span class="badge ${_nivelColor(nivel)}">${nivel}</span>`:dash}</td>
-      <td data-label="Atendimento">${modal?`<span class="badge badge-gray">${_modalLabel(modal)}</span>`:dash}</td>
-      <td class="al-data" data-label="Última avaliação">${ultAval}</td>
-      <td class="al-data" data-label="Último treino">
-        ${temPresc ? `<span class="badge badge-green"><i class=ph-check></i>${ultTreino}</span>` : dash}
-      </td>
+      <td class="al-sexo al-col al-c1 al-ct">${p.sexo?(p.sexo==='M'?'Masculino':'Feminino'):dash}</td>
+      <td class="al-sexo al-col al-c2 al-ct">${idade!==null?idade+' anos':dash}</td>
+      <td class="al-col al-c2 al-ct">${nivel?`<span class="badge ${_nivelColor(nivel)}">${escHTML(nivel)}</span>`:dash}</td>
+      <td class="al-col al-c2 al-ct">${modal?`<span class="badge badge-gray">${escHTML(_modalLabel(modal))}</span>`:dash}</td>
+      <td class="al-data al-col al-c1 al-ct">${dAval?`<div class="dp-v">${_alFmt(dAval)}</div><div class="dp-s">${_alHa(dAval)}</div>`:dash}</td>
+      <td class="al-data al-col al-c1 al-ct">${treino}${dTreino?`<div class="dp-s">${_alHa(dTreino)}</div>`:''}</td>
       <td class="al-acoes">
-        ${p.novoCadastro?`<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();marcarAlunoComoVisto(${s.id})" title="Marcar como visto">Marcar como visto</button>`:''}
-        <button class="icon-btn" onclick="event.stopPropagation();confirmarDeletarAluno(${s.id})" title="Remover aluno" aria-label="Remover aluno" ${(typeof alunoTravado==='function'&&alunoTravado(s))?'disabled':''}><i class=ph-trash></i></button>
+        ${p.novoCadastro?`<button class="icon-btn" onclick="event.stopPropagation();marcarAlunoComoVisto(${s.id})" title="Marcar como visto" aria-label="Marcar como visto"><i class=ph-eye></i></button>`:''}
+        <button class="icon-btn" onclick="event.stopPropagation();confirmarDeletarAluno(${s.id})" title="Remover aluno" aria-label="Remover aluno" ${travado?'disabled':''}><i class=ph-trash></i></button>
       </td>
     `;
-
     tr.onclick = ()=>selectStudent(s.id);
     grid.appendChild(tr);
   });
 
   if(!lista.length && students.length>0){
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td colspan="7"><div class="empty"><i class=ph-magnifying-glass></i><div class="empty-title">Nenhum aluno corresponde aos filtros</div><button class="btn btn-ghost btn-sm" onclick="limparFiltrosAlunos()">Limpar filtros</button></div></td>`;
+    tr.innerHTML=`<td colspan="8"><div class="empty"><i class=ph-magnifying-glass></i><div class="empty-title">Nenhum aluno corresponde aos filtros</div><button class="btn btn-ghost btn-sm" onclick="limparFiltrosAlunos()">Limpar filtros</button></div></td>`;
     grid.appendChild(tr);
     if(empty) empty.classList.add('hidden');
   }
+  _alAbas(); _alPagina(lista.length,ini,visiveis.length,paginas); _alSync();
+}
+
+function _alPagina(total,ini,qtd,paginas){
+  const el=$('alunos-pag'); if(!el) return;
+  // sem o que paginar (10 alunos ou menos no total) o rodapé não aparece
+  el.hidden = students.length<=_AL_POR_PAG[0] || !total;
+  if(el.hidden) return;
+  const pp=_alPag.n, pg=_alPag.pg;
+  el.innerHTML=
+    '<span class="al-pag-info">Mostrando '+(ini+1)+' a '+(ini+qtd)+' de '+total+' aluno'+(total!==1?'s':'')+'</span>'
+    +'<div class="al-pag-ctl"><span class="al-pag-l">Por página</span>'
+    +'<div class="dp-seg" role="group" aria-label="Alunos por página">'+_AL_POR_PAG.map(n=>
+      '<button type="button" class="dp-seg-b'+(pp===n?' on':'')+'" onclick="alunosPorPagina('+n+')">'+(n||'Tudo')+'</button>').join('')+'</div>'
+    +(paginas>1
+      ? '<div class="al-pag-nav"><button type="button" class="icon-btn" onclick="alunosPagina(-1)" aria-label="Página anterior" title="Página anterior"'+(pg<=1?' disabled':'')+'><i class=ph-caret-left></i></button>'
+        +'<span aria-live="polite">'+pg+' de '+paginas+'</span>'
+        +'<button type="button" class="icon-btn" onclick="alunosPagina(1)" aria-label="Próxima página" title="Próxima página"'+(pg>=paginas?' disabled':'')+'><i class=ph-caret-right></i></button></div>'
+      : '')
+    +'</div>';
+}
+function alunosPagina(d){
+  _alPag.pg+=d; renderScreenAlunos();
+  const sc=document.querySelector('#screen-alunos .main-scroll'); if(sc) sc.scrollTo({top:0});
+}
+function alunosPorPagina(n){
+  _alPag.n=n; _alPag.pg=1;
+  try{ localStorage.setItem(_AL_PAG_LS,String(n)); }catch(e){}
+  renderScreenAlunos();
 }
 
 function marcarAlunoComoVisto(id){
@@ -372,14 +624,12 @@ function marcarAlunoComoVisto(id){
   renderScreenAlunos();
 }
 
-function limparFiltrosAlunos(){
-  ['alunos-busca','alunos-filtro-sexo','alunos-filtro-nivel',
-   'alunos-filtro-obj','alunos-filtro-modal','alunos-filtro-presc'].forEach(id=>{
-    const el=$(id); if(el) el.value='';
-  });
-  const ord=$('alunos-ordem'); if(ord) ord.value='nome';
+function limparFiltrosAlunos(manterPainel){
+  _alF=_alVazio();
   _alunosSortCol=null; _alunosSortDir=1;
-  document.querySelectorAll('.alunos-sort-ind').forEach(el=>el.textContent='');
+  if(manterPainel===true && $('alunos-painel')){
+    document.querySelectorAll('#alunos-painel [data-al-box]').forEach(b=>{ b.innerHTML=_alBoxHTML(b.dataset.alBox); });
+  } else alunosFecharPop();
   renderScreenAlunos();
 }
 

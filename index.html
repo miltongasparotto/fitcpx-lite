@@ -16,10 +16,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Geist+Mono:wght@400..600&display=swap">
-<link rel="stylesheet" href="css/tokens.css?v=20261014d">
+<link rel="stylesheet" href="css/tokens.css?v=20261015a">
 <link rel="stylesheet" href="css/icons.css?v=20261014d">
-<link rel="stylesheet" href="css/app.css?v=20261014g">
-<link rel="stylesheet" href="css/painel.css?v=20261014d">
+<link rel="stylesheet" href="css/app.css?v=20261015g">
+<link rel="stylesheet" href="css/painel.css?v=20261015a">
 <link rel="stylesheet" href="css/carregando.css?v=20261014d">
 <script>try{if(localStorage.getItem('acm-tema')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 </head>
@@ -193,84 +193,33 @@
       </div>
       <div id="alunos-transf-strip" class="hidden"></div>
 
-      <!-- Elementos ocultos para compatibilidade (limparFiltrosAlunos usa esses IDs) -->
-      <select id="alunos-filtro-obj" onchange="renderScreenAlunos()" hidden>
-        <option value="">Todos os objetivos</option>
-        <option value="Hip">Hipertrofia</option><option value="Forca">Força</option>
-        <option value="Emagr">Emagrecimento</option><option value="Comp">Composição</option>
-        <option value="Resist">Resistência</option><option value="CardioR">Cardio</option>
-        <option value="Func">Funcional</option><option value="Saude">Saúde</option>
-        <option value="Esport">Esportivo</option><option value="Reab">Reabilitação</option>
-        <option value="Envelhec">Envelhecimento</option><option value="Gestacao">Gestação</option>
-      </select>
-      <select id="alunos-ordem" onchange="renderScreenAlunos()" hidden>
-        <option value="nome">Nome A→Z</option>
-        <option value="nome_desc">Nome Z→A</option>
-        <option value="nivel">Nível</option>
-        <option value="objetivo">Objetivo</option>
-        <option value="idade">Idade</option>
-        <option value="recente">Mais recentes</option>
-      </select>
-      <select id="alunos-filtro-presc" onchange="renderScreenAlunos()" hidden>
-        <option value="">Todos</option>
-        <option value="com">Com prescrição</option>
-        <option value="sem">Sem prescrição</option>
-      </select>
-
       <div class="main-scroll">
         <div class="content">
-          <div class="card" style="padding:0;overflow:hidden">
+          <div class="card al-card" style="overflow:hidden">
+            <!-- Mesmo padrão do Painel: título + subtítulo e, à direita, abas com contagem (documentos/DESIGN-SYSTEM.md) -->
+            <div class="dp-ph al-ph">
+              <div><h3>Carteira de alunos</h3><p>Status, avaliação e treino de cada aluno</p></div>
+              <div class="dp-segs al-segs" id="alunos-tabs"></div>
+            </div>
+            <div class="al-body">
+            <!-- Tablet e celular: só a busca por nome e o botão que abre os demais filtros -->
+            <div class="al-toolbar">
+              <div class="th-search"><i class=ph-magnifying-glass></i><input id="alunos-busca-m" data-al-busca placeholder="Buscar aluno" oninput="alunosSetFiltro('busca',this.value)" autocomplete="off"></div>
+              <button class="btn al-fil-btn" id="alunos-fil-btn" type="button" onclick="alunosAbrirPainel(this)" aria-haspopup="dialog" aria-label="Filtros"><i class=ph-funnel></i><span class="al-fil-n" id="alunos-fil-n"></span></button>
+            </div>
             <div style="overflow-x:auto">
               <table class="alunos-table">
-                <thead>
-                  <tr>
-                    <th style="min-width:230px">
-                      <div class="th-label">Nome</div>
-                      <div class="th-search"><i class=ph-magnifying-glass></i><input id="alunos-busca" placeholder="Buscar aluno" oninput="renderScreenAlunos()" autocomplete="off"></div>
-                    </th>
-                    <th style="min-width:104px">
-                      <div class="th-label">Sexo</div>
-                      <select id="alunos-filtro-sexo" onchange="renderScreenAlunos()">
-                        <option value="">Todos</option>
-                        <option value="M">Masc.</option>
-                        <option value="F">Fem.</option>
-                      </select>
-                    </th>
-                    <th style="min-width:132px">
-                      <div class="th-label">Nível</div>
-                      <select id="alunos-filtro-nivel" onchange="renderScreenAlunos()">
-                        <option value="">Todos</option>
-                        <option>Iniciante</option><option>Intermediário</option><option>Avançado</option>
-                      </select>
-                    </th>
-                    <th style="min-width:128px">
-                      <div class="th-label">Atendimento</div>
-                      <select id="alunos-filtro-modal" onchange="renderScreenAlunos()">
-                        <option value="">Todos</option>
-                        <option value="presencial">Presencial</option>
-                        <option value="online">Online</option>
-                        <option value="hibrido">Híbrido</option>
-                      </select>
-                    </th>
-                    <th class="sortable" style="min-width:140px" onclick="sortAlunos('ultAval')" title="Clique para ordenar">
-                      <div class="th-label">Última avaliação <i class=ph-arrows-down-up></i><span id="alunos-sort-ultAval" class="alunos-sort-ind" style="color:var(--accent)"></span></div>
-                    </th>
-                    <th class="sortable" style="min-width:140px" onclick="sortAlunos('ultTreino')" title="Clique para ordenar">
-                      <div class="th-label">Último treino <i class=ph-arrows-down-up></i><span id="alunos-sort-ultTreino" class="alunos-sort-ind" style="color:var(--accent)"></span></div>
-                    </th>
-                    <th style="width:40px;text-align:right;vertical-align:bottom">
-                      <button class="icon-btn" onclick="limparFiltrosAlunos()" title="Limpar filtros" aria-label="Limpar filtros"><i class=ph-funnel-x></i></button>
-                    </th>
-                  </tr>
-                </thead>
+                <thead><tr id="alunos-thr"></tr></thead>
                 <tbody id="alunos-grid"></tbody>
               </table>
             </div>
+            <div id="alunos-pag" class="al-pag" hidden></div>
             <div id="alunos-empty" class="empty hidden">
               <i class=ph-users></i>
               <div class="empty-title">Nenhum aluno cadastrado</div>
               <div class="empty-text">Cadastre o primeiro aluno ou compartilhe o link do Portal para ele mesmo se cadastrar.</div>
               <button class="btn btn-primary" onclick="abrirNovoAluno()"><i class=ph-plus></i>Novo aluno</button>
+            </div>
             </div>
           </div>
         </div>
@@ -2705,7 +2654,7 @@
 <script src="js/mensagens-wa.js?v=20261014h"></script>
 
 <script src="js/arquivo-store.js?v=20261014d"></script>
-<script src="js/avaliacao.js?v=20261014d"></script>
+<script src="js/avaliacao.js?v=20261015g"></script>
 <script src="js/exercicios-db.js?v=20261014d"></script>
 <script src="js/treinos-store.js?v=20261014d"></script>
 <script src="js/prescricao-motor.js?v=20261014d"></script>
