@@ -56,7 +56,7 @@ function renderLocaisAlunos(){
     return;
   }
   lista.forEach(({local:loc, vinculos})=>{
-    const nomes = vinculos.map(v => (typeof _portalNomeAlunoVinculado==='function' && _portalNomeAlunoVinculado(v.aluno_user_id)) || 'Aluno não importado ainda');
+    const nomes = vinculos.map(v => ((typeof students!=='undefined' && students.find(s=>s.perfil && s.perfil.alunoUserId===v.aluno_user_id)) || {perfil:{}}).perfil.nome || 'Aluno não importado ainda');
     const card = document.createElement('div');
     card.className = 'card';
     card.innerHTML = `
