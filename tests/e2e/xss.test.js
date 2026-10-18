@@ -33,7 +33,7 @@ const PAY2 = `');window.__x=(window.__x||0)+1;//`;
   steps.push(['fluxos tabs',"navGo('fluxos');crmFluxosTab='fluxos';renderFluxosCRM();crmFluxosTab='modalidades';renderFluxosCRM();crmFluxosTab='categorias';renderFluxosCRM()"]);
   for(let i=0;i<5;i++){
     steps.push(['aluno '+i,`selectStudent(students[${i}].id)`]);
-    for(const tab of ['perfil','anamnese','prescricao','evolucao']) steps.push([`aluno ${i} ${tab}`,`switchTab('${tab}')`]);
+    for(const tab of ['info','perfil','anamnese','prescricao','evolucao']) steps.push([`aluno ${i} ${tab}`,`switchTab('${tab}')`]);
     for(const st of ['anamnese-hist','anamnese-antro','anamnese-meta']) steps.push([`aluno ${i} ${st}`,`switchTab('anamnese');switchSubtab('${st}')`]);
     steps.push([`aluno ${i} crm`,`navAlunoCrm(students[${i}].id)`]);
     steps.push([`aluno ${i} ficha`,`closeAlunoCrm();selectStudent(students[${i}].id);switchTab('prescricao');if(students[${i}].treinos&&students[${i}].treinos[0])treinosAbrirAprovado(students[${i}].treinos[0].id)`]);

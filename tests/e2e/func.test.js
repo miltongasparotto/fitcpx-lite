@@ -4,7 +4,7 @@ const BASE="http://localhost:5178";
 const results=[];const ok=(n,c,info)=>results.push((c?'PASS ':'FAIL ')+n+(info?'  ['+info+']':''));
 (async()=>{
   const browser=await chromium.launch({headless:true});
-  const ctx=await browser.newContext({viewport:{width:1440,height:900}});
+  const ctx=await browser.newContext({viewport:{width:1700,height:900}});
   const page=await ctx.newPage();
   const errs=[],dialogs=[];page.on('pageerror',e=>errs.push(e.message.slice(0,160)));
   page.on('dialog',d=>{dialogs.push(d.type()+': '+d.message().replace(/\n/g,' ').slice(0,90));d.accept(d.type()==='prompt'?'Teste':undefined).catch(()=>{})});
@@ -34,7 +34,7 @@ const results=[];const ok=(n,c,info)=>results.push((c?'PASS ':'FAIL ')+n+(info?'
   // 2) novo aluno pela UI
   await page.click('#nav-alunos');await page.waitForTimeout(100);
   const antes=await ev(()=>students.length);
-  await page.click('#screen-alunos .page-header-actions button');await page.waitForTimeout(400);
+  await page.click('#alunos-btn-manual');await page.waitForTimeout(400);
   const depois=await ev(()=>students.length);
   ok('novo aluno: cria registro', depois===antes+1, antes+'->'+depois);
   await page.fill('#p-nome','Carla Teste Silva');

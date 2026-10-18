@@ -144,8 +144,10 @@ function _navGoForcado(tela){
   const ms=document.querySelector('.main-scroll:not(.hidden)'); if(ms) ms.scrollTop=0;
 }
 function navGo(tela){
-  if(typeof _guardNav==='function') _guardNav(()=>_navGoForcado(tela));
-  else _navGoForcado(tela);
+  // sair da ficha de um aluno novo que não foi salvo descarta o registro vazio
+  const ir=()=>{ if(typeof _novoDescartar==='function') _novoDescartar(); _navGoForcado(tela); };
+  if(typeof _guardNav==='function') _guardNav(ir);
+  else ir();
 }
 
 function toggleNavTreino(){

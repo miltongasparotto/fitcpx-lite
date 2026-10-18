@@ -87,9 +87,9 @@ async function boot(page) {
 
     // filtro volta pra página 1 e o rodapé acompanha o resultado
     await (await next()).click(); await page.waitForTimeout(60);
-    await page.click('#alunos-tabs .dp-seg-b >> text=Novo'); await page.waitForTimeout(100);
+    await page.click('#alunos-tabs .al-ab-novo'); await page.waitForTimeout(100);
     chk(L('filtro: 2 resultados, rodapé "1 a 2 de 2", sem botões de página'), await rows() === 2 && (await info()).includes('1 a 2 de 2') && (await page.$$('.al-pag-nav')).length === 0, await info());
-    await page.click('#alunos-tabs .dp-seg-b >> nth=0'); await page.waitForTimeout(100);
+    await page.click('#alunos-tabs .al-ab-novo'); await page.waitForTimeout(100);
     chk(L('limpar filtro: volta à página 1 de 4'), (await pag()).trim() === '1 de 4');
     // ordenar (só no notebook completo) volta pra página 1
     if (nome === 'ultrawide') {
@@ -107,6 +107,26 @@ async function boot(page) {
     chk(L('10 alunos ou menos: sem rodapé de paginação'), await page.evaluate(() => document.getElementById('alunos-pag').hidden));
     if (OUT) await page.screenshot({ path: `${OUT}/${nome}-paginacao.png` });
     chk(L('sem erro de JS'), errs.length === 0, errs.join(' | '));
+    await ctx.close();
+  }
+  // Altura da tela: a página não rola; só a lista rola, e só quando as linhas não cabem
+  for (const [rot, W, H, cabe] of [['tela alta (1440x1250)', 1440, 1250, true], ['tela baixa (1440x640)', 1440, 640, false], ['tablet (834x1112)', 834, 1112, true]]) {
+    const ctx = await browser.newContext({ viewport: { width: W, height: H }, hasTouch: W < 1000 });
+    const page = await ctx.newPage();
+    page.on('dialog', d => d.dismiss().catch(() => {}));
+    await boot(page);
+    const medir = () => page.evaluate(() => { const sc = document.querySelector('.al-scroll'), ms = document.querySelector('#screen-alunos .main-scroll'), pg = document.getElementById('alunos-pag').getBoundingClientRect(); return { pagina: document.documentElement.scrollHeight - innerHeight, main: ms.scrollHeight - ms.clientHeight, lista: sc.scrollHeight - sc.clientHeight, rodapeVisivel: pg.top >= 0 && pg.bottom <= innerHeight + 1 }; });
+    let m = await medir();
+    chk(rot + ': a página não rola', m.pagina <= 1 && m.main <= 1, JSON.stringify(m));
+    chk(rot + ': rodapé de paginação visível sem rolar', m.rodapeVisivel, JSON.stringify(m));
+    chk(rot + (cabe ? ': os 10 alunos cabem, a lista não rola' : ': não cabem, a lista rola por dentro'), cabe ? m.lista <= 1 : m.lista > 1, JSON.stringify(m));
+    // Tudo (33): rola só a lista e o cabeçalho das colunas fica fixo
+    await page.click('.al-pag .dp-seg-b >> text=Tudo'); await page.waitForTimeout(100);
+    m = await medir();
+    chk(rot + ' com Tudo: a página não rola e só a lista rola', m.pagina <= 1 && m.main <= 1 && m.lista > 1, JSON.stringify(m));
+    chk(rot + ' com Tudo: rodapé continua visível', m.rodapeVisivel);
+    await page.evaluate(() => { document.querySelector('.al-scroll').scrollTop = 300; });
+    chk(rot + ' com Tudo: cabeçalho das colunas fica fixo ao rolar', await page.evaluate(() => { const c = document.querySelector('.al-scroll').getBoundingClientRect().top, th = document.querySelector('.alunos-table thead th')?.getBoundingClientRect().top; return th === undefined || Math.abs(th - c) <= 2 || getComputedStyle(document.querySelector('.alunos-table thead')).display === 'none'; }));
     await ctx.close();
   }
   await browser.close();

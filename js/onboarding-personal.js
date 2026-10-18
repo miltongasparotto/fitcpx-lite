@@ -392,7 +392,10 @@ function aplicarEstadoTransferencia(s){
   const banner = $('aluno-transf-banner');
   const painel = $('tab-content');
   const t = transfDoAluno(s);
-  if(painel) Array.from(painel.children).forEach(el=>{ if(t) el.setAttribute('inert',''); else el.removeAttribute('inert'); });
+  const alvos = painel ? Array.from(painel.children) : [];
+  const cad = $('panel-perfil'); if(cad) alvos.push(cad);   // página de Cadastro também fica só pra visualização
+  alvos.forEach(el=>{ if(t) el.setAttribute('inert',''); else el.removeAttribute('inert'); });
+  if(typeof updateHeader==='function' && typeof getActive==='function' && getActive() && getActive().id===s.id) updateHeader(s);   // o selo Transferência chega depois, quando o pedido carrega
   if(!banner) return;
   if(!t){ banner.classList.add('hidden'); banner.innerHTML=''; return; }
   const saindo = _transf.saindo.some(x=>x.id===t.id);
@@ -563,30 +566,15 @@ function gerarTreinoAdaptacao(s){ /* implementar na Fase 6 */ }
 // também como "primeiro acesso": manda o mesmo código de 6 dígitos, não
 // importa se é a primeira vez ou a enésima.
 function renderPortalStatusBadge(s){
-  const badge = $('p-portal-status-badge'), btnReset = $('p-portal-reset-btn'), btnStatus = $('p-portal-status-btn');
-  if(!badge || !btnReset || !btnStatus) return;
   // Com conta criada, o e-mail é o login: só muda pelo botão "Alterar" (função no servidor).
+  // O estado do acesso (sem e-mail, aguardando, ativo, bloqueado) aparece no selo do aluno, no bloco Contato e no menu Alterar status.
   const emailInput = $('p-email'), btnEmail = $('p-email-alterar-btn');
   const comConta = !!s?.perfil?.alunoUserId;
   if(emailInput) emailInput.readOnly = comConta;
   if(btnEmail) btnEmail.classList.toggle('hidden', !comConta);
-  const email = s?.perfil?.email;
-  if(!email){
-    badge.className = 'badge badge-gray'; badge.textContent = '— preencha o e-mail';
-    btnReset.style.display = 'none'; btnStatus.style.display = 'none';
-    return;
-  }
-  btnReset.style.display = 'inline-block';
-  if(!s.perfil.alunoUserId){
-    badge.className = 'badge badge-gray'; badge.textContent = 'Aguardando primeiro acesso';
-    btnStatus.style.display = 'none';
-    return;
-  }
-  const bloqueado = s.perfil.portalStatus === 'bloqueado';
-  badge.className = bloqueado ? 'badge badge-red' : 'badge badge-green';
-  badge.textContent = bloqueado ? 'Bloqueado' : '✓ Ativo';
-  btnStatus.style.display = 'inline-block';
-  btnStatus.textContent = bloqueado ? 'Liberar acesso' : 'Bloquear acesso';
+  // Redefinir senha (ao lado do e-mail) só vale com e-mail preenchido
+  const btnSenha = $('p-email-senha-btn'), temEmail = !!String(s?.perfil?.email || '').trim();
+  if(btnSenha){ btnSenha.disabled = !temEmail; btnSenha.title = temEmail ? '' : 'Cadastre o e-mail primeiro'; }
 }
 
 // ─── Redefinir senha do aluno ──────────────────────────────────────────────
@@ -682,14 +670,16 @@ function _rsConcluirTarefas(studentId){
 }
 
 function _rsMensagem(s, url){
-  const primeiro = (s.perfil.nome || '').trim().split(/\s+/)[0] || 'tudo bem';
+  const primeiro = alunoNomeMsg(s) || 'tudo bem';
   return `Olá, ${primeiro}! Para criar uma nova senha no Portal do Aluno, toque no link abaixo. Ele vale por 24 horas e só funciona uma vez:\n\n`
     + `${url}\n\n`
     + `Depois, para trocar a senha ou o e-mail quando quiser, toque em "Conta", no topo do portal, ao lado de "Sair".`;
 }
 function _rsTelefone(s){
   const ddi = '55';
-  let p = String(s.perfil?.whatsapp || '').replace(/\D/g, '');
+  const bruto = String(s.perfil?.whatsapp || '').trim();
+  if(bruto.charAt(0) === '+') return bruto.replace(/\D/g, '');   // aluno de outro país: "+código número" vale como está
+  let p = bruto.replace(/\D/g, '');
   if(p.startsWith('55') && p.length > 11) p = p.slice(2);
   return p.length >= 10 ? ddi + p : '';
 }
@@ -748,18 +738,39 @@ async function sincronizarPedidosSenha(){
 }
 setInterval(()=>{ if(document.visibilityState==='visible') sincronizarPedidosSenha().catch(()=>{}); }, 180000);
 
-async function alunoTogglePortalStatus(){
-  const s = getActive(); if(!s || !s.perfil?.alunoUserId || !_supaUser) return;
-  if(alunoTravado(s)){ alert('Cadastro em transferência: só visualização.'); return; }
-  const novo = s.perfil.portalStatus === 'bloqueado' ? 'ativo' : 'bloqueado';
-  if(novo==='bloqueado' && !confirm('Bloquear o acesso deste aluno ao Portal? Ele continua logando, mas vê uma tela de acesso bloqueado até você liberar de novo.')) return;
-  const { error } = await Carregando.durante(novo==='bloqueado' ? 'Bloqueando o acesso...' : 'Liberando o acesso...', () => supa.from('alunos_acesso').update({ status: novo })
-    .eq('trainer_user_id', _supaUser.id).eq('aluno_user_id', s.perfil.alunoUserId));
-  if(error){ alert('Erro ao atualizar acesso: '+error.message); return; }
-  s.perfil.portalStatus = novo;
-  renderPortalStatusBadge(s);
+// Aplica no servidor o bloqueio (ou a liberação) do acesso do aluno ao Portal. A situação Bloqueado do aluno chama isto.
+// Sem conta no portal ainda, só grava a intenção: vale quando ele criar a conta (reconciliarBloqueiosPortal).
+async function alunoAplicarBloqueioPortal(s, bloquear, opts){
+  opts = opts || {};
+  const p = s.perfil || (s.perfil = {});
+  const eraBloq = p.portalStatus === 'bloqueado', comConta = !!p.alunoUserId;
+  if(bloquear === eraBloq && (!bloquear || p.bloqueioAplicado || !comConta)) return true;      // nada a mudar
+  if(!bloquear && !eraBloq && !comConta) return true;
+  if(comConta && typeof supa !== 'undefined' && typeof _supaUser !== 'undefined' && _supaUser){
+    const exec = () => supa.from('alunos_acesso').update({ status: bloquear ? 'bloqueado' : 'ativo' })
+      .eq('trainer_user_id', _supaUser.id).eq('aluno_user_id', p.alunoUserId);
+    const { error } = opts.silencioso ? await exec() : await Carregando.durante(bloquear ? 'Bloqueando o acesso...' : 'Liberando o acesso...', exec);
+    if(error){ if(!opts.silencioso) alert('Erro ao atualizar o acesso: ' + error.message); return false; }
+    p.bloqueioAplicado = bloquear;
+  } else p.bloqueioAplicado = false;
+  if(bloquear || eraBloq || comConta) p.portalStatus = bloquear ? 'bloqueado' : 'ativo';
+  if(typeof renderPortalStatusBadge === 'function') renderPortalStatusBadge(s);
   try{ localStorage.setItem(lsKey('acm-students'), JSON.stringify(students)); }catch(e){}
-  if(typeof supaAutoSave==='function') supaAutoSave();
+  if(typeof supaAutoSave === 'function') supaAutoSave();
+  return true;
+}
+// Alunos Bloqueados que criaram a conta depois do bloqueio: aplica o bloqueio no servidor (roda ao carregar a conta).
+async function reconciliarBloqueiosPortal(){
+  if(typeof supa === 'undefined' || typeof _supaUser === 'undefined' || !_supaUser) return;
+  for(const s of students){
+    const p = s.perfil || {};
+    if(p.alunoUserId && situacaoDe(s) === 'bloqueado' && !p.bloqueioAplicado) await alunoAplicarBloqueioPortal(s, true, { silencioso: true });
+  }
+}
+// Alterna Bloqueado e Ativo (mantido por compatibilidade; a ficha usa o menu Alterar status)
+async function alunoTogglePortalStatus(){
+  const s = getActive(); if(!s) return;
+  await alunoSetSituacao(s, situacaoDe(s) === 'bloqueado' ? 'ativo' : 'bloqueado');
 }
 
 // Voltar pra aba/janela depois de um tempo: reconsulta os pedidos (e roda prazos vencidos).

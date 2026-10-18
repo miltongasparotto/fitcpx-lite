@@ -20,7 +20,7 @@ function waVarsStudio(txt){
 
 function replaceVars(msg, al){
   const mod=DB.modalidades.find(m=>m.id===al.crm?.modId);
-  const firstName=alunoNome(al).split(' ')[0];
+  const firstName=alunoNomeMsg(al);
   const firstAf=(al.crm?.fluxos||[])[0];
   const dias=firstAf?diffDays(todayStr(), firstAf.triggerDate):0;
   return waVarsStudio((msg||'')
@@ -99,12 +99,12 @@ function setupWA(al, msg, tplId){
 function openWA(alunoId){
   const al=findAluno(alunoId); if(!al) return;
   const favTpl=DB.waTpls.find(t=>t.fav) || null;
-  const msg = favTpl ? replaceVars(favTpl.msg, al) : `Olá ${alunoNome(al).split(' ')[0]}! Tudo bem?`;
+  const msg = favTpl ? replaceVars(favTpl.msg, al) : `Olá ${alunoNomeMsg(al)}! Tudo bem?`;
   setupWA(al, msg, favTpl?favTpl.id:null);
 }
 function openWAForAluno(alunoId){
   const al=findAluno(alunoId); if(!al) return;
-  setupWA(al, `Olá ${alunoNome(al).split(' ')[0]}! Tudo bem?`, null);
+  setupWA(al, `Olá ${alunoNomeMsg(al)}! Tudo bem?`, null);
 }
 function selectWATpl(){
   const sel=$('wa-tpl-sel'); const id=sel.value?Number(sel.value):null;
@@ -128,10 +128,9 @@ function crmDdiOptions(sel){
 function doSendWA(){
   const msg=$('wa-msg').value;
   const ddi=$('wa-ddi').value||waDdiPadrao();
-  let p=(alunoTel(findAluno(curWA.alunoId))||'').replace(/[^0-9]/g,'');
-  if(ddi==='55' && p.startsWith('55') && p.length>11) p=p.slice(2);
-  if(!p){ crmToast('Número de telefone não cadastrado','err'); return; }
-  window.open(`https://wa.me/${ddi+p}?text=${encodeURIComponent(msg)}`,'_blank');
+  const fone=waFoneInternacional(alunoTel(findAluno(curWA.alunoId)), ddi);   // número com "+código" ignora o código do seletor
+  if(!fone){ crmToast('Número de telefone não cadastrado','err'); return; }
+  window.open(`https://wa.me/${fone}?text=${encodeURIComponent(msg)}`,'_blank');
   crmCloseModal('m-crm-wa'); crmToast('WhatsApp aberto!');
 }
 

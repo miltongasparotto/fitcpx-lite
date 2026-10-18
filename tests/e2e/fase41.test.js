@@ -24,7 +24,7 @@ async function painel(browser){
 
   // novo aluno + dados
   await page.click('#nav-alunos');await page.waitForTimeout(100);
-  await page.click('#screen-alunos .page-header-actions button');await page.waitForTimeout(400);
+  await page.click('#alunos-btn-manual');await page.waitForTimeout(400);
   await page.fill('#p-nome','Carla Teste Silva');
   await page.fill('#p-email','carla@teste.com');
   await page.fill('#p-cpf','52998224725');
@@ -71,7 +71,7 @@ async function painel(browser){
   const idTrav=await ev(()=>getActive().id);
   await ev((id)=>confirmarDeletarAluno(id),idTrav);
   ok('trava: excluir bloqueado', dialogs.some(d=>d.includes('só visualização'))&&await ev((id)=>students.some(s=>s.id===id),idTrav));
-  ok('trava: lista mostra status Transferência', await ev(()=>!!document.querySelector('#alunos-grid .al-st-transf')));
+  ok('trava: lista mostra o aviso Transferência (a situação continua a do aluno)', await ev(()=>!!document.querySelector('#alunos-grid .al-aviso-transf')));
   ok('trava: lixeira desabilitada', await ev(()=>[...document.querySelectorAll('#alunos-grid .icon-btn')].some(b=>b.disabled)));
 
   // aba Transferências
@@ -236,6 +236,7 @@ async function portal(browser){
   await page.evaluate(()=>salvarDadosPessoais());await page.waitForTimeout(400);
   const dpCall=calls.find(c=>c.acao==='dados-pessoais');
   ok('dados: envia nascimento em ISO', dpCall&&dpCall.dados.nascimento==='1990-05-20', JSON.stringify(dpCall&&dpCall.dados));
+  ok('dados: WhatsApp vai com o código do país (+55)', dpCall&&dpCall.dados.whatsapp==='+55 (44) 99999-1111', JSON.stringify(dpCall&&dpCall.dados));
   ok('dados: salvar libera as abas', await page.evaluate(()=>!document.getElementById('tab-anamnese').classList.contains('bloqueada')));
   await page.click('#tab-anamnese');
   ok('dados: aba Anamnese abre depois de liberada', await page.evaluate(()=>!document.getElementById('painel-anamnese').classList.contains('hidden')));

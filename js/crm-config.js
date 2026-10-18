@@ -133,7 +133,7 @@ function _cfgHtmlPerfil(){
     _cfgSecao('ph-chat-circle-text', 'Contato', '',
       '<div class="cfg-grid">' +
       _cfgCampo('cfg-email-pf', 'E-mail', c.emailPessoal || emailLogin, { tipo:'email', ph:'voce@email.com', max:120, dica:'O e-mail que o FitCPX usa para falar com você. Começa com o e-mail do login, que não muda por aqui. Não entra nas mensagens nem aparece ao aluno.' }) +
-      _cfgCampo('cfg-tel-pf', 'Telefone pessoal', c.telefonePessoal, { tipo:'tel', ph:'(11) 99999-0000', max:20, on:'cfgTelDigitou(this)', dica:'O número em que o FitCPX entra em contato com você. Não entra nas mensagens (o número delas é o WhatsApp da aba Marca) nem aparece ao aluno.' }) +
+      '<div class="field"><label for="cfg-tel-pf">Telefone pessoal</label>' + foneHTML('cfg-tel-pf', c.telefonePessoal) + '<div class="field-sub">O número em que o FitCPX entra em contato com você. Não entra nas mensagens (o número delas é o WhatsApp da aba Marca) nem aparece ao aluno. Toque no código do país para trocar (padrão +55).</div></div>' +
       '</div>') +
     _cfgSecao('ph-map-pin', 'Endereço', 'Seu endereço de cadastro. Digite o CEP e o resto é preenchido. Não entra nas mensagens nem aparece ao aluno.', _cfgEnderecoHtml('pf', c.enderecoPessoal)) +
     '<div class="btn-row" style="justify-content:flex-start">' +
@@ -158,8 +158,8 @@ function cfgSalvarPerfil(){
   const v = (id, atual) => ($(id) ? $(id).value.trim() : (atual || ''));
   const email = v('cfg-email-pf', c.emailPessoal);
   if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ crmToast('E-mail inválido', 'err'); return; }
-  const tel = v('cfg-tel-pf', c.telefonePessoal);
-  if(tel && tel.replace(/\D/g, '').length < 10){ crmToast('Telefone incompleto: informe o DDD e o número', 'err'); return; }
+  const tel = $('cfg-tel-pf') ? foneLer('cfg-tel-pf') : (c.telefonePessoal || '');
+  if(tel && !foneCompleto(tel)){ crmToast('Telefone incompleto: informe o DDD e o número', 'err'); return; }
   const end = _cfgEnderecoLer('pf', c.enderecoPessoal), erroEnd = _cfgEnderecoErro(end);
   if(erroEnd){ crmToast(erroEnd, 'err'); return; }
   Object.assign(c, { nomeCompleto: v('cfg-nome-completo', c.nomeCompleto), cref: v('cfg-cref', c.cref), emailPessoal: email, telefonePessoal: tel, enderecoPessoal: end });
@@ -185,10 +185,8 @@ function _cfgHtmlMarca(){
     '<div class="field cfg-span"><label>Foto</label>' + _cfgImagemHtml('foto') + '</div>' +
     '</div>';
   const contato = '<div class="cfg-grid">' +
-    '<div class="field"><label for="cfg-wa">WhatsApp</label><div style="display:flex;gap:8px">' +
-      '<select id="cfg-ddi" style="width:auto;max-width:150px" aria-label="DDI">' + crmDdiOptions(c.waCountryCode) + '</select>' +
-      '<input id="cfg-wa" type="text" inputmode="tel" value="' + escHTML(c.whatsapp) + '" placeholder="(11) 99999-0000" maxlength="20" style="flex:1" oninput="cfgTelDigitou(this)"></div>' +
-      '<div class="field-sub">O número de contato do personal para o aluno. Preenche a variável {whatsappStudio} nas mensagens de WhatsApp. O DDI escolhido é o padrão dos envios quando o número do aluno vem sem o código do país.</div></div>' +
+    '<div class="field"><label for="cfg-wa">WhatsApp</label>' + foneHTML('cfg-wa', c.whatsapp) +
+      '<div class="field-sub">O número de contato do personal para o aluno, guardado com o código do país. Preenche a variável {whatsappStudio} nas mensagens de WhatsApp. O país escolhido é o padrão dos envios quando o número do aluno vem sem o código.</div></div>' +
     _cfgCampo('cfg-email', 'E-mail', c.email, { tipo:'email', ph:'voce@email.com', max:120, dica:'O e-mail de contato com o aluno. Não tem variável nas mensagens; vai aparecer no portal em breve. Pode ser diferente do e-mail do Perfil.' }) +
     _cfgCampo('cfg-insta', 'Instagram', c.instagram, { ph:'@seuperfil', max:60, dica:'O seu perfil no Instagram para o aluno. Não tem variável nas mensagens; vai aparecer no portal em breve.' }) +
     '</div>';
@@ -264,12 +262,13 @@ async function cfgSalvarMarca(){
   const v = (id, atual) => ($(id) ? $(id).value.trim() : (atual || ''));
   const email = v('cfg-email', c.email);
   if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ crmToast('E-mail inválido', 'err'); return; }
-  const wa = v('cfg-wa', c.whatsapp);
-  if(wa && wa.replace(/\D/g, '').length < 10){ crmToast('WhatsApp incompleto: informe o DDD e o número', 'err'); return; }
+  const wa = $('cfg-wa') ? foneLer('cfg-wa') : (c.whatsapp || '');   // com o código do país
+  if(wa && !foneCompleto(wa)){ crmToast('WhatsApp incompleto: informe o DDD e o número', 'err'); return; }
   const end = _cfgEnderecoLer('st', c.enderecoStudio), erroEnd = _cfgEnderecoErro(end);
   if(erroEnd){ crmToast(erroEnd, 'err'); return; }
-  const ddi = ($('cfg-ddi') && $('cfg-ddi').value) || c.waCountryCode || '55';
-  const pais = CRM_DDI_LIST.find(p => p.code === ddi) || CRM_DDI_LIST[0];
+  const ddi = ($('cfg-wa-ddi') && $('cfg-wa-ddi').dataset.ddi) || c.waCountryCode || '55';   // país do botão = padrão dos envios
+  const pp = paisPorDdi(ddi, ($('cfg-wa-ddi') && $('cfg-wa-ddi').dataset.iso) || '') || paisPorDdi('55');
+  const pais = { code: pp[2], flag: paisBandeira(pp[0]), name: pp[1] };
   Object.assign(c, {
     studioName: v('cfg-studio', c.studioName === 'FitCPX Lite' ? '' : c.studioName) || 'FitCPX Lite', personalName: v('cfg-name', c.personalName),
     whatsapp: wa, waCountryCode: pais.code, waCountryFlag: pais.flag, waCountryName: pais.name,

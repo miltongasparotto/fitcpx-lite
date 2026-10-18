@@ -24,6 +24,7 @@ const LOG_MAX = 2000; // corte circular — a linha é um JSON só, não pode cr
 const ARQ_LABEL = {
   aluno:        'Aluno',
   avaliacao:    'Avaliação',
+  anamnese:     'Anamnese',
   treino:       'Treino',
   local:        'Local de treino',
   template:     'Template de treino',
@@ -75,6 +76,7 @@ function rotuloDoItem(tipo, item){
   if(!item) return '—';
   if(tipo === 'aluno')     return item.perfil?.nome || 'Aluno sem nome';
   if(tipo === 'avaliacao') return 'Avaliação de ' + (item.data_avaliacao || 'data não informada');
+  if(tipo === 'anamnese')  return 'Anamnese de ' + ((typeof _alDia === 'function' && _alDia(item.data) && _alFmt(_alDia(item.data))) || item.data || 'data não informada');
   if(tipo === 'treino'){
     const obj = (typeof TREINOS_OBJ_LABEL !== 'undefined' && TREINOS_OBJ_LABEL[item.objetivo]) || item.objetivo || 'Treino';
     const dt  = item.dataAprovacao || item.dataCriacao || '';
@@ -183,7 +185,7 @@ function restaurarItem(arqId){
   }
 
   // ── Avaliação e treino: precisam do aluno dono de volta na lista ────────
-  if(env.tipo === 'avaliacao' || env.tipo === 'treino'){
+  if(env.tipo === 'avaliacao' || env.tipo === 'anamnese' || env.tipo === 'treino'){
     const dono = students.find(s => s.id === env.ownerId || s._idOriginal === env.ownerId);
     if(!dono){
       return { ok:false, msg:`O aluno "${env.ownerNome||'—'}" não está mais na lista. Restaure o aluno primeiro — a avaliação volta junto com ele.` };
@@ -191,6 +193,10 @@ function restaurarItem(arqId){
     if(env.tipo === 'avaliacao'){
       if(!Array.isArray(dono.avaliacoesAntro)) dono.avaliacoesAntro = [];
       dono.avaliacoesAntro.push(item);
+    } else if(env.tipo === 'anamnese'){
+      if(!Array.isArray(dono.anamneses)) dono.anamneses = [];
+      dono.anamneses.push(item);
+      if(typeof anamAplicarAtual === 'function') anamAplicarAtual(dono);   // a ficha volta a espelhar o registro mais recente
     } else {
       if(!Array.isArray(dono.treinos)) dono.treinos = [];
       dono.treinos.push(item);

@@ -37,7 +37,7 @@ let alunoSearch='', alunoFilters={}, alunoSort={field:'nome',dir:'asc'};
 function clearAlunoFilters(){ alunoFilters={}; alunoSearch=''; renderPipelineCRM(); }
 function alunoSortVal(a,field){
   if(field==='modId'){ const m=DB.modalidades.find(x=>x.id===a.crm?.modId); return m?m.nome.toLowerCase():'zzzz'; }
-  if(field==='status') return ({lead:'0',ativo:'1',pausado:'2',inativo:'3'})[a.crm?.status||'ativo']||'1';
+  if(field==='status') return ({lead:'0',ativo:'1',inativo:'2',bloqueado:'3'})[situacaoDe(a)]||'1';
   if(field==='proximo'){ const nt=getAlunoTasks(a.id).filter(t=>!t.done).sort((x,y)=>liveDate(x).localeCompare(liveDate(y)))[0]; return nt?liveDate(nt):'99999999'; }
   return alunoNome(a).toLowerCase();
 }
@@ -49,7 +49,7 @@ function getFilteredAlunos(){
     list=list.filter(a=>alunoNome(a).toLowerCase().includes(q)||(a.crm?.apelido||'').toLowerCase().includes(q)||alunoTel(a).includes(alunoSearch));
   }
   if(alunoFilters.modId) list=list.filter(a=>a.crm?.modId===alunoFilters.modId);
-  if(alunoFilters.status) list=list.filter(a=>(a.crm?.status||'ativo')===alunoFilters.status);
+  if(alunoFilters.status) list=list.filter(a=>situacaoDe(a)===alunoFilters.status);
   if(alunoFilters.review) list=list.filter(a=>needsReview(a));
   const field=alunoSort.field||'nome', dir=alunoSort.dir||'asc';
   list.sort((a,b)=>{ const va=alunoSortVal(a,field), vb=alunoSortVal(b,field); return dir==='asc'?va.localeCompare(vb):vb.localeCompare(va); });
@@ -59,8 +59,8 @@ function alunoRowHTML(al){
   const today=todayStr();
   const next=getAlunoTasks(al.id).filter(t=>!t.done).sort((a,b)=>liveDate(a).localeCompare(liveDate(b)))[0];
   const mod=DB.modalidades.find(m=>m.id===al.crm?.modId);
-  const status=al.crm?.status||'ativo';
-  const stMap={lead:['var(--blue)','<i class=sd-blue></i> Lead'],ativo:['var(--accent)','<i class=sd-green></i> Ativo'],pausado:['var(--amber)','<i class=ph-pause></i> Pausado'],inativo:['var(--red)','<i class=sd-red></i> Inativo']};
+  const status=situacaoDe(al);
+  const stMap={lead:['var(--blue)','<i class=sd-blue></i> Lead'],ativo:['var(--accent)','<i class=sd-green></i> Ativo'],inativo:['var(--text3)','<i class=sd-gray></i> Inativo'],bloqueado:['var(--red)','<i class=sd-red></i> Bloqueado']};
   const st=stMap[status]||stMap.ativo;
   const reviewChip=needsReview(al)?` <span class="badge badge-amber"><i class=ph-alarm></i> revisar</span>`:'';
   let nextHtml='<span style="color:var(--text3)">—</span>';
@@ -83,8 +83,8 @@ function alunoRowHTML(al){
 }
 function alunoListAreaHTML(){
   const list=getFilteredAlunos();
-  const stLbls={lead:'Lead',ativo:'Ativo',pausado:'Pausado',inativo:'Inativo'};
-  const usedStatuses=['lead','ativo','pausado','inativo'].filter(s=>students.some(a=>!a.crm?.archived&&(a.crm?.status||'ativo')===s));
+  const stLbls={lead:'Lead',ativo:'Ativo',inativo:'Inativo',bloqueado:'Bloqueado'};
+  const usedStatuses=['lead','ativo','inativo','bloqueado'].filter(s=>students.some(a=>!a.crm?.archived&&situacaoDe(a)===s));
   const reviewCount=students.filter(a=>needsReview(a)).length;
   const banner = reviewCount ? `<div class="badge badge-amber" style="margin-bottom:10px;cursor:pointer;padding:6px 10px" onclick="alunoFilters={review:1};renderPipelineCRM()"><i class=ph-alarm></i> ${reviewCount} cliente(s) pausado(s)/inativo(s) há +30 dias — revisar</div>` : '';
   const sortBtn=(field,label)=>{ const active=alunoSort.field===field; const nextDir=active&&alunoSort.dir==='asc'?'desc':'asc'; return `<span style="cursor:pointer;font-weight:700" onclick="alunoSort={field:'${field}',dir:'${nextDir}'};renderPipelineCRM()">${label}${active?(alunoSort.dir==='asc'?' ↑':' ↓'):''}</span>`; };
@@ -116,13 +116,13 @@ function initAlunoForm(al){
   editingAlunoCrmId = al?al.id:null;
   $('m-crm-aluno-ttl').textContent = al?'Editar Cliente':'Novo Cliente';
   $('f-nome').value = al?alunoNome(al):'';
-  $('f-tel').value = al?alunoTel(al):'';
+  foneCarregar('f-tel', al?alunoTel(al):'');
   $('f-apelido').value = al?.crm?.apelido||'';
   $('f-obs').value = al?.crm?.obs||'';
 }
 function saveAluno(){
   const nome=$('f-nome').value.trim();
-  const tel=$('f-tel').value.trim();
+  const tel=foneLer('f-tel');   // guardado com o código do país: +55 (11) 98765-4321
   if(!nome||!tel){ crmToast('Preencha nome e WhatsApp','err'); return; }
   const apelido=$('f-apelido').value.trim();
   const obs=$('f-obs').value.trim();
@@ -135,7 +135,7 @@ function saveAluno(){
     crmToast('Cliente atualizado');
   } else {
     const al={ id:novoId(), perfil:{nome,whatsapp:tel}, anamnese:{}, prescricao:{}, reavaliacao:null,
-      crm:{ status:'lead', statusSince:todayStr(), cor:colors[students.length%colors.length], apelido, obs, fluxos:[] } };
+      crm:{ status:'lead', sit2:1, statusSince:todayStr(), cor:colors[students.length%colors.length], apelido, obs, fluxos:[] } };
     students.push(al);
     if(typeof renderStudentList==='function') renderStudentList();
     crmToast('Cliente cadastrado! Configure o fluxo na página do cliente.');
@@ -160,15 +160,10 @@ function addHistory(alunoId, tipo, texto, sub){
   const key=String(alunoId);
   (DB.historico[key]=DB.historico[key]||[]).unshift({tipo, texto, sub, data:new Date().toISOString()});
 }
-function setAlunoStatus(id,status){
+async function setAlunoStatus(id,status){
   const al=findAluno(id); if(!al) return;
-  const crm=ensureCrm(al);
-  if((crm.status||'lead')!==status){
-    crm.statusSince=todayStr();
-    const lbls={lead:'Lead',ativo:'Ativo',pausado:'Pausado',inativo:'Inativo'};
-    addHistory(id,'status','Status: '+(lbls[status]||status),'');
-  }
-  crm.status=status; crmSave(); navAlunoCrm(id); crmToast('Status atualizado');
+  await alunoSetSituacao(al,status);   // mesma regra da ficha: Bloqueado trava o acesso ao portal
+  navAlunoCrm(id);
 }
 function changeAlunoColor(id,color){ const al=findAluno(id); if(!al) return; ensureCrm(al).cor=color; crmSave(); navAlunoCrm(id); }
 function changeAlunoMod(id,modId){
@@ -254,8 +249,8 @@ function renderAlunoPage(id){
   const done=allTasks.filter(t=>t.done);
   const urgentes=pending.filter(t=>diffDays(liveDate(t),today)<0).length;
 
-  const statusCfg={lead:{color:'var(--blue)',lbl:'Lead',icon:'sd-blue'},ativo:{color:'var(--accent)',lbl:'Ativo',icon:'sd-green'},pausado:{color:'var(--amber)',lbl:'Pausado',icon:'sd-amber'},inativo:{color:'var(--red)',lbl:'Inativo',icon:'sd-red'}};
-  const st=crm.status||'ativo'; const sc=statusCfg[st]||statusCfg.ativo;
+  const statusCfg={lead:{color:'var(--blue)',lbl:'Lead',icon:'sd-blue'},ativo:{color:'var(--accent)',lbl:'Ativo',icon:'sd-green'},inativo:{color:'var(--text3)',lbl:'Inativo',icon:'sd-gray'},bloqueado:{color:'var(--red)',lbl:'Bloqueado',icon:'sd-red'}};
+  const st=situacaoDe(al); const sc=statusCfg[st]||statusCfg.ativo;
   const statusOptions=Object.entries(statusCfg).map(([k,v])=>`<option value="${k}"${k===st?' selected':''}>${v.lbl}</option>`).join('');
 
   const infoBox=`<div class="card">

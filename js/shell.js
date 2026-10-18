@@ -8,7 +8,8 @@
 //   celular < 768px    : barra superior + gaveta pelo botão do menu
 // A navegação (navGo, ids, onclick) é a mesma nos três.
 
-const SHELL_BP_DESK = 1200, SHELL_BP_TAB = 768;
+// 18/10/2026: o MacBook (1200 a 1439 px) usa o conteudo do notebook com o menu em icones (76 px); menu completo so a partir de 1440 px.
+const SHELL_BP_DESK = 1440, SHELL_BP_TAB = 768;   // 'desk' = menu completo; 'tab' = menu em icones (MacBook e tablet)
 function shellModo(){
   const w = window.innerWidth;
   return w >= SHELL_BP_DESK ? 'desk' : w >= SHELL_BP_TAB ? 'tab' : 'mob';

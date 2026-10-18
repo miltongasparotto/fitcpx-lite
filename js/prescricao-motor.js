@@ -840,7 +840,7 @@ function renderPainelAssimetrias(){
 
   if(!notas.length){ el.style.display='none'; return; }
   el.style.display='block';
-  el.innerHTML = `
+  const corpoAss = `
     <div style="padding:10px 14px;background:var(--amber-dim);border:1px solid var(--amber-line);border-radius:var(--radius)">
       <div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--amber);margin-bottom:7px;">
         ⚑ Ajustes por assimetrias — Camada 4
@@ -849,6 +849,7 @@ function renderPainelAssimetrias(){
         ${notas.map(n=>`<div style="font-size:12px;color:var(--text2);line-height:1.5">${n}</div>`).join('')}
       </div>
     </div>`;
+  el.innerHTML = prAcc('ph-warning', notas.length + (notas.length===1?' ajuste':' ajustes') + ' por assimetria', 'Camada 4: toque para ver', corpoAss, {cls:'pr-acc-aviso', key:'assim'});
 }
 
 
@@ -1457,11 +1458,20 @@ function renderTabelaVolumeGlobal(){
     if(!semEx) switchWrap.addEventListener('click', function(){ toggleGrupo(this.dataset.grupo); });
     td0.appendChild(switchWrap);
 
-    // td1: label
+    // td1: label. No notebook só o nome; no celular e no tablet (css/prescricao.css) vira nome + resumo + selo da situação + seta que abre os detalhes.
     const td1 = document.createElement('td');
     td1.style.cssText = 'font-size:12px;font-weight:' + (ativo ? '500' : '400') +
       ';color:' + (semEx ? 'var(--amber)' : ativo ? 'var(--text)' : 'var(--text3)');
-    td1.textContent = label + (semEx ? ' ' : '');
+    td1.innerHTML = '<div class="vol-nm"><span class="vol-n">' + escHTML(label) + (semEx ? ' ' : '') + '</span>'
+      + '<span class="vol-res" id="vol-res-' + id + '">' + (ativo ? semMin + '–' + semMax + ' séries por semana' : 'Desligado') + '</span></div>'
+      + '<div class="vol-r"><span class="vol-chip" id="vol-chip-' + id + '" style="color:' + cor + ';background:color-mix(in srgb,' + cor + ' 14%, transparent)">' + escHTML(status) + '</span>'
+      + '<span class="vol-car"><i class=ph-caret-down></i></span></div>';
+    td1.addEventListener('click', function(){
+      if(!_s3._volAberto) _s3._volAberto = {};
+      _s3._volAberto[id] = !_s3._volAberto[id];
+      tr.classList.toggle('aberta', !!_s3._volAberto[id]);
+    });
+    if(_s3._volAberto && _s3._volAberto[id]) tr.classList.add('aberta');
     if(semEx) td1.title = 'Sem exercício disponível para o nível e o local selecionados';
 
     // helper: cria célula input + −/+
@@ -1469,6 +1479,7 @@ function renderTabelaVolumeGlobal(){
       const td = document.createElement('td');
       td.style.textAlign = 'center';
       const wrap = document.createElement('div');
+      wrap.className = 'vol-st';
       wrap.style.cssText = 'display:flex;align-items:center;gap:2px;justify-content:center';
 
       const btnM = document.createElement('button');
@@ -1506,14 +1517,17 @@ function renderTabelaVolumeGlobal(){
     const td2 = makeInpCell('semMin', semMin, 0, 50, 38);
     const td3 = makeInpCell('semMax', semMax, 0, 50, 38);
     const td4 = makeInpCell('serEx',  serEx,  1,  8, 38);
+    td2.dataset.l = 'Séries/sem mínimo'; td3.dataset.l = 'Séries/sem máximo'; td4.dataset.l = 'Séries por exercício';
 
     const td5 = document.createElement('td');
     td5.style.cssText = 'font-variant-numeric:tabular-nums;font-size:12px;color:var(--accent);text-align:center;font-weight:600';
     td5.textContent = exRange;
+    td5.dataset.l = 'Exercícios';
 
     const td6 = document.createElement('td');
     td6.style.cssText = 'font-variant-numeric:tabular-nums;font-size:12px;color:var(--text3);text-align:center';
     td6.textContent = (mav_min||mev) + '–' + (mav_max||mrv);
+    td6.dataset.l = 'MEV–MRV';
 
     // td7: barra de status na régua do grupo (MEV / MAV / MRV) — RÉGUA A.
     // O valor aqui é uma FAIXA (Sér/sem mín–máx), não um número: a barra
@@ -1521,6 +1535,7 @@ function renderTabelaVolumeGlobal(){
     // classifica o ponto médio dela.
     const td7 = document.createElement('td');
     td7.style.cssText = 'min-width:170px';
+    td7.className = 'vol-bar';
     const gRef  = {mev, mav_min, mav_max, mrv};
     const mk    = _volMarcos(gRef);
     const barWrap = document.createElement('div');
@@ -1545,6 +1560,7 @@ function renderTabelaVolumeGlobal(){
     // td_filtro: resumo de filtros clínicos Camada 3
     const tdFiltro = document.createElement('td');
     tdFiltro.style.cssText = 'text-align:center;font-size:12px;font-variant-numeric:tabular-nums;';
+    tdFiltro.dataset.l = 'Exercícios disponíveis';
     try {
       // Contagem já feita em aplicarDisponibilidadeGrupos() — uma passada pelo
       // banco por render, em vez de 12 chamadas independentes aqui dentro.
@@ -1564,6 +1580,7 @@ function renderTabelaVolumeGlobal(){
     // td8: botão reset linha
     const td8 = document.createElement('td');
     td8.style.textAlign = 'center';
+    td8.className = 'vol-rs';
     const btnReset = document.createElement('button');
     btnReset.innerHTML = '<i class=ph-arrow-counter-clockwise></i>';
     btnReset.title = 'Restaurar ' + label + ' para MEV–MRV';
@@ -1573,6 +1590,8 @@ function renderTabelaVolumeGlobal(){
     btnReset.addEventListener('mouseout',  function(){ this.style.color='var(--text3)'; });
     btnReset.addEventListener('click', function(){ resetarLinhaGrupo(this.dataset.grupo); });
     td8.appendChild(btnReset);
+    const rsTxt = document.createElement('span'); rsTxt.className = 'vol-rs-t'; rsTxt.textContent = 'Restaurar este grupo'; td8.appendChild(rsTxt);
+    td8.addEventListener('click', function(e){ if(e.target.closest('button')) return; btnReset.click(); });
 
     [td0,td1,td2,td3,td4,td5,td6,td7,tdFiltro,td8].forEach(td => tr.appendChild(td));
     tbody.appendChild(tr);
@@ -1706,6 +1725,9 @@ function atualizarLinhaTabela(id){
   }
   const span = $('bar-status-' + id);
   if(span){ span.textContent = status; span.style.color = cor; }
+  const resEl = $('vol-res-' + id); if(resEl) resEl.textContent = ativo ? semMin + '–' + semMax + ' séries por semana' : 'Desligado';
+  const chipEl = $('vol-chip-' + id);
+  if(chipEl){ chipEl.textContent = status; chipEl.style.color = cor; chipEl.style.background = 'color-mix(in srgb,' + cor + ' 14%, transparent)'; }
   // Opacidade da linha
   row.style.opacity = ativo ? '1' : '0.45';
 }
@@ -2835,12 +2857,14 @@ function renderTelaDivisao(){
 
     // ── Card ────────────────────────────────────────────────────────────────
     const card = document.createElement('div');
+    card.className = 'dv-card' + (sel ? ' sel' : '');
     card.style.cssText =
       'border-radius:8px;border:2px solid ' + (sel ? 'var(--accent)' : 'var(--border)') +
       ';background:var(--bg3);overflow:hidden;margin-bottom:8px';
 
     // Header (clique = seleciona)
     const header = document.createElement('div');
+    header.className = 'dv-h';
     header.style.cssText =
       'display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;' +
       'background:' + (sel ? 'var(--accent-dim)' : 'var(--bg4)');
@@ -2854,6 +2878,7 @@ function renderTelaDivisao(){
     if(sel) radioEl.innerHTML = '<div style="width:6px;height:6px;border-radius:50%;background:var(--bg)"></div>';
 
     const infoEl = document.createElement('div');
+    infoEl.className = 'dv-info';
     infoEl.style.cssText = 'flex:1';
     infoEl.innerHTML =
       '<span style="font-size:13px;font-weight:700;color:' + (sel ? 'var(--accent)' : 'var(--text)') + '">' + op.nome + '</span>' +
@@ -2868,7 +2893,8 @@ function renderTelaDivisao(){
     const editBtn = document.createElement('button');
     editBtn.className='btn btn-ghost btn-sm';
     editBtn.style.cssText='font-size:12px;padding:3px 8px;flex-shrink:0';
-    editBtn.textContent='';
+    editBtn.innerHTML='<i class=ph-pencil-simple></i>';
+    editBtn.setAttribute('aria-label','Editar critérios desta divisão');
     editBtn.title='Editar critérios desta divisão (formulário completo da biblioteca)';
     editBtn.addEventListener('click', function(e){
       e.stopPropagation();
@@ -2899,7 +2925,8 @@ function renderTelaDivisao(){
       const delBtn = document.createElement('button');
       delBtn.className = 'btn btn-ghost btn-sm';
       delBtn.style.cssText = 'font-size:12px;padding:3px 8px;flex-shrink:0;color:var(--red)';
-      delBtn.textContent = '';
+      delBtn.innerHTML = '<i class=ph-trash></i>';
+      delBtn.setAttribute('aria-label','Excluir esta divisão');
       delBtn.title = op._libId != null ? 'Excluir este modelo da biblioteca' : 'Excluir esta divisão rápida (não salva)';
       delBtn.addEventListener('click', function(e){
         e.stopPropagation();
@@ -2923,6 +2950,7 @@ function renderTelaDivisao(){
 
     // Mini barras de carga + tempo estimado por sessão
     const minibars = document.createElement('div');
+    minibars.className = 'dv-mini';
     minibars.style.cssText = 'display:flex;gap:12px;flex-wrap:wrap;padding:6px 14px 8px;background:var(--bg3)';
     const objAtual = selectedObj || val('pr-objetivo') || 'Saude';
     op.cargasSessao.forEach((c, ti) => {
@@ -2939,10 +2967,11 @@ function renderTelaDivisao(){
       const tLabel = tMin > 0 ? `${tMin}–${tMax}min` : '';
 
       const d = document.createElement('div');
+      d.className = 'dv-sess';
       d.style.cssText = 'display:flex;align-items:center;gap:5px';
       d.innerHTML =
         '<span style="font-variant-numeric:tabular-nums;font-size:12px;font-weight:700;color:var(--text);min-width:14px">' + letra + '</span>' +
-        '<div style="width:60px;height:5px;background:var(--bg2);border-radius:6px;overflow:hidden">' +
+        '<div class="dv-bar" style="width:60px;height:5px;background:var(--bg2);border-radius:6px;overflow:hidden">' +
           '<div style="width:' + pct + '%;height:100%;background:' + (sel?'var(--accent)':'var(--text3)') + ';border-radius:6px"></div>' +
         '</div>' +
         '<span style="font-variant-numeric:tabular-nums;font-size:12px;color:var(--text2)">' + c + 's</span>' +
@@ -4020,7 +4049,9 @@ function renderPreviewVolSemanal(targetId){
   }).join('');
 
   const totalSem = Object.values(volSem).reduce((a,b)=>a+b,0);
-  el.innerHTML = `
+  const contFx = {}; grupos.forEach(g => { const gr = GRUPOS_MAPA.find(x => x.id === g); if(!gr) return; const k = classificarVolumeGrupo(volSem[g], gr, true); contFx[k] = (contFx[k]||0) + 1; });
+  const resumoVol = totalSem + ' séries' + (contFx.ideal ? ' · ' + contFx.ideal + ' ideais' : '') + (contFx.baixo ? ' · ' + contFx.baixo + ' baixos' : '');
+  const corpoVol = `
     <div class="section-label"><i class=ph-chart-bar></i> Volume Semanal por Grupo — ${obj}</div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:8px">
       Referência Israetel 2019, por grupo muscular: <strong>MEV</strong> (mínimo efetivo) → <strong>MAV</strong> (máximo adaptativo) → <strong>MRV</strong> (máximo recuperável)
@@ -4045,6 +4076,7 @@ function renderPreviewVolSemanal(targetId){
     <div style="margin-top:8px;font-size:12px;color:var(--text3);text-align:right">
       Total na semana: <strong style="color:var(--accent);font-variant-numeric:tabular-nums;">${totalSem} séries</strong>
     </div>`;
+  el.innerHTML = prAcc('ph-chart-bar', 'Volume semanal por grupo', resumoVol, corpoVol, {cls:'pr-acc-vol', key:'volsem-' + (targetId || 'p')});
 }
 
 
@@ -4059,9 +4091,10 @@ function renderFichaTabs(){
   const tabs = $('ficha-tabs'); tabs.innerHTML = '';
   f.treinos.forEach((t,i) => {
     const tab = document.createElement('div');
-    tab.className = 'tab' + (i===_s3.treinoAtivo?' active':'');
+    tab.className = 'tab ft-tab' + (i===_s3.treinoAtivo?' active':'');
     tab.style.cssText = 'font-size:14px;font-weight:600;padding:9px 22px';
-    tab.textContent = `Treino ${String.fromCharCode(65+i)}`; // fixo por posição — nome editável fica no card
+    const nSer = t.exercicios.reduce((a,e)=>a+(parseInt(e.series)||0),0);
+    tab.innerHTML = `Treino ${String.fromCharCode(65+i)}` + '<small class="ft-n">' + nSer + 's</small>'; // fixo por posição — nome editável fica no card
     tab.onclick = () => { _s3.treinoAtivo = i; renderFichaTabs(); };
     tabs.appendChild(tab);
   });
@@ -4466,9 +4499,11 @@ function renderTreinoAtivo(){
   </div>`;
 
   // ── Parte Principal ──────────────────────────────────────────────────────
+  const tiposAq = [...new Set(aquecimento.map(a => a.tipo).filter(Boolean))].join(' · ');
+  const aquecAcc = prAcc('ph-fire', 'Aquecimento', aquecimento.length ? aquecimento.length + (aquecimento.length===1?' exercício':' exercícios') + (tiposAq ? ' · ' + tiposAq : '') : 'Sem exercícios', aquecimentoHtml, {cls:'pr-acc-aq', key:'aq-' + ti});
   cont.innerHTML = `
     <div id="sessao-info-box">${sessaoInfoHtml}</div>
-    ${aquecimentoHtml}
+    ${aquecAcc}
     <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:8px">
       <div style="font-size:12px;font-weight:700;color:var(--text2);padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--border)"><i class=ph-hand-fist></i> Parte Principal</div>
       <div id="cards-treino"></div>
@@ -4549,6 +4584,7 @@ function renderTreinoAtivo(){
             <div id="${dropId}" class="hidden"></div>
           </div>
         </div>
+        <div class="excv2-ctrls">
         <div class="excv2-pg">
           <div class="excv2-plbl">Séries</div>
           <div class="excv2-pctrl">
@@ -4577,12 +4613,18 @@ function renderTreinoAtivo(){
             <button class="excv2-pm pl" onclick="_pmExercicio(${ti},${rowIdx},'intervalo',1)">+</button>
           </div>
         </div>
+        </div>
         ${videoBtn}
         <div style="position:relative;flex-shrink:0">
           <button class="excv2-iconbtn excv2-more" id="excv2-morebtn-${ti}-${rowIdx}"
             onclick="_toggleMenuExercicio(${ti},${rowIdx})" title="Mais opções">⋮</button>
           <div id="${menuId}" class="excv2-omenu hidden">
             <div class="excv2-oi" onclick="_toggleObsExercicio(${ti},${rowIdx})"><span><i class=ph-note-pencil></i></span> Observação</div>
+            ${dbExFull?.url ? `<div class="excv2-oi mv" onclick="abrirVideoModal('${dbExFull.url.replace(/'/g,"\\'")}','${ex.nome.replace(/'/g,"\\'")}')"><span><i class=ph-play></i></span> Ver vídeo</div>` : ''}
+            ${isHead && podeSubir ? `<div class="excv2-oi mv" onclick="moverExercicio(${ti},${rowIdx},-1)"><span><i class=ph-arrow-up></i></span> ${emGrupo?'Subir grupo':'Subir'}</div>` : ''}
+            ${isHead && groupEndIdx<treino.exercicios.length-1 ? `<div class="excv2-oi mv" onclick="moverExercicio(${ti},${rowIdx},1)"><span><i class=ph-arrow-down></i></span> ${emGrupo?'Descer grupo':'Descer'}</div>` : ''}
+            ${podeSubirNoGrupo ? `<div class="excv2-oi mv" onclick="moverDentroDoGrupo(${ti},${rowIdx},-1)"><span><i class=ph-arrow-up></i></span> Subir no grupo</div>` : ''}
+            ${podeDescerNoGrupo ? `<div class="excv2-oi mv" onclick="moverDentroDoGrupo(${ti},${rowIdx},1)"><span><i class=ph-arrow-down></i></span> Descer no grupo</div>` : ''}
             ${temProximoParaAgrupar ? `<div class="excv2-oi delink"
               onclick="agruparProximo(${ti},${rowIdx})"><span><i class=ph-link></i></span> ${_labelGrupo((emGrupo?info.total:1)+1)} (agrupar)</div>` : ''}
             ${emGrupo ? `<div class="excv2-oi" onclick="removerDoGrupo(${ti},${rowIdx})"><span><i class=ph-lock-open></i></span> Remover do grupo</div>` : ''}
@@ -5495,6 +5537,7 @@ function treinosMostrarLista(){
   if(lv) lv.style.display='block';
   if(fv) fv.style.display='none';
   _treinoEditId = null;
+  if(typeof fxFormFechar==='function') fxFormFechar('treino');
   renderTreinosLista();
 }
 
@@ -5502,6 +5545,9 @@ function treinosMostrarForm(){
   const lv=$('treinos-lista-view'), fv=$('treinos-form-view');
   if(lv) lv.style.display='none';
   if(fv) fv.style.display='block';
+  // o treino abre em página própria (js/historico.js), sem o cartão do aluno
+  const s=getActive(), t=s && _treinoEditId!=null ? getTreinoPorId(s,_treinoEditId) : null;
+  fxFormAbrir('treino', t && t.status===TREINOS_STATUS.APROVADO ? treinosNome(t) : 'Novo treino');
 }
 
 // Botão "+ Adicionar Treino" — se já existe rascunho em andamento, pergunta
@@ -5826,63 +5872,66 @@ function _copiarBlocoFitCpx(elId, btnEl){
   }
 }
 
+// Nome do treino pela data em que foi aprovado (ou criado): "Treino de setembro de 2026"
+function treinosNome(t){
+  const d=_alDia(t.dataAprovacao||t.dataCriacao);
+  return d ? 'Treino de '+HX_MESES[d.getMonth()]+' de '+d.getFullYear() : 'Treino';
+}
+// Situação de cada treino na lista: rascunho; o aprovado mais recente fica Ativo (ou Vencido, passada a data); os anteriores, Encerrados
+function treinosFim(t){ // vencimento gravado ou, nos treinos antigos que não têm, calculado pela aprovação + validade
+  return t.dataVencimento || (t.dataAprovacao ? _treinosCalcularVencimento(t.dataAprovacao, t.prazoSemanas) : null);
+}
+function treinosSituacao(s, t){
+  if(t.status!==TREINOS_STATUS.APROVADO) return {k:'rascunho', lbl:'Rascunho', badge:'badge-amber'};
+  const ult=getUltimoTreinoAprovado(s);
+  if(!ult || ult.id!==t.id) return {k:'encerrado', lbl:'Encerrado', badge:'badge-gray'};
+  const fim=_alDia(treinosFim(t));
+  return fim && fim<_alHoje() ? {k:'vencido', lbl:'Vencido', badge:'badge-red'} : {k:'ativo', lbl:'Ativo', badge:'badge-green'};
+}
 function renderTreinosLista(){
   const s=getActive();
   const cont=$('treinos-lista-tabela'); if(!cont) return;
   if(!s){ cont.innerHTML=''; return; }
   const lista = obterTreinosOrdenados(s);
   if(!lista.length){
-    cont.innerHTML = `<div class="empty"><i class=ph-barbell></i><div class="empty-title">Nenhum treino criado ainda</div><div class="empty-text">Use Adicionar treino para montar o primeiro treino deste aluno.</div></div>`;
+    cont.innerHTML = hxVazio('ph-barbell', 'Nenhum treino criado ainda', 'Use Novo treino para montar o primeiro treino deste aluno.');
     return;
   }
-  let html = `<div style="overflow-x:auto"><table class="tbl">
-    <thead><tr>
-      <th>Data</th><th>Objetivo</th><th>Modelo</th><th>Frequência</th><th>Status</th><th>Vencimento</th><th style="text-align:right">Ações</th>
-    </tr></thead><tbody>`;
-  lista.forEach(t=>{
-    const objLbl = TREINOS_OBJ_LABEL[t.objetivo]||t.objetivo||'—';
+  const ult=getUltimoTreinoAprovado(s);
+  cont.innerHTML = lista.map(t=>{
     const isAprovado = t.status===TREINOS_STATUS.APROVADO;
-    const statusBadge = isAprovado
-      ? `<span class="badge badge-green">Aprovado</span>`
-      : `<span class="badge badge-amber">Rascunho</span>`;
+    const sit = treinosSituacao(s,t);
+    const objLbl = TREINOS_OBJ_LABEL[t.objetivo]||t.objetivo||'—';
+    const nivel = HX_NIVEL[t.nivel]||t.nivel||'';
     const envio = t.envioFitCpx;
     const envioBadge = !envio ? '' : envio.status==='enviado'
-      ? `<div style="margin-top:4px"><span class="badge badge-blue" style="font-size:12px" title="${envio.enviadoEm}"><i class=ph-upload-simple></i> Enviado FitCpx</span></div>`
-      : `<div style="margin-top:4px"><span class="badge" style="font-size:12px;background:var(--red-dim);color:var(--red)" title="${escHTML(envio.obs||'')}"><i class=ph-warning></i> Erro no envio</span></div>`;
-    const dataLbl = isAprovado ? (t.dataAprovacao||'—') : (t.dataCriacao||'—');
-    const acao = isAprovado
-      ? `<button type="button" class="btn btn-ghost btn-xs" onclick="treinosAbrirAprovado(${t.id})">Ver / Editar</button>`
-      : `<button type="button" class="btn btn-primary btn-xs" onclick="treinosContinuarRascunho(${t.id})">Continuar</button>`;
-
-    // Vencimento — só informativo (não bloqueia nada), ver getStatusVencimento em treinos-store.js
-    let vencLbl = '—';
-    const st = getStatusVencimento(t);
-    if(st){
-      const semTxt = st.diasRestantes<0
-        ? `${Math.abs(st.semanasRestantes)} sem. atrás`
-        : `${st.semanasRestantes} sem. restante${st.semanasRestantes===1?'':'s'}`;
-      const indicador = {
-        vencido: '<i class=sd-red></i> Vencido', proximo: '<i class=ph-warning></i> Vencimento próximo', agendar: '<i class=ph-calendar-dots></i> Agendar avaliação', ok: '',
-      }[st.tier];
-      const cor = {vencido:'var(--red)', proximo:'var(--amber)', agendar:'var(--accent)', ok:'var(--text3)'}[st.tier];
-      vencLbl = `<div style="font-size:12px;color:${cor}">${st.dataVencimento} · ${semTxt}</div>${indicador?`<div style="font-size:12px;color:${cor}">${indicador}</div>`:''}`;
+      ? '<div style="margin-top:4px"><span class="badge badge-blue" title="'+escHTML(envio.enviadoEm||'')+'"><i class=ph-upload-simple></i>Enviado FitCpx</span></div>'
+      : '<div style="margin-top:4px"><span class="badge badge-red" title="'+escHTML(envio.obs||'')+'"><i class=ph-warning></i>Erro no envio</span></div>';
+    // Vigência: da aprovação até o vencimento; o treino ativo mostra a barra de quanto do prazo já passou
+    let vig='<div class="hx-v">—</div>';
+    if(isAprovado){
+      const ini=_alDia(t.dataAprovacao), fim=_alDia(treinosFim(t));
+      const fmt=d=>d ? String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0') : '';
+      const dias=fim ? Math.round((fim-_alHoje())/864e5) : null;
+      const sub = dias===null ? '' : dias>=0 ? (dias===0 ? 'vence hoje' : 'vence em '+dias+' dia'+(dias===1?'':'s')) : (sit.k==='encerrado' ? 'encerrado' : 'venceu')+' há '+Math.abs(dias)+' dia'+(Math.abs(dias)===1?'':'s');
+      let barra='';
+      if(sit.k==='ativo' && ini && fim && fim>ini){ const pct=Math.max(0,Math.min(100,Math.round((_alHoje()-ini)/(fim-ini)*100))); barra='<div class="hx-prog"><i style="width:'+pct+'%"></i></div>'; }
+      vig='<div class="hx-v">'+(ini?fmt(ini):'—')+(fim?' a '+_alFmt(fim):'')+'</div>'+(sub?'<div class="hx-sub2">'+sub+'</div>':'')+barra;
     }
-
-    html += `<tr>
-      <td>${dataLbl}</td>
-      <td>${objLbl}</td>
-      <td class="al-data">${escHTML(t.modelo||'—')}</td>
-      <td>${escHTML(t.frequencia||'—')}</td>
-      <td>${statusBadge}${envioBadge}</td>
-      <td>${vencLbl}</td>
-      <td class="al-acoes">
-        ${acao}
-        <button type="button" class="icon-btn" onclick="treinosExcluir(${t.id})" title="Excluir treino" aria-label="Excluir treino"><i class=ph-trash></i></button>
-      </td>
-    </tr>`;
-  });
-  html += '</tbody></table></div>';
-  cont.innerHTML = html;
+    const abrir = isAprovado ? 'treinosAbrirAprovado('+t.id+')' : 'treinosContinuarRascunho('+t.id+')';
+    const dt = _alDia(isAprovado ? t.dataAprovacao : t.dataCriacao);
+    return '<div class="hx-tr'+(ult && ult.id===t.id ? ' atual' : '')+'" onclick="'+abrir+'">'
+      + '<div class="hx-c"><div class="hx-main">'+escHTML(treinosNome(t))+'</div><div class="hx-sub2">'+(isAprovado?'Aprovado em ':'Criado em ')+(dt?_alFmt(dt):'—')+'</div></div>'
+      + '<div class="hx-r2">'
+      +   '<div class="hx-c" data-l="Vigência">'+vig+'</div>'
+      +   '<div class="hx-c" data-l="Objetivo"><div class="hx-v">'+escHTML(objLbl)+'</div>'+(nivel?'<div class="hx-sub2">'+escHTML(nivel)+'</div>':'')+'</div>'
+      +   '<div class="hx-c hx-lo" data-l="Frequência"><div class="hx-v">'+escHTML(t.frequencia||'—')+'</div></div>'
+      +   '<div class="hx-c" data-l="Status"><span class="badge '+sit.badge+'">'+sit.lbl+'</span>'+envioBadge+'</div>'
+      + '</div>'
+      + '<div class="hx-acoes"><button type="button" class="btn '+(isAprovado?'btn-ghost':'btn-primary')+' btn-xs" onclick="event.stopPropagation();'+abrir+'">'+(isAprovado?'Abrir':'Continuar')+'</button>'
+      +   '<button type="button" class="icon-btn" onclick="event.stopPropagation();treinosExcluir('+t.id+')" title="Excluir treino" aria-label="Excluir treino"><i class=ph-trash></i></button></div>'
+      + '</div>';
+  }).join('');
 }
 
 // ── Ficha aprovada — visual read-only (2026-09-16) ───────────────────────────
@@ -5975,15 +6024,17 @@ function renderFichaAprovadaVisual(ficha){
       <div class="param-key">Nome do treino</div>
       <div style="font-size:16px;font-weight:700;color:var(--text)">${escHTML(nomeTreino)}</div>
     </div>`;
-  el.innerHTML = nomeTreinoHtml + ficha.treinos.map(treino => {
+  el.innerHTML = nomeTreinoHtml + ficha.treinos.map((treino, ti) => {
     const total = treino.exercicios.reduce((a,e)=>a+parseInt(e.series||0),0);
-    return `<div>
-      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--border2)">
+    const tempo = (typeof calcularTempoEstimadoTreino==='function') ? calcularTempoEstimadoTreino(treino) : null;
+    const corpo = `<div>
+      <div class="pr-apv-t" style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--border2)">
         ${escHTML(treino.label)} <span style="font-weight:400;color:var(--text3);font-size:12px">(${total} séries)</span>
       </div>
       ${_htmlAquecimentoReadOnly(treino)}
       ${_htmlParteReadOnly(treino)}
     </div>`;
+    return prAcc('ph-barbell', escHTML(treino.label), total + ' séries' + (tempo ? ' · ~' + tempo.minutos + ' min' : ''), corpo, {cls:'pr-acc-apv', key:'apv-' + ti, aberto: ti === 0});
   }).join('');
   // Réguas de volume — mesma função/mesmo visual da tela de seleção de exercícios.
   // Depende de _s3.fichaObj/selectedObj já estarem apontando pra esta ficha
@@ -6147,8 +6198,8 @@ function renderComparacaoCiclos(anterior, atual, dataAprovacaoAnterior){
     <table style="width:100%;border-collapse:collapse;margin-bottom:10px">
       <thead><tr style="border-bottom:1px solid var(--border)">
         <th style="text-align:left;padding:5px 8px;font-size:12px;color:var(--text3)">Grupo Muscular</th>
-        <th style="text-align:center;padding:5px 8px;font-size:12px;color:var(--text3)">Anterior (s/sem)</th>
-        <th style="text-align:center;padding:5px 8px;font-size:12px;color:var(--text3)">Atual (s/sem)</th>
+        <th style="text-align:center;padding:5px 8px;font-size:12px;color:var(--text3)"><span class="pr-t-l">Anterior (s/sem)</span><span class="pr-t-c">Antes</span></th>
+        <th style="text-align:center;padding:5px 8px;font-size:12px;color:var(--text3)"><span class="pr-t-l">Atual (s/sem)</span><span class="pr-t-c">Agora</span></th>
         <th style="text-align:center;padding:5px 8px;font-size:12px;color:var(--text3)">Δ</th>
       </tr></thead>
       <tbody>${rows}</tbody>

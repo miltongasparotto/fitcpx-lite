@@ -1495,6 +1495,9 @@ function toggleTema(){
 
 function saveStudent(){
   const s=getActive(); if(!s) return;
+  // aluno novo sem nome não é gravado (evita cadastro vazio na lista)
+  if(typeof _novoSemNome==='function' && _novoSemNome()) return;
+  if(typeof _novoSemSalvarId!=='undefined' && _novoSemSalvarId===s.id) _novoSemSalvarId=null; // 1º Salvar com nome: vira cadastro de verdade
   try { localStorage.setItem(lsKey('acm-students'), JSON.stringify(students)); } catch(e){}
   supaAutoSave();
   if(typeof _clearDirty==='function') _clearDirty();

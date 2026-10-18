@@ -18,8 +18,10 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Geist+Mono:wght@400..600&display=swap">
 <link rel="stylesheet" href="css/tokens.css?v=20261015a">
 <link rel="stylesheet" href="css/icons.css?v=20261014d">
-<link rel="stylesheet" href="css/app.css?v=20261015g">
-<link rel="stylesheet" href="css/painel.css?v=20261015a">
+<link rel="stylesheet" href="css/app.css?v=20261018b">
+<link rel="stylesheet" href="css/prescricao.css?v=20261018f">
+<link rel="stylesheet" href="css/painel.css?v=20261018b">
+<link rel="stylesheet" href="css/telefone.css?v=20261015a">
 <link rel="stylesheet" href="css/carregando.css?v=20261014d">
 <script>try{if(localStorage.getItem('acm-tema')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
 </head>
@@ -188,7 +190,8 @@
           <div class="page-subtitle"><span id="alunos-count-badge">0 alunos</span></div>
         </div>
         <div class="page-header-actions">
-          <button class="btn btn-primary" onclick="abrirNovoAluno()"><i class=ph-plus></i>Novo aluno</button>
+          <button class="btn btn-ghost" id="alunos-btn-link" onclick="dashCopiarLinkCadastro()" title="Copia o link de cadastro; cole no WhatsApp para o aluno preencher os próprios dados"><i class=ph-link></i>Cadastro via link</button>
+          <button class="btn btn-primary" id="alunos-btn-manual" onclick="abrirNovoAluno()" title="Preencher os dados do aluno agora"><i class=ph-pencil-simple-line></i>Cadastro manual</button>
         </div>
       </div>
       <div id="alunos-transf-strip" class="hidden"></div>
@@ -207,7 +210,7 @@
               <div class="th-search"><i class=ph-magnifying-glass></i><input id="alunos-busca-m" data-al-busca placeholder="Buscar aluno" oninput="alunosSetFiltro('busca',this.value)" autocomplete="off"></div>
               <button class="btn al-fil-btn" id="alunos-fil-btn" type="button" onclick="alunosAbrirPainel(this)" aria-haspopup="dialog" aria-label="Filtros"><i class=ph-funnel></i><span class="al-fil-n" id="alunos-fil-n"></span></button>
             </div>
-            <div style="overflow-x:auto">
+            <div class="al-scroll">
               <table class="alunos-table">
                 <thead><tr id="alunos-thr"></tr></thead>
                 <tbody id="alunos-grid"></tbody>
@@ -217,8 +220,11 @@
             <div id="alunos-empty" class="empty hidden">
               <i class=ph-users></i>
               <div class="empty-title">Nenhum aluno cadastrado</div>
-              <div class="empty-text">Cadastre o primeiro aluno ou compartilhe o link do Portal para ele mesmo se cadastrar.</div>
-              <button class="btn btn-primary" onclick="abrirNovoAluno()"><i class=ph-plus></i>Novo aluno</button>
+              <div class="empty-text">Cadastre o primeiro aluno ou copie o link de cadastro para ele mesmo se cadastrar.</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+                <button class="btn btn-ghost" onclick="dashCopiarLinkCadastro()"><i class=ph-link></i>Cadastro via link</button>
+                <button class="btn btn-primary" onclick="abrirNovoAluno()"><i class=ph-pencil-simple-line></i>Cadastro manual</button>
+              </div>
             </div>
             </div>
           </div>
@@ -1256,106 +1262,70 @@
     <!-- STUDENT VIEW -->
     <div id="student-view" class="hidden" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
 
-      <div style="padding:16px 32px 0">
-        <button class="btn btn-ghost btn-sm" onclick="navGo('alunos')"><i class=ph-arrow-left></i>Alunos</button>
-      </div>
-
-      <div class="student-header-card">
-        <div class="profile-bar"></div>
-        <div class="page-header" style="border-bottom:none;align-items:center">
-          <div class="avatar-circle"><i class=ph-user style="font-size:24px"></i></div>
-          <div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <div class="page-title" id="student-header-name">—</div>
-              <span id="saved-indicator" class="hidden" style="font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums;"><i class=ph-check></i> Salvo</span>
-            </div>
-            <div class="page-subtitle" id="student-badges"></div>
-          </div>
+      <!-- ═══ PÁGINA 1: FICHA (cartão principal + cartão de abas) ═══ -->
+      <div id="fx-ficha" class="fx-view">
+        <div class="page-header fx-top">
+          <button class="btn btn-ghost btn-sm" onclick="navGo('alunos')"><i class=ph-arrow-left></i>Alunos</button>
         </div>
-        <div id="aluno-transf-banner" class="hidden" style="padding:0 20px 16px"></div>
-      </div>
 
-      <div class="tabs">
-        <div class="tab active" role="button" tabindex="0" onclick="switchTab('perfil')" id="tab-perfil">Perfil</div>
-        <div class="tab" role="button" tabindex="0" onclick="switchTab('anamnese')" id="tab-anamnese">Avaliação</div>
-        <div class="tab" role="button" tabindex="0" onclick="switchTab('prescricao')" id="tab-prescricao">Prescrição</div>
-        <div class="tab" role="button" tabindex="0" onclick="switchTab('evolucao')" id="tab-evolucao">Evolução</div>
-      </div>
-
-      <div class="main-scroll" id="tab-content">
-
-        <!-- ══════════════ PERFIL ══════════════ -->
-        <div id="panel-perfil" class="content">
-          <div class="card">
-            <div class="card-title">Dados Pessoais <i class=ph-globe></i> COMUM</div>
-            <div class="grid-2" style="gap:12px">
-              <div class="field span2">
-                <label>Nome completo</label>
-                <input type="text" id="p-nome" oninput="onPerfilChange()" placeholder="Nome do aluno">
+        <div class="fx">
+          <section class="card fx-id" aria-label="Aluno">
+            <div class="fx-id-main">
+              <div class="fx-av-wrap">
+                <button type="button" class="fx-av" id="fx-av" onclick="fxFotoEscolher('ficha')" aria-label="Adicionar ou trocar a foto do aluno" title="Adicionar ou trocar a foto">?</button>
+                <button type="button" class="fx-cam" onclick="fxFotoEscolher('ficha')" aria-label="Adicionar ou trocar a foto do aluno" title="Adicionar ou trocar a foto"><i class=ph-camera></i></button>
+                <input type="file" id="fx-foto-input" accept="image/jpeg,image/png,image/webp" hidden onchange="fxFotoArquivo(this)">
               </div>
-              <div class="field">
-                <label>Data de nascimento</label>
-                <div style="display:flex;gap:8px;align-items:center">
-                  <input type="date" id="p-nascimento" oninput="onPerfilChange();calcIdade()" style="flex:1">
-                  <span id="p-idade-label" style="font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap"></span>
+              <div class="fx-id-txt">
+                <div class="fx-nome">
+                  <div class="page-title" id="student-header-name">—</div>
+                  <span id="fx-status-chip" class="badge badge-gray"></span><span id="fx-alertas" class="fx-alertas"></span>
+                  <span id="saved-indicator" class="hidden" style="font-size:12px;color:var(--primary-ink);font-variant-numeric:tabular-nums;"><i class=ph-check></i> Salvo</span>
                 </div>
+                <div class="fx-mail" id="fx-mail"></div>
+                <div class="fx-chips" id="student-badges"></div>
               </div>
-              <div class="field">
-                <label>Sexo biológico</label>
-                <select id="p-sexo" onchange="onPerfilChange();toggleFeminino()">
-                  <option value="">Selecionar</option>
-                  <option value="M">Masculino</option>
-                  <option value="F">Feminino</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Profissão / ocupação</label>
-                <input type="text" id="p-profissao" oninput="onPerfilChange()" placeholder="Ex: Analista de sistemas, professor, auxiliar de enfermagem...">
-              </div>
-              <div class="field">
-                <label>Contato (WhatsApp)</label>
-                <input type="text" id="p-whatsapp" oninput="onPerfilChange()" placeholder="(00) 00000-0000">
-              </div>
-              <div class="field">
-                <label>Modalidade de atendimento</label>
-                <select id="p-modalidade" onchange="onPerfilChange()">
-                  <option value="">Selecionar</option>
-                  <option value="presencial">Presencial</option>
-                  <option value="online">Online</option>
-                  <option value="hibrido">Híbrido (presencial + online)</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Cód. aluno no FitCpx (legado)</label>
-                <input type="text" id="p-cod-aluno-legado" oninput="onPerfilChange()" placeholder="Ex: 339">
-                <div style="font-size:12px;color:var(--text3);margin-top:2px">Vínculo pro envio de treino ao app.fitcpx.com - confere com o cod_aluno da tela do aluno lá antes de injetar.</div>
-              </div>
-              <div class="field">
-                <label>CPF</label>
-                <input type="text" id="p-cpf" inputmode="numeric" maxlength="14" oninput="mascararCpfInput(this);onPerfilChange()" placeholder="000.000.000-00" autocomplete="off">
-                <div style="font-size:12px;color:var(--text3);margin-top:2px" id="p-cpf-ajuda">Junto com nome e e-mail, identifica o aluno no sistema e evita cadastro duplicado. Fica guardado só pra você; entre personals circula apenas um código irreversível.</div>
-                <div id="p-cpf-msg" class="hidden" style="font-size:12px;margin-top:4px"></div>
-              </div>
-              <div class="field">
-                <label>E-mail (acesso ao Portal do Aluno)</label>
-                <div style="display:flex;gap:8px;align-items:center">
-                  <input type="email" id="p-email" oninput="onPerfilChange()" placeholder="email@exemplo.com" style="flex:1">
-                  <button class="btn btn-ghost btn-sm hidden" id="p-email-alterar-btn" onclick="alunoAlterarEmail()"><i class=ph-pencil-simple></i> Alterar</button>
+              <div class="fx-acoes">
+                <button class="btn btn-primary" id="fx-editar" onclick="switchTab('perfil')"><i class=ph-pencil-simple></i>Editar perfil</button>
+                <div class="fx-menuwrap" id="fx-st-wrap">
+                  <button class="btn btn-ghost" id="fx-st-btn" type="button" onclick="fxStatusToggle(event)" aria-haspopup="menu" aria-expanded="false"><i class=ph-circle-half></i><span class="fx-lbl-l">Alterar status</span><span class="fx-lbl-s">Status</span><i class="ph-caret-down dp-chev"></i></button>
+                  <div class="dp-menu" id="fx-st-menu" role="menu" aria-label="Status do aluno"></div>
                 </div>
-                <div style="font-size:12px;color:var(--text3);margin-top:2px" id="p-email-ajuda">É por aqui que ele loga no portal. Depois que o aluno tem acesso, o e-mail só muda pelo botão Alterar.</div>
-              </div>
-              <div class="field">
-                <label>Acesso ao Portal do Aluno</label>
-                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                  <span id="p-portal-status-badge" class="badge badge-gray">— preencha o e-mail</span>
-                  <button class="btn btn-ghost btn-sm" id="p-portal-reset-btn" style="display:none" onclick="alunoResetarSenha()"><i class=ph-key></i> Redefinir senha</button>
-                  <button class="btn btn-ghost btn-sm" id="p-portal-status-btn" style="display:none" onclick="alunoTogglePortalStatus()">Bloquear acesso</button>
-                </div>
+                <button class="btn btn-ghost fx-btn-warn" id="fx-arquivar" onclick="fxArquivar()" aria-label="Arquivar aluno" title="Arquivar aluno"><i class=ph-archive></i><span class="fx-lbl">Arquivar</span></button>
               </div>
             </div>
-          </div>
-          <div class="btn-row" style="margin-top:16px;padding:0 4px">
-            <button class="btn btn-primary btn-save" onclick="salvarPerfil()" style="min-width:130px;gap:6px"><span><i class=ph-check></i></span> Salvar</button>
+            <div id="aluno-transf-banner" class="hidden" style="padding:16px 0 0"></div>
+            <div class="fx-datas">
+              <div class="fx-data">
+                <div class="fx-data-ic"><i class=ph-ruler></i></div>
+                <div><div class="fx-data-l">Última avaliação</div><span class="dp-v" id="fx-aval-d">—</span><span class="dp-s" id="fx-aval-h"></span></div>
+              </div>
+              <div class="fx-data">
+                <div class="fx-data-ic"><i class=ph-barbell></i></div>
+                <div><div class="fx-data-l">Último treino</div><span class="dp-v" id="fx-trn-d">—</span><span class="dp-s" id="fx-trn-h"></span></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card fx-panel" aria-label="Detalhes do aluno">
+            <div class="dp-ph">
+              <div><h3 id="fx-panel-t">Informações pessoais</h3><p id="fx-panel-s">Resumo do cadastro</p></div>
+              <div class="dp-seg" role="tablist" aria-label="Seções da ficha">
+                <button class="dp-seg-b active on" role="tab" type="button" onclick="switchTab('info')" id="tab-info" aria-selected="true"><span class="t-full">Informações pessoais</span><span class="t-short">Dados</span></button>
+                <button class="dp-seg-b" role="tab" type="button" onclick="switchTab('anamnese')" id="tab-anamnese" aria-selected="false">Avaliação</button>
+                <button class="dp-seg-b" role="tab" type="button" onclick="switchTab('prescricao')" id="tab-prescricao" aria-selected="false">Prescrição</button>
+                <button class="dp-seg-b" role="tab" type="button" onclick="switchTab('evolucao')" id="tab-evolucao" aria-selected="false">Evolução</button>
+              </div>
+            </div>
+            <span id="tab-perfil" hidden></span>
+
+            <div class="fx-body" id="tab-content">
+
+        <!-- ══════════════ INFORMAÇÕES PESSOAIS (resumo; o formulário completo é a página Cadastro) ══════════════ -->
+        <div id="panel-info" class="content">
+          <div class="fx-blocks">
+            <div class="fx-blk" id="fx-blk-contato"></div>
+            <div class="fx-blk" id="fx-blk-pessoal"></div>
           </div>
         </div>
 
@@ -1372,12 +1342,322 @@
 
           <!-- ── SUBPAINEL: ANAMNESE ── -->
           <div id="subpanel-anamnese-hist" class="content" style="padding:0">
-            <div class="card">
-              <div class="card-title">Anamnese EF <i class=ph-lock></i></div>
-              <div style="font-size:12px;color:var(--text3);margin-bottom:16px">Preenchida pelo aluno no app (Portal) ou por você aqui. Os dois lados gravam no mesmo lugar.</div>
+            <div id="anam-lista-view" class="hx-ana">
+              <div class="hx-cab">
+                <div><h4>Anamneses</h4><p>Cada preenchimento é um registro novo; os anteriores ficam no histórico.</p></div>
+                <button type="button" class="btn btn-primary btn-sm" onclick="anamNova()"><i class=ph-plus></i>Nova anamnese</button>
+              </div>
+              <div class="hx-th"><span>Data</span><span>Objetivo</span><span>Frequência</span><span>Nível</span><span>Restrições</span><span class="hx-lo">Origem</span><span></span></div>
+              <div id="anam-lista-tabela"></div>
+            </div>
+          </div>
 
-              <!-- ══════════════ BLOCO 1 — HISTÓRICO DE SAÚDE ══════════════ -->
-              <div class="section-label" style="font-size:13px;color:var(--accent)">① Histórico de Saúde</div>
+          <div id="subpanel-anamnese-antro" class="content hidden" style="padding:0">
+            <div id="antro-lista-view" class="hx-ant">
+              <div class="hx-cab">
+                <div><h4>Avaliações antropométricas</h4><p>As setas mostram a mudança desde a avaliação anterior.</p></div>
+                <button type="button" class="btn btn-primary btn-sm" onclick="antroNovaAvaliacao()"><i class=ph-plus></i>Nova avaliação</button>
+              </div>
+              <div class="hx-th"><span>Data</span><span>Peso</span><span>Gordura</span><span>Músculo</span><span class="hx-lo">IMC</span><span class="hx-lo">Origem</span><span></span></div>
+              <div id="antro-lista-tabela"></div>
+            </div>
+          </div>
+
+          <!-- ── SUBPAINEL: META ── -->
+          <div id="subpanel-anamnese-meta" class="content hidden" style="padding:0">
+          <div class="card">
+            <div class="card-title">Meta - Composição Corporal</div>
+
+            <div class="section-label">Fonte dos dados base (Altura, Peso, Músculo, Gordura)</div>
+            <div style="display:flex;gap:16px;margin-bottom:12px">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                <input type="radio" name="meta-fonte" value="anterior" id="meta-fonte-anterior" checked onchange="onMetaFonteChange()">
+                Puxar da última avaliação
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                <input type="radio" name="meta-fonte" value="manual" id="meta-fonte-manual" onchange="onMetaFonteChange()">
+                Inserir manualmente (bioimpedância)
+              </label>
+            </div>
+
+            <!-- Bloco manual — só aparece se fonte = manual -->
+            <div id="meta-manual-bloco" class="hidden" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:16px">
+              <div style="display:flex;gap:16px;margin-bottom:10px">
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+                  <input type="radio" name="meta-unidade" value="pct" id="meta-unidade-pct" checked onchange="onMetaManualChange()">
+                  Músculo/Gordura em %
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+                  <input type="radio" name="meta-unidade" value="kg" id="meta-unidade-kg" onchange="onMetaManualChange()">
+                  Músculo/Gordura em kg
+                </label>
+              </div>
+              <div class="grid-4" style="gap:12px">
+                <div class="field">
+                  <label><b>Altura (cm) *</b></label>
+                  <input type="number" step="0.1" id="meta-manual-altura" oninput="onMetaManualChange()" placeholder="—">
+                </div>
+                <div class="field">
+                  <label><b>Peso da bioimpedância (kg) *</b></label>
+                  <input type="number" step="0.1" id="meta-manual-peso" oninput="onMetaManualChange()" placeholder="—">
+                </div>
+                <div class="field">
+                  <label id="meta-manual-musculo-label">Músculo (%) - opcional</label>
+                  <input type="number" step="0.1" id="meta-manual-musculo" oninput="onMetaManualChange()" placeholder="—">
+                </div>
+                <div class="field">
+                  <label id="meta-manual-gordura-label"><b>Gordura (%) *</b></label>
+                  <input type="number" step="0.1" id="meta-manual-gordura" oninput="onMetaManualChange()" placeholder="—">
+                </div>
+              </div>
+              <div style="font-size:12px;color:var(--text3);margin-top:8px">* obrigatório. Se Músculo não for informado, o sistema estima a partir da fórmula preditiva (menos preciso - ver aviso ao calcular). Óssea e Residual não são digitados - sempre calculados.</div>
+            </div>
+
+            <div id="meta-fonte-badge" style="font-size:12px;color:var(--text3);margin-bottom:16px"></div>
+
+            <div class="section-label">Nível de meta</div>
+            <div class="field" style="max-width:320px;margin-bottom:16px">
+              <select id="meta-nivel" onchange="onMetaNivelChange()">
+                <option value="">Selecionar</option>
+                <option value="saude-1">Saúde Leve</option>
+                <option value="saude0">Saúde Padrão</option>
+                <option value="saude+1">Saúde Robusto</option>
+                <option value="magro">Magro</option>
+                <option value="atletico">Atlético</option>
+                <option value="musculoso">Musculoso</option>
+                <option value="personalizado">Personalizado</option>
+              </select>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:8px">
+              <div class="field">
+                <label>IMC alvo</label>
+                <input type="number" step="0.1" id="meta-imc" oninput="onMetaImcChange()" placeholder="—">
+              </div>
+              <div class="field">
+                <label>Peso alvo (kg)</label>
+                <input type="number" step="0.1" id="meta-peso" oninput="onMetaPesoChange()" placeholder="—">
+              </div>
+              <div class="field">
+                <label>% Gordura alvo</label>
+                <input type="number" step="0.1" id="meta-gordura-pct" oninput="onMetaGorduraChange()" placeholder="—">
+              </div>
+            </div>
+            <div id="meta-personalizado-badge" style="display:none;font-size:12px;color:var(--amber);margin-bottom:12px"><i class=ph-warning></i> Valores ajustados manualmente - meta marcada como Personalizado</div>
+
+            <div id="meta-erro" style="display:none;margin-bottom:12px;padding:8px 12px;background:rgba(255,60,60,.08);border:1px solid rgba(255,60,60,.3);border-radius:var(--radius);font-size:13px;color:var(--red)"></div>
+
+            <div class="btn-row" style="justify-content:flex-start;margin:0 0 16px">
+              <button class="btn btn-primary" onclick="calcularMeta()">Calcular</button>
+            </div>
+
+            <div class="section-label" style="margin-top:0">Comparativo - Atual vs. Meta</div>
+            <table class="treino-table">
+              <thead>
+                <tr><th>Métrica</th><th>Atual</th><th>Meta</th><th>Diferença</th></tr>
+              </thead>
+              <tbody id="meta-tabela-body">
+                <tr><td colspan="4" style="color:var(--text3);text-align:center">Preencha os dados e clique em Calcular</td></tr>
+              </tbody>
+            </table>
+
+            <div id="meta-card-divergencia" style="display:none;margin-top:14px;padding:10px 14px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);font-size:13px"></div>
+
+            <div class="btn-row" style="margin-top:16px">
+              <button class="btn btn-primary btn-save" onclick="salvarMeta()" style="min-width:130px;gap:6px"><span><i class=ph-check></i></span> Salvar</button>
+            </div>
+          </div>
+          </div>
+
+        </div>
+
+        <!-- ══════════════ PRESCRIÇÃO ══════════════ -->
+        <div id="panel-prescricao" class="content hidden">
+          <div id="treinos-lista-view" class="hx-trn">
+            <div class="hx-cab">
+              <div><h4>Treinos</h4><p>Cada treino é uma linha; o que está valendo fica destacado.</p></div>
+              <button type="button" class="btn btn-primary btn-sm" onclick="treinosAdicionar()"><i class=ph-plus></i>Novo treino</button>
+            </div>
+            <div class="hx-th"><span>Treino</span><span>Vigência</span><span>Objetivo</span><span class="hx-lo">Frequência</span><span>Status</span><span></span></div>
+            <div id="treinos-lista-tabela"></div>
+          </div>
+        </div>
+
+        <!-- ══════════════ EVOLUÇÃO ══════════════ -->
+        <!-- Placeholder — comparação de ciclos com gráficos, vault + treinos-store.js.
+             Fica vazio de propósito até a próxima fase de desenvolvimento. -->
+        <div id="panel-evolucao" class="content hidden">
+          <div class="card">
+            <div class="empty"><i class=ph-chart-line-up></i><div class="empty-title">Evolução em desenvolvimento</div><div class="empty-text">Aqui entra a comparação entre ciclos: composição corporal e cargas lado a lado, com gráficos.</div></div>
+          </div>
+        </div>
+
+            </div><!-- /tab-content -->
+          </section>
+        </div><!-- /fx -->
+      </div><!-- /fx-ficha -->
+
+      <!-- ═══ PÁGINA 3: FORMULÁRIO DE ANAMNESE, AVALIAÇÃO OU TREINO (como o Cadastro, sem o cartão do aluno; só uma linha de identificação) ═══ -->
+      <div id="fx-form" class="fx-view hidden">
+        <div class="page-header fx-top">
+          <button class="btn btn-ghost btn-sm" type="button" onclick="fxFormVoltar()"><i class=ph-arrow-left></i><span id="fxf-voltar">Aluno</span></button>
+        </div>
+        <div class="fx-idlin" id="fxf-id" aria-label="Aluno">
+          <span class="fx-av" id="fxf-av" aria-hidden="true">?</span>
+          <b id="fxf-nome">—</b><span id="fxf-info" class="fx-idlin-i"></span>
+        </div>
+        <div class="fx-ph">
+          <div class="page-title" id="fxf-titulo">Nova anamnese</div>
+        </div>
+
+        <div class="fx-scroll" id="fxf-scroll">
+
+          <div id="fxf-anamnese" class="fx-cad hidden">
+
+          <section class="card fx-sec">
+            <div class="dp-ph"><div><h3>Dados da anamnese</h3></div></div>
+            <div class="fx-form">
+              <div class="field f3"><label>Data</label><input type="date" id="a-data-anamnese" oninput="anamDataMudou()"></div>
+              <div class="field f3"><label>Preenchida por</label><input type="text" id="a-origem-ro" readonly tabindex="-1"></div>
+              <div class="field f6" id="anam-copiar-box"><label>Copiar respostas da anamnese de</label>
+                <select id="a-copiar" onchange="anamCopiar(this.value)"></select></div>
+            </div>
+          </section>
+
+          <section class="card fx-sec">
+            <div class="dp-ph"><div><h3>Objetivo e rotina</h3><p class="page-subtitle">Vai para a Prescrição; lá dá para ajustar sem mudar aqui.</p></div></div>
+              <div class="grid-3" style="gap:12px">
+                <div class="field">
+                  <label>Objetivo principal</label>
+                  <select id="a-objetivo-ef" onchange="_onObjetivoEfChange()">
+                    <option value="">Selecionar</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Objetivo secundário <span style="color:var(--text3);font-size:12px">(opcional)</span></label>
+                  <select id="a-objetivo-sec" onchange="_onObjetivoSecChange()" disabled>
+                    <option value="">Nenhum</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Frequência semanal disponível</label>
+                  <select id="a-frequencia" onchange="onAnamneseChange()">
+                    <option value="">Selecionar</option>
+                    <option value="2x">2x por semana</option>
+                    <option value="3x">3x por semana</option>
+                    <option value="4x">4x por semana</option>
+                    <option value="5x">5x por semana</option>
+                    <option value="6x">6x por semana</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Duração por sessão</label>
+                  <select id="a-duracao" onchange="onAnamneseChange()">
+                    <option value="">Selecionar</option>
+                    <option value="30">Até 30 minutos</option>
+                    <option value="45">30–45 minutos</option>
+                    <option value="60">45–60 minutos</option>
+                    <option value="75">60–75 minutos</option>
+                    <option value="90">75–90 minutos</option>
+                    <option value="90+">Mais de 90 minutos</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Melhor horário para treinar</label>
+                  <select id="a-horario" onchange="onAnamneseChange()">
+                    <option value="">Selecionar</option>
+                    <option value="manhã">Manhã (06h–12h)</option>
+                    <option value="tarde">Tarde (12h–18h)</option>
+                    <option value="noite">Noite (18h–22h)</option>
+                    <option value="variável">Variável / sem preferência</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Local de treino</label>
+                  <select id="a-local" onchange="onAnamneseChange()">
+                    <option value="">Selecionar</option>
+                    <!-- Buckets genericos (academia/casa/ar livre/hibrido) removidos em 2026-09-02:
+                         classificacao desnecessaria. As opcoes reais vem dos locais do personal
+                         (LIBS.locais), preenchidas por JS. -->
+                  </select>
+                </div>
+                <div class="field" style="grid-column:1/-1">
+                  <label style="margin-bottom:8px;display:block">Exercícios preferidos e a evitar <span style="color:var(--text3);font-size:12px;font-variant-numeric:tabular-nums;">(influenciam a prescrição)</span></label>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                    <!-- Preferidos -->
+                    <div>
+                      <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:6px"><i class=ph-check-circle></i> Exercícios preferidos</div>
+                      <div style="display:flex;gap:6px;margin-bottom:6px">
+                        <input id="ex-pref-busca" type="text" placeholder="Buscar exercício..." oninput="_exPickerBusca('pref')"
+                          style="flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:6px 8px;font-size:12px">
+
+                      </div>
+                      <div id="ex-pref-sugestoes" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);max-height:140px;overflow-y:auto;margin-bottom:6px;font-size:12px"></div>
+                      <div id="ex-pref-tags" style="display:flex;flex-wrap:wrap;gap:4px;min-height:28px"></div>
+                      <input type="hidden" id="a-gosta-ex">
+                      <!-- legado -->
+                      <input type="hidden" id="a-gosta">
+                    </div>
+                    <!-- A evitar -->
+                    <div>
+                      <div style="font-size:12px;font-weight:600;color:var(--red);margin-bottom:6px"><i class=ph-prohibit></i> Exercícios a evitar</div>
+                      <div style="display:flex;gap:6px;margin-bottom:6px">
+                        <input id="ex-evit-busca" type="text" placeholder="Buscar exercício..." oninput="_exPickerBusca('evit')"
+                          style="flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:6px 8px;font-size:12px">
+
+                      </div>
+                      <div id="ex-evit-sugestoes" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);max-height:140px;overflow-y:auto;margin-bottom:6px;font-size:12px"></div>
+                      <div id="ex-evit-tags" style="display:flex;flex-wrap:wrap;gap:4px;min-height:28px"></div>
+                      <input type="hidden" id="a-evitar-ex">
+                      <!-- legado -->
+                      <input type="hidden" id="a-preferencias">
+                    </div>
+                  </div>
+                  <div id="a-aluno-texto-exercicios" style="display:none;margin-top:10px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px"></div>
+                </div>
+              </div>
+          </section>
+
+          <section class="card fx-sec">
+            <div class="dp-ph"><div><h3>Histórico de treino</h3></div></div>
+              <div class="grid-3" style="gap:12px">
+                <div class="field">
+                  <label>Nível de treinamento <span style="color:var(--text3);font-size:12px">(calculado)</span></label>
+                  <select id="a-nivel" disabled title="Calculado: tempo de treino (&lt;6m Iniciante · 6m–2a Intermediário · 2a+ Avançado), consistência irregular desce um nível. Ajuste fino na Prescrição.">
+                    <option value="">— preencha tempo e consistência</option>
+                    <option value="Inic">Iniciante (0–6 meses ou retorno após pausa longa)</option>
+                    <option value="Inte">Intermediário (6 meses–2 anos, consistente)</option>
+                    <option value="Avan">Avançado (2+ anos consistentes, boa técnica)</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Tempo de treino contínuo atual</label>
+                  <select id="a-tempo" onchange="onAnamneseChange()">
+                    <option value="">Selecionar</option>
+                    <option value="Menos de 1 mês">Menos de 1 mês</option>
+                    <option value="1–3 meses">1–3 meses</option>
+                    <option value="3–6 meses">3–6 meses</option>
+                    <option value="6–12 meses">6–12 meses</option>
+                    <option value="1–2 anos">1–2 anos</option>
+                    <option value="2–4 anos">2–4 anos</option>
+                    <option value="Mais de 4 anos">Mais de 4 anos</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Consistência histórica</label>
+                  <select id="a-consistencia" onchange="onAnamneseChange()">
+                    <option value="">Selecionar</option>
+                    <option value="irregular">Irregular — treina e para com frequência</option>
+                    <option value="regular">Regular — treina na maioria das semanas</option>
+                    <option value="alta">Alta — raramente perde treinos</option>
+                  </select>
+                </div>
+              </div>
+
+          </section>
+
+          <section class="card fx-sec">
+            <div class="dp-ph"><div><h3>Saúde</h3></div></div>
 
               <div class="grid-2" style="gap:12px">
                 <div class="field" style="grid-column:1/-1">
@@ -1496,166 +1776,27 @@
                 </div>
               </div>
 
-              <!-- ══════════════ BLOCO 2 — HISTÓRICO DE EXPERIÊNCIA COM TREINO ══════════════ -->
-              <div class="section-label" style="font-size:13px;color:var(--accent);margin-top:24px">② Histórico de Experiência com Treino</div>
-              <div class="grid-3" style="gap:12px">
-                <div class="field">
-                  <label>Nível de treinamento <span style="color:var(--text3);font-size:12px">(calculado)</span></label>
-                  <select id="a-nivel" disabled title="Calculado: tempo de treino (&lt;6m Iniciante · 6m–2a Intermediário · 2a+ Avançado), consistência irregular desce um nível. Ajuste fino na Prescrição.">
-                    <option value="">— preencha tempo e consistência</option>
-                    <option value="Inic">Iniciante (0–6 meses ou retorno após pausa longa)</option>
-                    <option value="Inte">Intermediário (6 meses–2 anos, consistente)</option>
-                    <option value="Avan">Avançado (2+ anos consistentes, boa técnica)</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Tempo de treino contínuo atual</label>
-                  <select id="a-tempo" onchange="onAnamneseChange()">
-                    <option value="">Selecionar</option>
-                    <option value="Menos de 1 mês">Menos de 1 mês</option>
-                    <option value="1–3 meses">1–3 meses</option>
-                    <option value="3–6 meses">3–6 meses</option>
-                    <option value="6–12 meses">6–12 meses</option>
-                    <option value="1–2 anos">1–2 anos</option>
-                    <option value="2–4 anos">2–4 anos</option>
-                    <option value="Mais de 4 anos">Mais de 4 anos</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Consistência histórica</label>
-                  <select id="a-consistencia" onchange="onAnamneseChange()">
-                    <option value="">Selecionar</option>
-                    <option value="irregular">Irregular — treina e para com frequência</option>
-                    <option value="regular">Regular — treina na maioria das semanas</option>
-                    <option value="alta">Alta — raramente perde treinos</option>
-                  </select>
-                </div>
-              </div>
+          </section>
 
-              <!-- ══════════════ BLOCO 3 — DADOS ATUAIS DE TREINO ══════════════ -->
-              <div class="section-label" style="font-size:13px;color:var(--accent);margin-top:24px">③ Dados Atuais de Treino <span style="color:var(--text3);font-size:12px;font-weight:400">chave pra prescrição - importado automaticamente na Prescrição, editável lá sem alterar aqui</span></div>
-              <div class="grid-3" style="gap:12px">
-                <div class="field">
-                  <label>Objetivo principal</label>
-                  <select id="a-objetivo-ef" onchange="_onObjetivoEfChange()">
-                    <option value="">Selecionar</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Objetivo secundário <span style="color:var(--text3);font-size:12px">(opcional)</span></label>
-                  <select id="a-objetivo-sec" onchange="_onObjetivoSecChange()" disabled>
-                    <option value="">Nenhum</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Frequência semanal disponível</label>
-                  <select id="a-frequencia" onchange="onAnamneseChange()">
-                    <option value="">Selecionar</option>
-                    <option value="2x">2x por semana</option>
-                    <option value="3x">3x por semana</option>
-                    <option value="4x">4x por semana</option>
-                    <option value="5x">5x por semana</option>
-                    <option value="6x">6x por semana</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Duração por sessão</label>
-                  <select id="a-duracao" onchange="onAnamneseChange()">
-                    <option value="">Selecionar</option>
-                    <option value="30">Até 30 minutos</option>
-                    <option value="45">30–45 minutos</option>
-                    <option value="60">45–60 minutos</option>
-                    <option value="75">60–75 minutos</option>
-                    <option value="90">75–90 minutos</option>
-                    <option value="90+">Mais de 90 minutos</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Melhor horário para treinar</label>
-                  <select id="a-horario" onchange="onAnamneseChange()">
-                    <option value="">Selecionar</option>
-                    <option value="manhã">Manhã (06h–12h)</option>
-                    <option value="tarde">Tarde (12h–18h)</option>
-                    <option value="noite">Noite (18h–22h)</option>
-                    <option value="variável">Variável / sem preferência</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Local de treino</label>
-                  <select id="a-local" onchange="onAnamneseChange()">
-                    <option value="">Selecionar</option>
-                    <!-- Buckets genericos (academia/casa/ar livre/hibrido) removidos em 2026-09-02:
-                         classificacao desnecessaria. As opcoes reais vem dos locais do personal
-                         (LIBS.locais), preenchidas por JS. -->
-                  </select>
-                </div>
-                <div class="field" style="grid-column:1/-1">
-                  <label style="margin-bottom:8px;display:block">Exercícios preferidos e a evitar <span style="color:var(--text3);font-size:12px;font-variant-numeric:tabular-nums;">(influenciam a prescrição)</span></label>
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-                    <!-- Preferidos -->
-                    <div>
-                      <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:6px"><i class=ph-check-circle></i> Exercícios preferidos</div>
-                      <div style="display:flex;gap:6px;margin-bottom:6px">
-                        <input id="ex-pref-busca" type="text" placeholder="Buscar exercício..." oninput="_exPickerBusca('pref')"
-                          style="flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:6px 8px;font-size:12px">
-
-                      </div>
-                      <div id="ex-pref-sugestoes" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);max-height:140px;overflow-y:auto;margin-bottom:6px;font-size:12px"></div>
-                      <div id="ex-pref-tags" style="display:flex;flex-wrap:wrap;gap:4px;min-height:28px"></div>
-                      <input type="hidden" id="a-gosta-ex">
-                      <!-- legado -->
-                      <input type="hidden" id="a-gosta">
-                    </div>
-                    <!-- A evitar -->
-                    <div>
-                      <div style="font-size:12px;font-weight:600;color:var(--red);margin-bottom:6px"><i class=ph-prohibit></i> Exercícios a evitar</div>
-                      <div style="display:flex;gap:6px;margin-bottom:6px">
-                        <input id="ex-evit-busca" type="text" placeholder="Buscar exercício..." oninput="_exPickerBusca('evit')"
-                          style="flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:6px 8px;font-size:12px">
-
-                      </div>
-                      <div id="ex-evit-sugestoes" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);max-height:140px;overflow-y:auto;margin-bottom:6px;font-size:12px"></div>
-                      <div id="ex-evit-tags" style="display:flex;flex-wrap:wrap;gap:4px;min-height:28px"></div>
-                      <input type="hidden" id="a-evitar-ex">
-                      <!-- legado -->
-                      <input type="hidden" id="a-preferencias">
-                    </div>
-                  </div>
-                  <div id="a-aluno-texto-exercicios" style="display:none;margin-top:10px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px"></div>
-                </div>
-              </div>
+            <div class="fx-salvar">
+              <button class="btn btn-ghost" type="button" onclick="anamCancelar()">Cancelar</button>
+              <button class="btn btn-primary btn-save" type="button" onclick="anamSalvar()"><i class=ph-check></i>Salvar anamnese</button>
             </div>
-          <div class="btn-row" style="margin:0 28px 20px">
-            <button class="btn btn-primary btn-save" onclick="salvarAnamnese()" style="min-width:130px;gap:6px"><span><i class=ph-check></i></span> Salvar</button>
           </div>
-          </div>
-          <div id="subpanel-anamnese-antro" class="content hidden" style="padding:0">
 
-            <div class="card">
-              <div class="card-title">Avaliação Antropométrica <i class=ph-lock></i></div>
+          <div id="fxf-antro" class="fx-cad hidden">
+            <div id="antro-form-view" style="display:none">
 
-              <!-- ── LISTA DE AVALIAÇÕES SALVAS ── -->
-              <div id="antro-lista-view">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-                  <div style="font-size:12px;color:var(--text3)">Todas as avaliações antropométricas salvas deste aluno.</div>
-                  <button type="button" class="btn btn-primary" onclick="antroNovaAvaliacao()" >+ Adicionar Avaliação</button>
-                </div>
-                <div id="antro-lista-tabela"></div>
+          <section class="card fx-sec">
+            <div class="dp-ph"><div><h3>Dados da avaliação</h3></div></div>
+              <div class="fx-form">
+                <div class="field f3"><label>Data</label><input type="date" id="a-data-avaliacao" oninput="onAnamneseChange()"></div>
+                <div class="field f3"><label>Preenchida por</label><input type="text" id="a-origem-antro-ro" readonly tabindex="-1"></div>
               </div>
+          </section>
 
-              <!-- ── FORMULÁRIO DE AVALIAÇÃO (nova ou edição) ── -->
-              <div id="antro-form-view" style="display:none">
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
-                  <button type="button" class="btn btn-ghost" onclick="antroVoltarLista()" ><i class=ph-arrow-left></i>Voltar para lista</button>
-                  <div id="antro-form-titulo" style="font-size:12px;color:var(--text3);font-weight:500">Nova avaliação</div>
-                </div>
-
-              <!-- Medidas básicas -->
-              <div class="section-label">Medidas Básicas</div>
-              <div class="field" style="width:200px;margin-bottom:12px">
-                <label style="font-size:12px">Data desta avaliação</label>
-                <input type="date" id="a-data-avaliacao" oninput="onAnamneseChange()">
-              </div>
+          <section class="card fx-sec">
+            <div class="dp-ph"><div><h3>Medidas básicas</h3></div></div>
               <div class="grid-4" style="gap:12px">
                 <div class="field">
                   <label>Altura (cm) <span style="color:var(--red)">*</span></label>
@@ -1675,11 +1816,14 @@
                 </div>
               </div>
 
+          </section>
+
+          <section class="card fx-sec">
+            <div class="dp-ph"><div><h3>Composição corporal</h3><p class="page-subtitle">Em kg ou %: preencha um e o outro calcula.</p></div></div>
               <!-- Composição corporal -->
-              <div class="section-label">Composição Corporal <span style="font-size:12px;color:var(--text3);font-weight:400">(kg ou % - preencha um, o outro calcula sozinho)</span></div>
 
               <!-- Linha 1: Gordura | Muscular | Óssea -->
-              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+              <div class="ant-g3">
 
                 <!-- Col 1: Gordura (obrigatório) -->
                 <div style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
@@ -1731,8 +1875,8 @@
               <div id="antro-comp-alerta" style="display:none;margin-top:6px;padding:6px 12px;background:var(--amber-dim);border:1px solid var(--amber-line);border-radius:var(--radius);font-size:12px;color:var(--amber)"></div>
 
               <!-- Linha 2: Magra | Residual (calculados, aparecem depois dos anteriores) -->
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
-                <div style="background:var(--bg4);border:1px solid rgba(0,229,160,.15);border-radius:var(--radius);padding:10px 12px">
+              <div class="ant-g2" style="margin-top:12px">
+                <div style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
                   <div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--text3);margin-bottom:8px">Massa Magra <span style="font-size:12px;opacity:.7">auto: peso−gordura</span></div>
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
                     <div class="field" style="margin:0">
@@ -1745,7 +1889,7 @@
                     </div>
                   </div>
                 </div>
-                <div style="background:var(--bg4);border:1px solid rgba(0,229,160,.15);border-radius:var(--radius);padding:10px 12px">
+                <div style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
                   <div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--text3);margin-bottom:8px"><span id="a-residual-label">Massa Residual </span><span style="font-size:12px;opacity:.7">auto: depende da Óssea informada</span></div>
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
                     <div class="field" style="margin:0">
@@ -1760,10 +1904,13 @@
                 </div>
               </div>
 
-              <!-- Circunferências — layout 3 colunas -->
-              <div class="section-label" style="margin-top:16px">Circunferências (cm)</div>
+          </section>
 
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+          <section class="card fx-sec">
+            <div class="dp-ph"><div><h3>Circunferências (cm)</h3></div></div>
+              <!-- Circunferências — layout 3 colunas -->
+
+              <div class="ant-g2c">
 
                 <!-- COLUNA ESQUERDA: TRONCO -->
                 <div>
@@ -1837,151 +1984,35 @@
                 <div style="margin-top:6px;color:var(--text3)">→ Priorizar exercícios unilaterais ou com cargas independentes por membro.</div>
               </div>
 
-              <!-- Observações -->
-              <div class="section-label" style="margin-top:16px">Observações</div>
+          </section>
+
+          <section class="card fx-sec">
+            <div class="dp-ph"><div><h3>Observações</h3></div></div>
               <div class="field">
                 <textarea id="a-obs-antro" oninput="onAnamneseChange()" placeholder="Registros adicionais relevantes para prescrição..." style="min-height:55px"></textarea>
               </div>
-              <div class="btn-row" style="margin-top:20px;padding:0 4px">
-                <button type="button" class="btn btn-primary btn-save" onclick="antroSalvarAvaliacao()" style="min-width:130px;gap:6px"><span><i class=ph-check></i></span> Salvar</button>
-              </div>
-              </div><!-- /antro-form-view -->
+          </section>
+            </div>
+            <div class="fx-salvar">
+              <button class="btn btn-ghost" type="button" onclick="antroCancelar()">Cancelar</button>
+              <button class="btn btn-primary btn-save" type="button" onclick="antroSalvarAvaliacao()"><i class=ph-check></i>Salvar avaliação</button>
             </div>
           </div>
 
-          <!-- ── SUBPAINEL: META ── -->
-          <div id="subpanel-anamnese-meta" class="content hidden" style="padding:0">
-          <div class="card">
-            <div class="card-title">Meta - Composição Corporal</div>
-
-            <div class="section-label">Fonte dos dados base (Altura, Peso, Músculo, Gordura)</div>
-            <div style="display:flex;gap:16px;margin-bottom:12px">
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-                <input type="radio" name="meta-fonte" value="anterior" id="meta-fonte-anterior" checked onchange="onMetaFonteChange()">
-                Puxar da última avaliação
-              </label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-                <input type="radio" name="meta-fonte" value="manual" id="meta-fonte-manual" onchange="onMetaFonteChange()">
-                Inserir manualmente (bioimpedância)
-              </label>
-            </div>
-
-            <!-- Bloco manual — só aparece se fonte = manual -->
-            <div id="meta-manual-bloco" class="hidden" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:16px">
-              <div style="display:flex;gap:16px;margin-bottom:10px">
-                <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-                  <input type="radio" name="meta-unidade" value="pct" id="meta-unidade-pct" checked onchange="onMetaManualChange()">
-                  Músculo/Gordura em %
-                </label>
-                <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-                  <input type="radio" name="meta-unidade" value="kg" id="meta-unidade-kg" onchange="onMetaManualChange()">
-                  Músculo/Gordura em kg
-                </label>
-              </div>
-              <div class="grid-4" style="gap:12px">
-                <div class="field">
-                  <label><b>Altura (cm) *</b></label>
-                  <input type="number" step="0.1" id="meta-manual-altura" oninput="onMetaManualChange()" placeholder="—">
-                </div>
-                <div class="field">
-                  <label><b>Peso da bioimpedância (kg) *</b></label>
-                  <input type="number" step="0.1" id="meta-manual-peso" oninput="onMetaManualChange()" placeholder="—">
-                </div>
-                <div class="field">
-                  <label id="meta-manual-musculo-label">Músculo (%) - opcional</label>
-                  <input type="number" step="0.1" id="meta-manual-musculo" oninput="onMetaManualChange()" placeholder="—">
-                </div>
-                <div class="field">
-                  <label id="meta-manual-gordura-label"><b>Gordura (%) *</b></label>
-                  <input type="number" step="0.1" id="meta-manual-gordura" oninput="onMetaManualChange()" placeholder="—">
-                </div>
-              </div>
-              <div style="font-size:12px;color:var(--text3);margin-top:8px">* obrigatório. Se Músculo não for informado, o sistema estima a partir da fórmula preditiva (menos preciso - ver aviso ao calcular). Óssea e Residual não são digitados - sempre calculados.</div>
-            </div>
-
-            <div id="meta-fonte-badge" style="font-size:12px;color:var(--text3);margin-bottom:16px"></div>
-
-            <div class="section-label">Nível de meta</div>
-            <div class="field" style="max-width:320px;margin-bottom:16px">
-              <select id="meta-nivel" onchange="onMetaNivelChange()">
-                <option value="">Selecionar</option>
-                <option value="saude-1">Saúde Leve</option>
-                <option value="saude0">Saúde Padrão</option>
-                <option value="saude+1">Saúde Robusto</option>
-                <option value="magro">Magro</option>
-                <option value="atletico">Atlético</option>
-                <option value="musculoso">Musculoso</option>
-                <option value="personalizado">Personalizado</option>
-              </select>
-            </div>
-
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:8px">
-              <div class="field">
-                <label>IMC alvo</label>
-                <input type="number" step="0.1" id="meta-imc" oninput="onMetaImcChange()" placeholder="—">
-              </div>
-              <div class="field">
-                <label>Peso alvo (kg)</label>
-                <input type="number" step="0.1" id="meta-peso" oninput="onMetaPesoChange()" placeholder="—">
-              </div>
-              <div class="field">
-                <label>% Gordura alvo</label>
-                <input type="number" step="0.1" id="meta-gordura-pct" oninput="onMetaGorduraChange()" placeholder="—">
-              </div>
-            </div>
-            <div id="meta-personalizado-badge" style="display:none;font-size:12px;color:var(--amber);margin-bottom:12px"><i class=ph-warning></i> Valores ajustados manualmente - meta marcada como Personalizado</div>
-
-            <div id="meta-erro" style="display:none;margin-bottom:12px;padding:8px 12px;background:rgba(255,60,60,.08);border:1px solid rgba(255,60,60,.3);border-radius:var(--radius);font-size:13px;color:var(--red)"></div>
-
-            <div class="btn-row" style="justify-content:flex-start;margin:0 0 16px">
-              <button class="btn btn-primary" onclick="calcularMeta()">Calcular</button>
-            </div>
-
-            <div class="section-label" style="margin-top:0">Comparativo - Atual vs. Meta</div>
-            <table class="treino-table">
-              <thead>
-                <tr><th>Métrica</th><th>Atual</th><th>Meta</th><th>Diferença</th></tr>
-              </thead>
-              <tbody id="meta-tabela-body">
-                <tr><td colspan="4" style="color:var(--text3);text-align:center">Preencha os dados e clique em Calcular</td></tr>
-              </tbody>
-            </table>
-
-            <div id="meta-card-divergencia" style="display:none;margin-top:14px;padding:10px 14px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);font-size:13px"></div>
-
-            <div class="btn-row" style="margin-top:16px">
-              <button class="btn btn-primary btn-save" onclick="salvarMeta()" style="min-width:130px;gap:6px"><span><i class=ph-check></i></span> Salvar</button>
-            </div>
-          </div>
-          </div>
-
-        </div>
-
-        <!-- ══════════════ PRESCRIÇÃO ══════════════ -->
-        <div id="panel-prescricao" class="content hidden">
-          <div class="card">
-            <div class="card-title">Prescrição</div>
-
-            <!-- ── LISTA DE TREINOS SALVOS ── -->
-            <div id="treinos-lista-view">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-                <div style="font-size:12px;color:var(--text3)">Todos os treinos criados para este aluno.</div>
-                <button type="button" class="btn btn-primary" onclick="treinosAdicionar()" >+ Adicionar Treino</button>
-              </div>
-              <div id="treinos-lista-tabela"></div>
-            </div>
-
-            <!-- ── FORMULÁRIO / FLUXO GUIADO (novo treino ou edição) ── -->
+          <div id="fxf-treino" class="fx-cad hidden">
+            <section class="card fx-sec">
             <div id="treinos-form-view" style="display:none">
-            <div style="display:flex;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">
-              <button type="button" class="btn btn-ghost" onclick="confirmarSairEdicaoDivisao(treinosVoltarLista)" ><i class=ph-arrow-left></i>Voltar para lista</button>
-            </div>
-
             <div id="presc-warning" class="alert alert-amber hidden">
               <span><i class=ph-warning></i></span><div>Preencha o Perfil e a Avaliação antes de gerar a prescrição.</div>
             </div>
 
-            <!-- STEPS -->
+            <!-- PASSOS (celular e tablet) -->
+            <div class="pr-passos" id="pr-passos" aria-live="polite">
+              <div class="pr-passos-t"><b id="pr-passo-n">Passo 1 de 4</b><span id="pr-passo-nome">Configurações</span></div>
+              <div class="pr-barra"><div class="at"><i></i><small>Configurações</small></div><div><i></i><small>Distribuição</small></div><div><i></i><small>Exercícios</small></div><div><i></i><small>Aprovação</small></div></div>
+            </div>
+
+            <!-- STEPS (notebook) -->
             <div class="steps">
               <div class="step active" id="step-1"><div class="step-num">1</div>Configurações Gerais</div>
               <div class="step-line"></div>
@@ -1995,13 +2026,14 @@
             <!-- STEP 1 — BASE DO TREINO -->
             <div id="presc-step1">
               <div style="font-variant-numeric:tabular-nums;font-size:13px;color:var(--text3);margin-bottom:10px">Base do Treino</div>
-              <div class="alert alert-blue" style="margin-bottom:12px;font-size:13px">
+              <div class="alert alert-blue pr-so-desk" style="margin-bottom:12px;font-size:13px">
                 <span><i class=ph-info></i></span>
                 <div id="step1-info">Nível e frequência são importados automaticamente da Avaliação. Confirme ou ajuste abaixo se necessário.</div>
               </div>
               <div id="analise-avaliacao" class="alert alert-amber hidden" style="margin-bottom:12px;flex-direction:column;align-items:flex-start"></div>
 
               <!-- ── GRUPO 1: OBJETIVO ── -->
+              <section class="pr-card pr-c1">
               <div class="section-label">Objetivo</div>
               <div class="flex-row" style="margin-bottom:4px">
                 <div class="field flex-1">
@@ -2024,7 +2056,10 @@
               </div>
 
               <!-- ── GRUPO 2: PERFIL DE TREINO ── -->
-              <div class="section-label" style="margin-top:16px">Perfil de Treino <span style="color:var(--text3);font-size:12px;font-weight:400">importado da Avaliação - ajustar aqui não altera a Avaliação do aluno</span></div>
+              </section>
+
+              <section class="pr-card pr-c2">
+              <div class="section-label">Perfil de Treino <span style="color:var(--text3);font-size:12px;font-weight:400">importado da Avaliação - ajustar aqui não altera a Avaliação do aluno</span></div>
               <div class="flex-row" style="margin-bottom:4px">
                 <div class="field flex-1">
                   <label>Nível <span id="nivel-origem" style="font-size:12px;color:var(--accent)"></span></label>
@@ -2049,7 +2084,10 @@
               </div>
 
               <!-- ── GRUPO 3: ROTINA DE TREINO ── -->
-              <div class="section-label" style="margin-top:16px">Rotina de Treino <span style="color:var(--text3);font-size:12px;font-weight:400">importado da Anamnese - ajustar aqui não altera a Anamnese do aluno</span></div>
+              </section>
+
+              <section class="pr-card pr-c3">
+              <div class="section-label">Rotina de Treino <span style="color:var(--text3);font-size:12px;font-weight:400">importado da Anamnese - ajustar aqui não altera a Anamnese do aluno</span></div>
               <div class="grid-3" style="gap:12px;margin-bottom:4px">
                 <div class="field">
                   <label>Duração por sessão</label>
@@ -2085,7 +2123,10 @@
               </div>
 
               <!-- ── GRUPO 4: PREFERÊNCIAS E RESTRIÇÕES ── -->
-              <div class="section-label" style="margin-top:16px">Preferências e Restrições</div>
+              </section>
+
+              <section class="pr-card pr-c1">
+              <div class="section-label">Preferências e Restrições</div>
               <div class="grid-2" style="gap:12px;margin-bottom:4px">
                 <div class="field">
                   <label>Preferência de exercícios</label>
@@ -2117,7 +2158,10 @@
               </div>
 
               <!-- ── GRUPO 5: VIGÊNCIA ── -->
-              <div class="section-label" style="margin-top:16px">Vigência</div>
+              </section>
+
+              <section class="pr-card pr-c1">
+              <div class="section-label">Vigência</div>
               <div class="grid-2" style="gap:12px;margin-bottom:16px">
                 <div class="field">
                   <label>Validade do treino <span style="color:var(--text3);font-size:12px">(vencimento - só informativo; o padrão está em Configurações)</span></label>
@@ -2132,6 +2176,8 @@
                   <textarea id="pr-obs" placeholder="Focar em MMII, incluir cardio, evitar alto impacto..." style="min-height:36px"></textarea>
                 </div>
               </div>
+
+              </section>
 
               <!-- ── RESUMO / SUGESTÃO DO SISTEMA ── -->
               <div id="resumo-config-geral" style="display:none;margin-bottom:16px">
@@ -2153,7 +2199,7 @@
               </div>
 
               <!-- ══ RELATÓRIO DA BASE — diagnóstico do sistema (bloqueios/alertas/contexto: dores, lesões, assimetrias) ══ -->
-              <div class="section-label" style="margin-top:4px">Relatório da Base <span style="color:var(--text3);font-size:12px;font-weight:400">identificado automaticamente a partir do Perfil e da Avaliação</span></div>
+              <div class="section-label pr-rel-h" style="margin-top:4px">Relatório da Base <span style="color:var(--text3);font-size:12px;font-weight:400">identificado automaticamente a partir do Perfil e da Avaliação</span></div>
               <div id="triagem-painel" style="display:none;margin-bottom:16px">
 
                 <!-- Resumo de uma linha -->
@@ -2188,18 +2234,18 @@
               </div>
               <!-- /RELATÓRIO DA BASE -->
 
-              <div class="btn-row">
-                <button class="btn btn-primary" id="btn-step1-next" disabled onclick="goStep(2)">Próximo →</button>
+              <div class="btn-row pr-barra-fixa">
+                <button class="btn btn-primary" id="btn-step1-next" disabled onclick="goStep(2)"><span class="pr-t-l">Próximo</span><span class="pr-t-c">Próximo: Distribuição</span> <i class=ph-arrow-right></i></button>
               </div>
             </div>
 
             <!-- STEP 2: distribuição (volume + divisão, lado a lado, sempre em sincronia) → Exercícios -->
             <div id="presc-step2" class="hidden">
-              <div class="btn-row" style="margin-bottom:14px">
+              <div class="btn-row pr-so-desk" style="margin-bottom:14px">
                 <button class="btn btn-ghost" onclick="confirmarSairEdicaoDivisao(() => goStep(1))"><i class=ph-arrow-left></i>Configurações gerais</button>
               </div>
 
-              <div class="alert alert-blue" style="margin-bottom:14px;font-size:13px">
+              <div class="alert alert-blue pr-so-desk" style="margin-bottom:14px;font-size:13px">
                 <span><i class=ph-info></i></span>
                 <div>Defina o volume por grupo muscular e escolha o modelo de divisão - os dois se ajustam ao vivo: mudar o volume recalcula o encaixe de cada modelo; trocar de modelo mostra quanto do volume definido cada sessão realmente comporta. Só são exibidos modelos compatíveis com o objetivo escolhido na tela anterior.</div>
               </div>
@@ -2207,13 +2253,13 @@
               <!-- ── CAIXA 1: VOLUME POR GRUPO MUSCULAR ───────────────────────── -->
               <div id="s3-volume" style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);margin-bottom:14px;overflow:hidden">
                 <div id="step2-perfil-ctx-anchor"></div>
-                <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer" onclick="toggleVolumeCaixa()">
+                <div class="pr-bh" style="display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer" onclick="toggleVolumeCaixa()">
                   <span id="vol-collapse-icone" style="font-size:12px;color:var(--text3);transition:transform .15s;flex-shrink:0;display:inline-flex"><i class=ph-caret-down></i></span>
                   <div style="flex:1;min-width:0">
                     <div class="section-label" style="margin-bottom:2px">Volume por Grupo Muscular</div>
                     <div style="font-size:13px;color:var(--text3)">Já calculado pelo sistema a partir do objetivo, nível e sexo - ajuste se necessário.</div>
                   </div>
-                  <div style="display:flex;align-items:center;gap:8px;flex-shrink:0" onclick="event.stopPropagation()">
+                  <div class="pr-bc" style="display:flex;align-items:center;gap:8px;flex-shrink:0" onclick="event.stopPropagation()">
                     <span style="font-size:13px;color:var(--text3);white-space:nowrap">Sér/exercício (padrão):</span>
                     <div style="display:flex;align-items:center">
                       <button id="btn-series-menos" style="width:22px;height:28px;background:var(--bg2);border:1px solid var(--border);border-radius:6px 0 0 6px;color:var(--text2);font-size:13px;cursor:pointer;line-height:1;padding:0">−</button>
@@ -2257,11 +2303,11 @@
 
               <!-- ── CAIXA 2: MODELOS DE DIVISÃO (filtrados pelo objetivo, ajustados ao volume acima) ─────────── -->
               <div id="s3-divisao" style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);margin-bottom:16px;overflow:hidden">
-                <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer" onclick="toggleDivisaoCaixa()">
+                <div class="pr-bh" style="display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer" onclick="toggleDivisaoCaixa()">
                   <span id="div-collapse-icone" style="font-size:12px;color:var(--text3);transition:transform .15s;flex-shrink:0;display:inline-flex"><i class=ph-caret-down></i></span>
                   <div class="section-label" style="margin-bottom:0;flex:1;min-width:0">Modelo de Divisão</div>
                   <!-- Limite de séries por sessão -->
-                  <div style="display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;flex-shrink:0" onclick="event.stopPropagation()">
+                  <div class="pr-bc" style="display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;flex-shrink:0" onclick="event.stopPropagation()">
                     <span style="font-size:13px;color:var(--text3);white-space:nowrap">Limite séries/sessão:</span>
                     <button id="btn-lim-menos" style="width:20px;height:22px;background:var(--bg2);border:1px solid var(--border);border-radius:6px 0 0 6px;color:var(--text2);font-size:13px;cursor:pointer;padding:0;line-height:1">−</button>
                     <input type="number" id="lim-sessao" min="4" max="60"
@@ -2290,9 +2336,9 @@
                 </div>
               </div>
 
-              <div class="btn-row" id="s3-vd-btnrow">
-                <button class="btn btn-ghost" onclick="confirmarSairEdicaoDivisao(() => goStep(1))"><i class=ph-arrow-left></i>Configurações gerais</button>
-                <button class="btn btn-primary" onclick="montarFichaModelo()">Avançar para Exercícios →</button>
+              <div class="btn-row pr-barra-fixa" id="s3-vd-btnrow">
+                <button class="btn btn-ghost" onclick="confirmarSairEdicaoDivisao(() => goStep(1))" aria-label="Voltar para Configurações gerais"><i class=ph-arrow-left></i><span class="pr-t-l">Configurações gerais</span></button>
+                <button class="btn btn-primary" onclick="montarFichaModelo()"><span class="pr-t-l">Avançar para Exercícios →</span><span class="pr-t-c">Exercícios <i class=ph-arrow-right></i></span></button>
               </div>
             </div>
 
@@ -2303,7 +2349,7 @@
                 <!-- Painel de assimetrias ativas — Camada 4 -->
                 <div id="ficha-assimetrias" style="display:none;margin-bottom:12px"></div>
 
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+                <div class="pr-div-resumo" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
                   <div style="flex:1;min-width:120px">
                     <div class="param-key">Divisão</div>
                     <div id="ficha-divisao-label" style="font-size:13px;color:var(--accent);font-variant-numeric:tabular-nums;"></div>
@@ -2317,10 +2363,10 @@
                     <span style="font-size:13px;color:var(--text3)">Mudar:</span>
                     <select id="ficha-divisao-select" style="font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:3px 8px;color:var(--text);outline:none" onchange="mudarDivisaoFicha(this.value)"></select>
                   </div>
-                  <button class="tbtn" onclick="voltarDivisao()"><i class=ph-arrow-left></i>Distribuição</button>
+                  <button class="tbtn pr-so-desk" onclick="voltarDivisao()"><i class=ph-arrow-left></i>Distribuição</button>
                 </div>
 
-                <div style="margin-bottom:12px">
+                <div class="pr-nome" style="margin-bottom:12px">
                   <div class="param-key">Nome do treino</div>
                   <input id="ficha-nome-treino" type="text" oninput="editarNomeTreinoFicha(this.value)"
                     style="width:100%;box-sizing:border-box;font-size:15px;font-weight:600;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;color:var(--text);outline:none">
@@ -2332,10 +2378,10 @@
                 <!-- Preview volume semanal MEV/MAV/MRV -->
                 <div id="preview-vol-semanal" style="margin-top:14px"></div>
 
-                <div class="btn-row">
-                  <button class="btn btn-ghost" onclick="voltarDivisao()"><i class=ph-arrow-left></i>Distribuição</button>
-                  <button class="btn btn-ghost" onclick="regerarFicha()"><i class=ph-arrows-clockwise></i>Regerar</button>
-                  <button class="btn btn-primary" onclick="aprovarTreinoMotor()"><i class=ph-check></i> Aprovar</button>
+                <div class="btn-row pr-barra-fixa">
+                  <button class="btn btn-ghost" onclick="voltarDivisao()" aria-label="Voltar para Distribuição"><i class=ph-arrow-left></i><span class="pr-t-l">Distribuição</span></button>
+                  <button class="btn btn-ghost" onclick="regerarFicha()" aria-label="Regerar"><i class=ph-arrows-clockwise></i><span class="pr-t-t">Regerar</span><span class="pr-t-l">Regerar</span></button>
+                  <button class="btn btn-primary" onclick="aprovarTreinoMotor()"><i class=ph-check></i> <span class="pr-t-l">Aprovar</span><span class="pr-t-c">Aprovar treino</span></button>
                 </div>
               </div>
 
@@ -2359,11 +2405,12 @@
                 </div>
               </div>
               <div id="ciclo-comparacao" style="display:none"></div>
-              <div class="btn-row" style="justify-content:space-between">
-                <button class="btn btn-ghost" onclick="novaPrescricao()">Nova prescrição</button>
-                <div style="display:flex;gap:8px">
+              <div class="pr-nova-m"><button class="btn btn-ghost btn-sm" onclick="novaPrescricao()"><i class=ph-plus></i>Nova prescrição</button></div>
+              <div class="btn-row pr-barra-fixa" style="justify-content:space-between">
+                <button class="btn btn-ghost pr-so-desk" onclick="novaPrescricao()">Nova prescrição</button>
+                <div class="pr-acoes-fim" style="display:flex;gap:8px">
                   <button class="btn btn-ghost" onclick="exportarTreinoParaFitCpx()" style="gap:6px">
-                    <i class=ph-upload-simple></i> Enviar ao FitCpx
+                    <i class=ph-upload-simple></i> <span class="pr-t-l">Enviar ao FitCpx</span><span class="pr-t-c">FitCpx</span>
                   </button>
                   <button class="btn btn-primary" onclick="abrirSalvarBiblioteca()" style="gap:6px">
                     <i class=ph-books></i> Salvar na Biblioteca
@@ -2373,19 +2420,117 @@
             </div>
 
             </div><!-- /treinos-form-view -->
+            </section>
           </div>
+
+        </div>
+      </div><!-- /fx-form -->
+
+      <!-- ═══ PÁGINA 2: CADASTRO DO ALUNO (cartões empilhados; todos os campos) ═══ -->
+      <div id="fx-cadastro" class="fx-view hidden">
+        <div class="page-header fx-top">
+          <button class="btn btn-ghost btn-sm" id="fx-cad-back-info" onclick="switchTab('info')"><i class=ph-arrow-left></i><span id="fx-cad-voltar">Aluno</span></button>
+          <button class="btn btn-ghost btn-sm hidden" id="fx-cad-back-list" onclick="navGo('alunos')"><i class=ph-arrow-left></i>Alunos</button>
+        </div>
+        <div class="fx-ph">
+          <div class="page-title">Cadastro do aluno</div>
         </div>
 
-        <!-- ══════════════ EVOLUÇÃO ══════════════ -->
-        <!-- Placeholder — comparação de ciclos com gráficos, vault + treinos-store.js.
-             Fica vazio de propósito até a próxima fase de desenvolvimento. -->
-        <div id="panel-evolucao" class="content hidden">
-          <div class="card">
-            <div class="empty"><i class=ph-chart-line-up></i><div class="empty-title">Evolução em desenvolvimento</div><div class="empty-text">Aqui entra a comparação entre ciclos: composição corporal e cargas lado a lado, com gráficos.</div></div>
+        <div class="fx-scroll" id="fx-cad-scroll">
+          <div id="panel-perfil" class="fx-cad hidden">
+
+            <section class="card fx-sec">
+              <div class="dp-ph"><div><h3>Perfil</h3></div></div>
+              <div class="fx-perfil">
+                <div class="field p-foto">
+                  <div class="fx-foto-g">
+                    <button type="button" class="fx-av" id="fx-cad-av" onclick="fxFotoEscolher('cad')" aria-label="Adicionar ou trocar a foto do aluno">?</button>
+                    <div class="fx-foto-bt">
+                      <button type="button" class="btn btn-ghost btn-sm" id="fx-cad-foto-btn" onclick="fxFotoEscolher('cad')"><i class=ph-camera></i><span>Adicionar foto</span></button>
+                      <button type="button" class="btn btn-ghost btn-sm fx-btn-warn hidden" id="fx-cad-foto-rm" onclick="fxFotoRemover()"><i class=ph-trash></i>Remover</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="field"><label>Atendimento</label>
+                  <select id="p-modalidade" onchange="onPerfilChange()">
+                    <option value="">Selecionar</option>
+                    <option value="presencial">Presencial</option>
+                    <option value="online">Online</option>
+                    <option value="hibrido">Híbrido</option>
+                  </select></div>
+                <div class="field"><label>Nível</label>
+                  <input type="text" id="p-nivel-ro" readonly tabindex="-1" placeholder="Definido na Avaliação"></div>
+                <div class="field p-prof"><label>Profissão</label>
+                  <input type="text" id="p-profissao" oninput="onPerfilChange()" placeholder="Ex: professor"></div>
+              </div>
+            </section>
+
+            <section class="card fx-sec">
+              <div class="dp-ph"><div><h3>Dados pessoais</h3></div></div>
+              <div class="fx-form">
+                <div class="field f6"><label>Nome completo</label>
+                  <input type="text" id="p-nome" oninput="onPerfilChange()" placeholder="Nome do aluno"></div>
+                <div class="field f6"><label>Apelido</label>
+                  <input type="text" id="p-apelido" maxlength="40" oninput="onPerfilChange()" placeholder="Como chamar nas mensagens" autocomplete="off"></div>
+                <div class="field f4"><label>Nascimento</label>
+                  <div style="display:flex;gap:8px;align-items:center">
+                    <input type="date" id="p-nascimento" oninput="onPerfilChange();calcIdade()" style="flex:1;min-width:0">
+                    <span id="p-idade-label" style="font-size:12px;color:var(--primary-ink);font-variant-numeric:tabular-nums;white-space:nowrap"></span>
+                  </div></div>
+                <div class="field f4"><label>Sexo biológico</label>
+                  <select id="p-sexo" onchange="onPerfilChange();toggleFeminino()">
+                    <option value="">Selecionar</option>
+                    <option value="M">Masculino</option>
+                    <option value="F">Feminino</option>
+                  </select></div>
+                <div class="field f4"><label>CPF</label>
+                  <input type="text" id="p-cpf" inputmode="numeric" maxlength="14" oninput="mascararCpfInput(this);onPerfilChange()" placeholder="000.000.000-00" autocomplete="off">
+                  <div id="p-cpf-msg" class="hidden" style="font-size:12px;margin-top:4px"></div></div>
+              </div>
+            </section>
+
+            <section class="card fx-sec">
+              <div class="dp-ph"><div><h3>Contato</h3></div></div>
+              <div class="fx-form">
+                <div class="field f4 t6"><label>WhatsApp</label>
+                  <div class="fx-tel"><button type="button" class="fx-tel-ddi" id="p-whatsapp-ddi" data-ddi="55" data-iso="BR" aria-haspopup="dialog" aria-expanded="false" aria-label="Código do país: Brasil +55. Tocar para trocar." onclick="foneAbrir(this)"><span class="fx-flag" aria-hidden="true">🇧🇷</span><span class="fx-ddi-n">+55</span><i class="ph-caret-down" aria-hidden="true"></i></button>
+                    <input type="text" class="fx-tel-num" id="p-whatsapp" inputmode="tel" oninput="foneDigitou(this);onPerfilChange()" placeholder="(00) 00000-0000" autocomplete="tel-national"></div></div>
+                <div class="field f8 t6"><label for="p-email">E-mail <span class="fx-lbl-dica">(login no portal)</span></label>
+                  <div class="fx-mail-lin">
+                    <input type="email" id="p-email" oninput="onPerfilChange()" placeholder="email@exemplo.com">
+                    <button class="btn btn-ghost hidden" id="p-email-alterar-btn" type="button" onclick="alunoAlterarEmail()"><i class=ph-pencil-simple></i>Alterar</button>
+                    <button class="btn btn-ghost" id="p-email-senha-btn" type="button" onclick="alunoResetarSenha()" disabled title="Cadastre o e-mail primeiro"><i class=ph-key></i>Redefinir senha</button>
+                  </div></div>
+              </div>
+            </section>
+
+            <section class="card fx-sec">
+              <div class="dp-ph"><div><h3>Endereço</h3></div></div>
+              <div class="fx-form">
+                <div class="field e-cep"><label>CEP</label>
+                  <input type="text" id="p-cep" inputmode="numeric" maxlength="9" oninput="fxCepDigitou(this)" placeholder="00000-000" autocomplete="postal-code"></div>
+                <div class="field e-rua"><label>Rua</label>
+                  <input type="text" id="p-rua" oninput="onPerfilChange()" autocomplete="street-address"></div>
+                <div class="field e-num"><label>Número</label>
+                  <input type="text" id="p-numero" oninput="onPerfilChange()"></div>
+                <div class="field e-comp"><label>Complemento</label>
+                  <input type="text" id="p-complemento" oninput="onPerfilChange()"></div>
+                <div class="field e-bai"><label>Bairro</label>
+                  <input type="text" id="p-bairro" oninput="onPerfilChange()"></div>
+                <div class="field e-cid"><label>Cidade</label>
+                  <input type="text" id="p-cidade" oninput="onPerfilChange()"></div>
+                <div class="field e-uf"><label>UF</label>
+                  <input type="text" id="p-uf" maxlength="2" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'');onPerfilChange()" placeholder="SP"></div>
+              </div>
+            </section>
+
+            <div class="fx-salvar">
+              <button class="btn btn-ghost" onclick="fxCancelarCadastro()">Cancelar</button>
+              <button class="btn btn-primary btn-save" onclick="fxSalvarCadastro()"><i class=ph-check></i>Salvar</button>
+            </div>
           </div>
         </div>
-
-      </div><!-- /tab-content -->
+      </div><!-- /fx-cadastro -->
     </div><!-- /student-view -->
   </div><!-- /main-area -->
 </div><!-- /app -->
@@ -2419,7 +2564,7 @@
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-title" id="m-crm-aluno-ttl">Novo Cliente</div>
     <div class="field"><label>Nome completo *</label><input type="text" id="f-nome"></div>
-    <div class="field"><label>WhatsApp *</label><input type="text" id="f-tel" placeholder="(11) 99999-0000"></div>
+    <div class="field"><label>WhatsApp *</label><div class="fx-tel"><button type="button" class="fx-tel-ddi" id="f-tel-ddi" data-ddi="55" data-iso="BR" aria-haspopup="dialog" aria-expanded="false" aria-label="Código do país: Brasil +55. Tocar para trocar." onclick="foneAbrir(this)"><span class="fx-flag" aria-hidden="true">🇧🇷</span><span class="fx-ddi-n">+55</span><i class="ph-caret-down" aria-hidden="true"></i></button><input type="text" class="fx-tel-num" id="f-tel" inputmode="tel" placeholder="(00) 00000-0000" oninput="foneDigitou(this)"></div></div>
     <div class="field"><label>Apelido <span style="font-weight:400;color:var(--text3)">(opcional, usado nas mensagens)</span></label><input type="text" id="f-apelido"></div>
     <div class="field"><label>Observações</label><textarea id="f-obs"></textarea></div>
     <div class="btn-row">
@@ -2634,6 +2779,8 @@
 </div>
 
 <script src="js/ids.js?v=20261014d"></script>
+<script src="js/paises.js?v=20261015a"></script>
+<script src="js/telefone.js?v=20261015b"></script>
 <script src="js/marca.js?v=20261014d"></script>
 <script src="js/instalar.js?v=20261014d"></script>
 
@@ -2642,38 +2789,39 @@
      os módulos que dependem dele. Nenhum roda código no carregamento (só
      declara funções), então a ordem relativa aos demais scripts do Auto não
      importa — mas ficam agrupados aqui por clareza. -->
-<script src="js/crm-store.js?v=20261014g"></script>
+<script src="js/crm-store.js?v=20261016a"></script>
 <script src="js/crm-categorias.js?v=20261014d"></script>
 <script src="js/crm-fluxos.js?v=20261014d"></script>
 <script src="js/crm-tarefas.js?v=20261014d"></script>
 <script src="js/crm-pipeline.js?v=20261014d"></script>
-<script src="js/crm-alunos.js?v=20261014d"></script>
-<script src="js/crm-whatsapp.js?v=20261014h"></script>
-<script src="js/crm-config.js?v=20261014h"></script>
+<script src="js/crm-alunos.js?v=20261016a"></script>
+<script src="js/crm-whatsapp.js?v=20261015b"></script>
+<script src="js/crm-config.js?v=20261015c"></script>
 <script src="js/adapters.js?v=20261014d"></script>
-<script src="js/mensagens-wa.js?v=20261014h"></script>
+<script src="js/mensagens-wa.js?v=20261015a"></script>
 
-<script src="js/arquivo-store.js?v=20261014d"></script>
-<script src="js/avaliacao.js?v=20261015g"></script>
+<script src="js/arquivo-store.js?v=20261017a"></script>
+<script src="js/avaliacao.js?v=20261018a"></script>
 <script src="js/exercicios-db.js?v=20261014d"></script>
 <script src="js/treinos-store.js?v=20261014d"></script>
-<script src="js/prescricao-motor.js?v=20261014d"></script>
-  <script src="js/dashboard.js?v=20261014d"></script>
+<script src="js/prescricao-motor.js?v=20261018b"></script>
+<script src="js/historico.js?v=20261018a"></script>
+  <script src="js/dashboard.js?v=20261015h"></script>
 <script src="js/wa-regras.js?v=20261014d"></script>
-<script src="js/integracao-google.js?v=20261014d"></script>
-<script src="js/shell.js?v=20261014d"></script>
-<script src="js/biblioteca-exercicios.js?v=20261014d"></script>
+<script src="js/integracao-google.js?v=20261015i"></script>
+<script src="js/shell.js?v=20261018a"></script>
+<script src="js/biblioteca-exercicios.js?v=20261015i"></script>
 <script src="js/init-app.js?v=20261014d"></script>
 <script src="js/arquivo-ui.js?v=20261014d"></script>
 
 <script src="js/carregando.js?v=20261014d"></script>
-<script src="js/supabase-auth.js?v=20261014d"></script>
+<script src="js/supabase-auth.js?v=20261016a"></script>
 
 <!-- Portal do Aluno (Fase 4) — cadastro/anamnese/avaliação/equipamentos enviados
      pelo próprio aluno via app separado (pasta aluno/). Tabelas e RLS próprias,
      fora do blob app_data do trainer — ver supabase/sql/onboarding-aluno.sql. -->
 <script src="js/locais-alunos.js?v=20261014e"></script>
-<script src="js/onboarding-personal.js?v=20261014j"></script>
+<script src="js/onboarding-personal.js?v=20261016b"></script>
 
 
 

@@ -133,7 +133,7 @@ const JSON_H = { ...CORS, 'content-type': 'application/json' };
   ok('sem a tabela (SQL ainda não rodado) o painel segue normal', true);
 
   // ── perfil: botão agora é "Redefinir senha" e usa o mesmo fluxo ──
-  ok('Perfil: botão "Redefinir senha" existe e usa o mesmo fluxo', await ev(() => { const b = document.getElementById('p-portal-reset-btn'); return !!b && b.textContent.includes('Redefinir senha') && b.getAttribute('onclick') === 'alunoResetarSenha()' && typeof alunoResetarSenha === 'function'; }));
+  ok('Ficha: bloco Contato tem o botão "Redefinir senha" e usa o mesmo fluxo', await ev(() => { fxRenderInfo(students[0]); const b = [...document.querySelectorAll('#fx-blk-contato button')].find(x => x.textContent.includes('Redefinir senha')); return !!b && b.getAttribute('onclick') === 'alunoResetarSenha()' && typeof alunoResetarSenha === 'function'; }));
   ok('painel: sem pageerror', errs.length === 0, errs.join(' | '));
 
   await browser.close();

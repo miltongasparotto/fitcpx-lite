@@ -18,7 +18,8 @@
 <link rel="stylesheet" href="../css/tokens.css?v=20261014c">
 <link rel="stylesheet" href="../css/icons.css">
 <link rel="stylesheet" href="../css/carregando.css?v=20261014c">
-<link rel="stylesheet" href="portal.css?v=20261014c">
+<link rel="stylesheet" href="../css/telefone.css?v=20261015a">
+<link rel="stylesheet" href="portal.css?v=20261015a">
 <script>try{var _t=localStorage.getItem('fitcpx-aluno-tema');var _d=_t?_t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(_d){document.documentElement.classList.add('dark');document.querySelector('meta[name=theme-color]').setAttribute('content','#121212')}}catch(e){}</script>
 </head>
 <body>
@@ -205,7 +206,7 @@
     <div class="field"><label>Nascimento</label><input type="text" id="dp-nascimento" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" autocomplete="bday" oninput="mascararData(this)"></div>
     <div class="field"><label>Sexo</label><select id="dp-sexo"><option value="">Selecionar</option><option value="M">Masculino</option><option value="F">Feminino</option></select></div>
   </div>
-  <div class="field"><label>WhatsApp</label><input type="tel" id="dp-whatsapp" placeholder="(00) 00000-0000" autocomplete="tel"></div>
+  <div class="field"><label>WhatsApp</label><div class="fx-tel"><button type="button" class="fx-tel-ddi" id="dp-whatsapp-ddi" data-ddi="55" data-iso="BR" aria-haspopup="dialog" aria-expanded="false" aria-label="Código do país: Brasil +55. Tocar para trocar." onclick="foneAbrir(this)"><span class="fx-flag" aria-hidden="true">🇧🇷</span><span class="fx-ddi-n">+55</span><i class="ph-caret-down" aria-hidden="true"></i></button><input type="tel" class="fx-tel-num" id="dp-whatsapp" placeholder="(00) 00000-0000" autocomplete="tel-national" oninput="foneDigitou(this)"></div><div class="obs">Toque no código para trocar o país.</div></div>
   <div class="field"><label>Profissão <span style="color:var(--text3);font-weight:400">(opcional)</span></label><input type="text" id="dp-profissao"></div>
   <button class="btn btn-primary" id="dp-btn" onclick="salvarDadosPessoais()">Salvar</button>
   <button class="btn btn-ghost" onclick="fecharTelaDados()" style="margin-top:10px">Voltar</button>
@@ -513,12 +514,14 @@
   <div id="toast-bloqueio" class="toast hidden" role="status"></div>
 </div>
 
+<script src="../js/paises.js?v=20261015a"></script>
+<script src="../js/telefone.js?v=20261015b"></script>
 <script src="../js/marca.js?v=20261014c"></script>
 <script src="../js/instalar.js?v=20261014c"></script>
 <script src="../js/carregando.js?v=20261014c"></script>
 <script src="js/aluno-supabase.js?v=20261014c"></script>
 <script src="js/portal-adapters.js?v=20261014c"></script>
 <script src="js/marca-portal.js?v=20261014c"></script>
-<script src="js/aluno-app.js?v=20261014f"></script>
+<script src="js/aluno-app.js?v=20261015a"></script>
 </body>
 </html>

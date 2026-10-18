@@ -160,6 +160,7 @@ function abrirNovoAluno(){
   hide('modal-overlay');
   const s = { id:novoId(), perfil:{nome:''}, anamnese:{}, prescricao:{}, reavaliacao:null };
   students.push(s);
+  _novoSemSalvarId = s.id; // só vira cadastro de verdade no 1º Salvar com nome (ver _novoDescartar)
   renderStudentList();
   _formDirty = false;
   window._skipDraftModal = true; // student novo sem versão salva — sem modal de recuperação
@@ -217,7 +218,7 @@ function _nivelColor(n){
 const ALUNOS_TREINO_VENCIDO_DIAS = 56; // ciclo de 8 semanas
 const ALUNOS_COMPLETO_PX = 1260;       // largura do cartão abaixo da qual a lista perde o cabeçalho com ordenar/filtro (igual ao @container do app.css)
 
-const _alVazio = ()=>({busca:'',status:'',sexo:'',nivel:'',modal:'',
+const _alVazio = ()=>({busca:'',status:'',alerta:'',sexo:'',nivel:'',modal:'',
   idade:{modo:'exata',a:'',b:''}, aval:{preset:'',de:'',ate:''}, treino:{preset:'',de:'',ate:''}});
 let _alF = _alVazio();
 let _alunosSortCol = null;
@@ -228,7 +229,15 @@ const _AL_POR_PAG = [10,20,30,0];
 const _AL_PAG_LS = 'fitcpx-alunos-por-pagina';
 const _alPag = {n:(()=>{ try{ const v=parseInt(localStorage.getItem(_AL_PAG_LS),10); if(_AL_POR_PAG.includes(v)) return v; }catch(e){} return 10; })(), pg:1, sig:''};
 
-const _AL_STATUS = {novo:'Novo',ativo:'Ativo',pendente:'Pendente',transf:'Transferência',bloq:'Bloqueado'};
+// Situação (o personal escolhe, na ficha): vira abas, anel do avatar e selo. Alertas (o sistema calcula): viram selos com ícone e um filtro à parte.
+const _AL_STATUS = {lead:'Lead',ativo:'Ativo',inativo:'Inativo',bloq:'Bloqueado'};
+const _AL_ALERTAS = {novo:'Novo',pendente:'Pendente',transf:'Transferência'};
+const _AL_ALERTA_IC = {novo:'ph-sparkle',pendente:'ph-warning-circle',transf:'ph-arrows-left-right'};
+const _AL_ALERTA_DICA = {
+  novo:'Cadastro novo: marque como visto.',
+  pendente:'Faltam nascimento, sexo ou WhatsApp: o app do aluno fica com as abas bloqueadas até completar.',
+  transf:'Transferência de personal em andamento: cadastro só para visualização.'
+};
 const _AL_SEL = {
   sexo:{lab:'Sexo',id:'alunos-filtro-sexo',opts:[['','Todos'],['F','Feminino'],['M','Masculino'],['__vazio','—']]},
   nivel:{lab:'Nível',id:'alunos-filtro-nivel',opts:[['','Todos'],['Iniciante','Iniciante'],['Intermediário','Intermediário'],['Avançado','Avançado'],['__vazio','—']]},
@@ -264,8 +273,9 @@ function _alHa(d){
   return n<=0 ? 'hoje' : n===1 ? 'ontem' : 'há '+n+' dias';
 }
 function _alAval(s){
-  const avs=s.avaliacoesAntro||[];
-  return _alDia((avs.length?avs[avs.length-1].data_avaliacao:null)||(s.anamnese||{}).data_avaliacao);
+  const avs=(s.avaliacoesAntro||[]).map(r=>_alDia(r.data_avaliacao)).filter(Boolean);
+  if(avs.length) return avs.reduce((m,d)=>d>m?d:m);
+  return _alDia((s.anamnese||{}).data_avaliacao);
 }
 function _alTreino(s){
   const pr=getUltimoTreino(s); if(!pr.aprovado) return null;
@@ -280,14 +290,18 @@ function _alDadosPendentes(s){
   const p=s.perfil||{};
   return !!(p.alunoUserId && !(p.nascimento && p.sexo && String(p.whatsapp||'').replace(/\D/g,'').length>=10));
 }
-// Status (prioridade): transferência > novo > bloqueado > pendente > ativo
-function _alStatus(s){
-  const p=s.perfil||{};
-  if(typeof alunoTravado==='function' && alunoTravado(s)) return 'transf';
-  if(p.novoCadastro) return 'novo';
-  if(p.portalStatus==='bloqueado') return 'bloq';
-  if(_alDadosPendentes(s)) return 'pendente';
-  return 'ativo';
+// Situação do aluno para a lista (lead, ativo, inativo, bloq). Vem de s.crm.status (ver situacaoDe em js/crm-store.js).
+function _alStatus(s){ const k=situacaoDe(s); return k==='bloqueado' ? 'bloq' : k; }
+// Alertas do sistema (podem valer junto com qualquer situação): novo, pendente, transf
+function _alAlertas(s){
+  const a=[], p=s.perfil||{};
+  if(p.novoCadastro) a.push('novo');
+  if(_alDadosPendentes(s)) a.push('pendente');
+  if(typeof alunoTravado==='function' && alunoTravado(s)) a.push('transf');
+  return a;
+}
+function _alFlagHTML(k, tag){
+  return '<'+(tag||'span')+' class="al-aviso al-aviso-'+k+'" title="'+_AL_ALERTA_DICA[k]+'"><i class='+_AL_ALERTA_IC[k]+'></i>'+_AL_ALERTAS[k]+'</'+(tag||'span')+'>';
 }
 // Alerta de saúde (o detalhe aparece no Perfil e na prescrição): lesão, gestação ou cardiopatia
 function _alAtencao(s){
@@ -370,11 +384,15 @@ function _alMontaCabecalho(){
 }
 function _alAbas(){
   const el=$('alunos-tabs'); if(!el) return;
-  const cont={}; students.forEach(s=>{ const k=_alStatus(s); cont[k]=(cont[k]||0)+1; });
+  const cont={}, ca={}; students.forEach(s=>{ const k=_alStatus(s); cont[k]=(cont[k]||0)+1; _alAlertas(s).forEach(a=>{ ca[a]=(ca[a]||0)+1; }); });
   const abas=[['','Todos',students.length]].concat(Object.keys(_AL_STATUS).map(k=>[k,_AL_STATUS[k],cont[k]||0]));
-  el.innerHTML='<div class="dp-seg" role="group" aria-label="Filtrar por status">'+abas.map(a=>
+  el.innerHTML='<div class="dp-seg" role="group" aria-label="Filtrar por situação">'+abas.map(a=>
     '<button type="button" class="dp-seg-b'+(_alF.status===a[0]?' on':'')+'" onclick="alunosSetFiltro(\'status\',\''+a[0]+'\')">'
-    +(a[0]?'<i class="al-dot al-st-'+a[0]+'"></i>':'')+a[1]+'<span>'+a[2]+'</span></button>').join('')+'</div>';
+    +(a[0]?'<i class="al-dot al-st-'+a[0]+'"></i>':'')+a[1]+'<span>'+a[2]+'</span></button>').join('')+'</div>'
+  +'<div class="al-alertas" role="group" aria-label="Filtrar por alerta do sistema"><span class="al-alertas-l">Alertas</span><div class="dp-seg">'
+  +Object.keys(_AL_ALERTAS).map(k=>
+    '<button type="button" class="dp-seg-b al-ab-'+k+(_alF.alerta===k?' on':'')+'" aria-pressed="'+(_alF.alerta===k)+'" title="'+_AL_ALERTA_DICA[k]+'" onclick="alunosSetFiltro(\'alerta\',\''+(_alF.alerta===k?'':k)+'\')">'
+    +'<i class='+_AL_ALERTA_IC[k]+'></i>'+_AL_ALERTAS[k]+'<span>'+(ca[k]||0)+'</span></button>').join('')+'</div></div>';
 }
 function _alSync(){
   document.querySelectorAll('[data-alf]').forEach(el=>{ const k=el.dataset.alf; el.value=_alF[k]; el.classList.toggle('active',!!_alF[k]); });
@@ -488,6 +506,7 @@ function renderScreenAlunos(){
     const p=s.perfil||{}, a=s.anamnese||{};
     if(busca && !matchTokens(busca, p.nome||'', _alNivel(s), getUltimoTreino(s).objetivo||'')) return false;
     if(_alF.status && _alStatus(s)!==_alF.status) return false;
+    if(_alF.alerta && !_alAlertas(s).includes(_alF.alerta)) return false;
     if(_alF.sexo===_AL_VAZIO){ if(p.sexo) return false; } else if(_alF.sexo && p.sexo!==_alF.sexo) return false;
     if(_alF.nivel===_AL_VAZIO){ if(_alNivel(s)) return false; } else if(_alF.nivel && _alNivel(s)!==_alF.nivel) return false;
     if(_alF.modal===_AL_VAZIO){ if(p.modalidade) return false; } else if(_alF.modal && !(p.modalidade||'').toLowerCase().includes(_alF.modal)) return false;
@@ -552,14 +571,13 @@ function renderScreenAlunos(){
       : venc ? `<span class="badge badge-amber" title="Treino com mais de ${ALUNOS_TREINO_VENCIDO_DIAS} dias: ciclo de 8 semanas vencido"><i class=ph-clock-countdown></i>${_alFmt(dTreino)}</span>`
              : `<span class="badge badge-green"><i class=ph-check></i>${_alFmt(dTreino)}</span>`;
     const semCpf = String(p.cpf||'').replace(/\D/g,'').length!==11;
-    const tags = (semCpf?'<span class="badge badge-gray" title="Sem CPF: mande o link de cadastro pro aluno preencher"><i class=ph-identification-card></i>Sem CPF</span>':'')
-               + (_alDadosPendentes(s)?'<span class="badge badge-amber" title="Aluno com app bloqueado: faltam nascimento, sexo ou WhatsApp. Complete no Perfil ou espere o aluno preencher."><i class=ph-lock></i>Dados pendentes</span>':'');
+    const tags = _alAlertas(s).map(k=>_alFlagHTML(k)).join('') + (semCpf?'<span class="badge badge-gray" title="Sem CPF: mande o link de cadastro pro aluno preencher"><i class=ph-identification-card></i>Sem CPF</span>':'');
     const travado = typeof alunoTravado==='function' && alunoTravado(s);
 
     tr.innerHTML=`
       <td>
         <div class="al-nome">
-          <span class="al-av al-st-${st}" title="${_AL_STATUS[st]}" aria-label="Status: ${_AL_STATUS[st]}">${escHTML(_alIni(nome))}</span>
+          <span class="al-av al-st-${st}" title="${_AL_STATUS[st]}" aria-label="Status: ${_AL_STATUS[st]}">${_alAvatarInner(s,nome)}</span>
           <span class="al-id">${_alAtencao(s)?'<span class="al-warn" title="Alerta de saúde: veja os detalhes no Perfil do aluno"><i class=ph-warning></i></span>':''}<span class="al-n">${escHTML(nome)}</span></span>
           <span class="al-tags">${tags}</span>
         </div>
@@ -677,6 +695,42 @@ function abrirSalvarBibliotecaDeAluno(id){
 
 
 
+// ─── ALUNO NOVO AINDA NÃO SALVO ──────────────────────────────────────────────
+// "Cadastro manual" já põe o aluno em students[] para o formulário funcionar. Se o personal sai sem
+// salvar, esse registro vazio ficava na lista. Aqui ele é descartado ao sair e nunca é gravado sem nome.
+let _novoSemSalvarId = null;
+// "Sem dado": vazio ou o valor padrão que o formulário grava sozinho (Nenhum, Nenhuma, []); chaves internas (_x) não contam.
+function _semDado(v){
+  if(v===null || v===undefined || v==='' || v===false) return true;
+  if(typeof v==='string') return v==='Nenhum' || v==='Nenhuma' || v==='[]';
+  if(Array.isArray(v)) return v.every(_semDado);
+  if(typeof v==='object') return Object.keys(v).every(k=>k.charAt(0)==='_' || _semDado(v[k]));
+  return false;
+}
+function _alunoVazio(s){
+  const r=Object.assign({},s); delete r.id;
+  // o CRM cria sozinho um cartão padrão (lead, sem fluxo) em todo aluno: só conta se houver apelido, obs ou fluxo
+  const c=r.crm;
+  if(c && (!c.status || c.status==='lead' || c.status==='ativo') && !c.apelido && !c.obs && _semDado(c.fluxos)) delete r.crm;
+  return _semDado(r);
+}
+function _novoSemNome(){
+  if(_novoSemSalvarId===null) return false;
+  const s=students.find(x=>x.id===_novoSemSalvarId);
+  return !!s && !String((s.perfil||{}).nome||'').trim();
+}
+function _novoDescartar(){
+  const id=_novoSemSalvarId; if(id===null) return;
+  _novoSemSalvarId=null; _formDirty=false;
+  try{ const k=lsKey('acm-draft-'+id); localStorage.removeItem(k); localStorage.removeItem(k.replace('acm-draft-','acm-draft-nav-')); }catch(e){}
+  const i=students.findIndex(x=>x.id===id); if(i<0) return;
+  students.splice(i,1);
+  if(activeId===id) activeId=null;
+  try{ localStorage.setItem(lsKey('acm-students'), JSON.stringify(students)); }catch(e){}
+  if(typeof supaAutoSave==='function') supaAutoSave();
+  if(typeof renderStudentList==='function') renderStudentList();
+}
+
 // ─── DRAFT / DIRTY TRACKING ──────────────────────────────────────────────────
 let _formDirty  = false;
 let _pendingNavFn = null;
@@ -690,8 +744,8 @@ function _saveDraft(){
   try{
     localStorage.setItem(lsKey('acm-draft-'+(activeId||'_')), JSON.stringify(s));
     // Also save current tab/subtab so recovery can restore navigation
-    let tab='perfil';
-    for(const t of ['perfil','anamnese','prescricao','evolucao']){
+    let tab='info';
+    for(const t of ['info','perfil','anamnese','prescricao','evolucao']){
       if(document.getElementById('tab-'+t)?.classList.contains('active')){ tab=t; break; }
     }
     let subtab='anamnese-hist';
@@ -712,6 +766,12 @@ function _revertStudent(){
 }
 
 function _saveCurrentContext(){
+  if(typeof _fxFormModo!=='undefined' && _fxFormModo){
+    if(_fxFormModo==='anamnese') anamSalvar();
+    else if(_fxFormModo==='antro') antroSalvarAvaliacao();
+    else if(typeof salvarEstadoPrescricao==='function') salvarEstadoPrescricao();
+    return;
+  }
   const tabPerf=$('tab-perfil')?.classList.contains('active');
   const tabAnam=$('tab-anamnese')?.classList.contains('active');
   const tabPresc=$('tab-prescricao')?.classList.contains('active');
@@ -747,11 +807,17 @@ function salvarPerfil(){
   const _s = getActive();
   if(_s && typeof alunoTravado==='function' && alunoTravado(_s)) return;   // em transferência: só visualização
   if(typeof onPerfilChange==='function') onPerfilChange();
+  if(_novoSemNome()){
+    if(typeof crmToast==='function') crmToast('Informe o nome do aluno para salvar','err');
+    const n=$('p-nome'); if(n) n.focus();
+    return;
+  }
   if(typeof saveStudent==='function') saveStudent();
   // Nome + CPF + e-mail conferidos no índice central (evita duplicar aluno de outro personal)
   if(_s && typeof registrarAlunoNuvem==='function') registrarAlunoNuvem(_s);
 }
 function salvarAnamnese(){
+  if(typeof _fxFormModo!=='undefined' && _fxFormModo==='anamnese'){ anamSalvar(); return; }
   if(typeof onAnamneseChange==='function') onAnamneseChange();
   if(typeof saveStudent==='function') saveStudent();
 }
@@ -760,6 +826,7 @@ function _unsavedSalvar(){
   const el=document.getElementById('modal-unsaved-overlay');
   if(el) el.classList.add('hidden');
   _saveCurrentContext();
+  if(_novoSemNome()){ _pendingNavFn=null; return; } // aluno novo sem nome não é salvo nem sai da ficha
   _clearDirty();
   const fn=_pendingNavFn; _pendingNavFn=null;
   if(fn) fn();
@@ -808,7 +875,7 @@ window.addEventListener('beforeunload', ()=>{
       // Sync anamnese-hist fields → s.anamnese if that panel is active
       if(typeof onAnamneseChange==='function'){
         const panelAnam = document.getElementById('panel-anamnese');
-        if(panelAnam && !panelAnam.classList.contains('hidden')) onAnamneseChange();
+        if((panelAnam && !panelAnam.classList.contains('hidden')) || (typeof _fxFormModo!=='undefined' && _fxFormModo)) onAnamneseChange();
       }
       // Sync perfil fields → s.perfil if that panel is active
       if(typeof onPerfilChange==='function'){
@@ -841,6 +908,8 @@ function detectarDraftsNaoSalvos(){
       if(!student){
         // Orphan draft = new student never saved to acm-students
         try{ const d=JSON.parse(localStorage.getItem(key)||'null'); if(d) student=d; }catch(e){}
+        // rascunho de aluno novo sem nenhum dado: descarta sem perguntar
+        if(student && _alunoVazio(student)){ try{ localStorage.removeItem(key); }catch(e){} continue; }
       } else {
         // Draft exists for a saved student — compare; if identical, discard silently
         try{
@@ -911,7 +980,7 @@ function _bannerVerAlteracoes(){
     }
     if(navRaw){
       const nav=JSON.parse(navRaw);
-      if(nav.tab && nav.tab!=='perfil') switchTabForcado(nav.tab);
+      if(nav.tab && nav.tab!=='info') switchTabForcado(nav.tab);
       if(nav.subtab && nav.tab==='anamnese'){
         _switchSubtabForcado(nav.subtab);
         // If antro form was open (editing or new eval in progress), reopen it
@@ -976,7 +1045,8 @@ function selectStudent(id){
   sv.classList.remove('hidden');
   sv.style.display='flex';
   loadStudentData(getActive());
-  switchTabForcado('perfil');
+  // aluno novo (Cadastro manual) abre direto no formulário; os demais, em Informações pessoais
+  switchTabForcado(_novoSemSalvarId===id ? 'perfil' : 'info');
   // Update sidebar nav active
   const nav=$('nav-alunos'); if(nav) nav.classList.add('active');
   renderStudentList();
@@ -988,44 +1058,27 @@ function loadStudentData(s){
 
   // Perfil
   setVal('p-nome', p.nome||'');
+  setVal('p-apelido', (s.crm&&s.crm.apelido)||'');
   setVal('p-nascimento', p.nascimento||'');
   setVal('p-sexo', p.sexo||'');
   setVal('p-profissao', p.profissao||'');
-  setVal('p-whatsapp', p.whatsapp||'');
+  foneCarregar('p-whatsapp', p.whatsapp||'');
   setVal('p-modalidade', p.modalidade||'');
-  setVal('p-cod-aluno-legado', p.codAlunoLegado||'');
   setVal('p-email', p.email||'');
+  ['cep','rua','numero','complemento','bairro','cidade','uf'].forEach(k=>setVal('p-'+k, p[k]||''));
+  setVal('p-nivel-ro', _alNivel(s));
   setVal('p-cpf', typeof cpfFormatado==='function' ? cpfFormatado(p.cpf) : (p.cpf||''));
   const _cpfMsg = $('p-cpf-msg'); if(_cpfMsg) _cpfMsg.classList.add('hidden');
-  setVal('p-liberacao', p.liberacao||'');
   if(typeof renderPortalStatusBadge==='function') renderPortalStatusBadge(s);
   if(typeof aplicarEstadoTransferencia==='function') aplicarEstadoTransferencia(s);
-  carregarCondicoes(p.condicoes||'');
-  carregarMedicamentos(p.medicamentos||'');
-  const medDet = document.getElementById('p-medicamentos-detalhe');
-  if(medDet) medDet.value = p.medicamentos_detalhe||'';
-  carregarLesoes(p.lesoes||'');
-  setVal('p-obs-clinicas', p.obs_clinicas||'');
   calcIdade();
   toggleFeminino();
 
-  // Anamnese — campos base
-  const anaBase = ['nivel','tempo','consistencia',
-   'frequencia','duracao','horario','local',
-   'gosta','preferencias','cirurgias',
-   'lesoes_passadas','gestacao'];
-  anaBase.forEach(k=>{ setVal('a-'+k.replace(/_/g,'-'), a[k]||''); });
-  // Objetivos — backward compat: converte texto antigo para code
-  const _OBJ_TEXT2CODE = {'Hipertrofia':'Hip','Emagrecimento':'Emagr','Força':'Forca','Saúde':'Saude','Reabilitação':'Reab',
-    'Composição Corporal':'Comp','Resistência Muscular':'Resist','Cond. Cardiorrespiratório':'CardioR',
-    'Funcional / Mobilidade':'Func','Performance Esportiva':'Esport','Envelhecimento Ativo':'Envelhec'};
-  const _efCode = _OBJ_TEXT2CODE[a.objetivo_ef] || a.objetivo_ef || '';
-  const _secCode = _OBJ_TEXT2CODE[a.objetivo_sec] || a.objetivo_sec || '';
-  _initObjetivoAnamnese(_efCode, _secCode);
-  _populateLocalSelect(a.local||'');
-  carregarSintomas(a.sintomas||'');
-  _exPickerLoad(a.gosta_ex||'', a.evitar_ex||'');
-  renderTextoAlunoExercicios(a);
+  // Anamnese e saúde — campos do formulário (js/historico.js); a ficha mostra o registro mais recente
+  anamMigrar(s);
+  anamAplicarAtual(s);
+  anamPreencherForm(s);
+  renderAnamLista();
 
   // Antropométrica
   const anaAntro = ['peso','altura','gordura','mgorda','mmuscular','mmuscular-pct','osso','osso-pct','residual','residual-pct',
@@ -1124,17 +1177,292 @@ function loadStudentData(s){
   setTimeout(()=>{ _loadingData = false; _formDirty = false; }, 150);
 }
 
-// ─── HEADER ───────────────────────────────────────────────────────────────────
+// ─── FICHA DO ALUNO: cartão principal, informações pessoais e status ─────────
+// Situação do aluno (o personal escolhe): Lead, Ativo, Inativo ou Bloqueado, em s.crm.status. Inativo sai das tarefas e do Painel;
+// Bloqueado também trava o acesso ao Portal (servidor, alunos_acesso). Novo, Pendente e Transferência são avisos que o sistema calcula
+// (_alAlertas) e aparecem como selos com ícone ao lado da situação; ninguém escolhe esses.
+const _FX_STATUS = {
+  lead:     {lbl:'Lead',      badge:'badge-blue',  dot:'sd-blue',  ic:'ph-star',         key:'lead'},
+  ativo:    {lbl:'Ativo',     badge:'badge-green', dot:'sd-green', ic:'ph-check-circle', key:'ativo'},
+  inativo:  {lbl:'Inativo',   badge:'badge-gray',  dot:'sd-gray',  ic:'ph-minus-circle', key:'inativo'},
+  bloqueado:{lbl:'Bloqueado', badge:'badge-red',   dot:'sd-red',   ic:'ph-lock-simple',  key:'bloq'},
+};
+const _FX_ORDEM = ['lead','ativo','inativo','bloqueado'];
+const _FX_MODALIDADE = {presencial:'Presencial', online:'Online', hibrido:'Híbrido'};
+function _fxStatus(s){ const k = situacaoDe(s), c = _FX_STATUS[k]; return {key:c.key, k, lbl:c.lbl, badge:c.badge, ic:c.ic}; }
+function _fxIdade(nasc){
+  const d=_alDia(nasc); if(!d) return null;
+  const h=_alHoje(); let n=h.getFullYear()-d.getFullYear();
+  if(h.getMonth()<d.getMonth() || (h.getMonth()===d.getMonth() && h.getDate()<d.getDate())) n--;
+  return n>=0 && n<130 ? n : null;
+}
+function _fxRow(rotulo, valor, sub){
+  const v = valor ? '<span class="dp-v">'+valor+'</span>' : '<span class="dp-v fx-nada">—</span>';
+  return '<div class="fx-r"><span>'+rotulo+'</span><span class="fx-val">'+v+(sub?'<span class="dp-s">'+sub+'</span>':'')+'</span></div>';
+}
+function _fxPortalBadge(s){
+  const p=s.perfil||{};
+  if(!p.email) return '<span class="badge badge-gray">Sem e-mail</span>';
+  if(!p.alunoUserId) return '<span class="badge badge-gray">Aguardando primeiro acesso</span>';
+  if(p.portalStatus==='bloqueado') return '<span class="badge badge-red"><i class=ph-lock-simple></i>Bloqueado</span>';
+  return '<span class="badge badge-green"><i class=ph-check-circle></i>Ativo</span>';
+}
 
 function updateHeader(s){
-  const p=s.perfil, a=s.anamnese, pr=getUltimoTreino(s);
-  $('student-header-name').textContent = p.nome||'Aluno';
-  let b='';
-  if(p.sexo) b+=`<span class="badge badge-blue">${escHTML(p.sexo)}</span>`;
-  if(a.nivel) b+=`<span class="badge badge-amber">${escHTML(a.nivel)}</span>`;
-  if(pr.objetivo) b+=`<span class="badge badge-green">${escHTML(pr.objetivo)}</span>`;
-  if(pr.aprovado) b+=`<span class="badge badge-green"><i class=ph-check></i> Prescrito</span>`;
-  $('student-badges').innerHTML = b;
+  if(!s) return;
+  const p=s.perfil||{}, nome=p.nome||'Aluno', st=_fxStatus(s);
+  const set=(id,fn)=>{ const el=$(id); if(el) fn(el); };
+  set('student-header-name', el=>{ el.textContent=nome; });
+  set('fx-av', el=>{ _fxAvatarPinta(el, s); el.className='fx-av fx-st-'+st.key; });
+  set('fx-cad-av', el=>{ _fxAvatarPinta(el, s); el.className='fx-av fx-st-'+st.key; });
+  fxFotoBotoes(s);
+  set('fx-status-chip', el=>{ el.className='badge '+st.badge; el.innerHTML='<i class='+st.ic+'></i>'+escHTML(st.lbl); });
+  set('fx-alertas', el=>{ el.innerHTML = fxAlertasHTML(s); });
+  set('fx-mail', el=>{ el.innerHTML = p.email ? '<i class=ph-envelope-simple></i><span>'+escHTML(p.email)+'</span>' : ''; });
+  set('student-badges', el=>{
+    const idade=_fxIdade(p.nascimento), niv=_alNivel(s), mod=_FX_MODALIDADE[p.modalidade]||'';
+    let b='';
+    if(p.sexo) b+='<span class="badge badge-blue">'+(p.sexo==='F'?'Feminino':p.sexo==='M'?'Masculino':escHTML(p.sexo))+'</span>';
+    if(idade!==null) b+='<span class="badge badge-gray">'+idade+' anos</span>';
+    if(niv) b+='<span class="badge badge-amber">'+escHTML(niv)+'</span>';
+    if(mod) b+='<span class="badge badge-gray"><i class=ph-map-pin></i>'+mod+'</span>';
+    el.innerHTML=b;
+  });
+  const av=_alAval(s), tr=_alTreino(s);
+  set('fx-aval-d', el=>{ el.textContent = av ? _alFmt(av) : '—'; });
+  set('fx-aval-h', el=>{ el.textContent = av ? _alHa(av) : 'sem avaliação'; });
+  set('fx-trn-d', el=>{ el.textContent = tr ? _alFmt(tr) : '—'; });
+  set('fx-trn-h', el=>{ el.textContent = tr ? _alHa(tr) : 'sem treino prescrito'; });
+  set('fx-cad-voltar', el=>{ el.textContent = nome; });
+  set('p-nivel-ro', el=>{ el.value=_alNivel(s); });
+  fxRenderStatusMenu(s);
+  fxRenderInfo(s);
+}
+
+function fxRenderInfo(s){
+  const c=$('fx-blk-contato'), d=$('fx-blk-pessoal'); if(!c || !d) return;
+  const p=s.perfil||{}, E=escHTML;
+  const fone=String(p.whatsapp||'').replace(/\D/g,'');
+  const wa = fone ? waLinkPara(s,'') : null;
+  c.innerHTML =
+    '<div class="fx-blk-h"><div class="fx-blk-ic"><i class=ph-chat-circle></i></div><div><h4>Contato</h4><p>Falar com o aluno</p></div></div>'
+    + _fxRow('WhatsApp', p.whatsapp ? E(foneExibir(p.whatsapp)) : '')
+    + _fxRow('E-mail', p.email ? E(p.email) : '')
+    + '<div class="fx-r"><span>Portal do aluno</span><span class="fx-val">'+_fxPortalBadge(s)+'</span></div>'
+    + '<div class="fx-foot">'
+    +   '<button class="btn btn-soft btn-sm" type="button" onclick="fxAbrirWhats()"'+(wa?'':' disabled title="Sem WhatsApp cadastrado"')+'><i class=ph-whatsapp-logo></i>Abrir WhatsApp</button>'
+    +   (p.email ? '<a class="btn btn-ghost btn-sm" href="mailto:'+E(encodeURIComponent(p.email).replace('%40','@'))+'"><i class=ph-envelope-simple></i>Enviar e-mail</a>'
+                 : '<button class="btn btn-ghost btn-sm" type="button" disabled title="Sem e-mail cadastrado"><i class=ph-envelope-simple></i>Enviar e-mail</button>')
+    +   '<button class="btn btn-ghost btn-sm" type="button" onclick="alunoResetarSenha()"'+(p.email?'':' disabled title="Cadastre o e-mail primeiro"')+'><i class=ph-key></i>Redefinir senha</button>'
+    + '</div>';
+
+  const nasc=_alDia(p.nascimento), idade=_fxIdade(p.nascimento);
+  const rua=[p.rua, p.numero].filter(Boolean).join(', ') + (p.complemento ? ' · '+p.complemento : '');
+  const loc=[p.bairro, [p.cidade,p.uf].filter(Boolean).join(' · '), p.cep].filter(Boolean).join(' · ');
+  const cpf=String(p.cpf||'').replace(/\D/g,'');
+  d.innerHTML =
+    '<div class="fx-blk-h"><div class="fx-blk-ic"><i class=ph-user></i></div><div><h4>Dados pessoais</h4><p>Cadastro do aluno</p></div></div>'
+    + _fxRow('Apelido', (s.crm&&s.crm.apelido) ? E(s.crm.apelido) : '', (s.crm&&s.crm.apelido) ? 'nas mensagens' : '')
+    + _fxRow('Nascimento', nasc ? _alFmt(nasc) : '', idade!==null ? idade+' anos' : '')
+    + _fxRow('Profissão', p.profissao ? E(p.profissao) : '')
+    + _fxRow('Endereço', rua ? E(rua) : (loc ? E(loc) : ''), rua && loc ? E(loc) : '')
+    + '<div class="fx-r"><span>CPF</span><span class="fx-val">'
+    +   (cpf.length===11 ? '<span class="dp-v">***.***.***-'+cpf.slice(9)+'</span>' : '<span class="badge badge-amber">Não informado</span>')
+    + '</span></div>';
+}
+
+function fxAbrirWhats(){
+  const s=getActive(); if(!s) return;
+  const url=waLinkPara(s,''); if(url) window.open(url,'_blank','noopener');
+}
+
+// ── Menu de status ──
+function fxRenderStatusMenu(s){
+  const m=$('fx-st-menu'); if(!m) return;
+  const atual=situacaoDe(s), comConta=!!((s.perfil||{}).alunoUserId);
+  m.innerHTML = '<div class="fx-mn-h">Situação do aluno</div>' + _FX_ORDEM.map(k=>{
+    const c=_FX_STATUS[k], on=k===atual;
+    const sub = k==='bloqueado' ? '<small>'+(comConta ? 'Mostra a tela de acesso bloqueado' : 'Vale quando o aluno criar a conta')+'</small>' : '';
+    return '<button class="dp-menu-it fx-mn-it" role="menuitemradio" aria-checked="'+on+'" type="button" data-k="'+k+'" onclick="fxSetStatus(this.dataset.k)"><i class='+c.dot+'></i><span class="fx-mn-t">'+c.lbl+sub+'</span>'+(on?'<i class="ph-check fx-mn-ck"></i>':'')+'</button>';
+  }).join('');
+}
+// avisos do sistema ao lado do selo; Novo e Pendente levam à ação que resolve
+function fxAlertasHTML(s){
+  return _alAlertas(s).map(k=>{
+    if(k==='novo') return _alFlagHTML(k,'button').replace('<button ', '<button type="button" onclick="fxMarcarVisto()" ');
+    if(k==='pendente') return _alFlagHTML(k,'button').replace('<button ', '<button type="button" onclick="fxEditarPerfil()" ');
+    return _alFlagHTML(k);
+  }).join('');
+}
+function fxMarcarVisto(){ const s=getActive(); if(!s) return; marcarAlunoComoVisto(s.id); updateHeader(s); }
+function fxEditarPerfil(){ switchTab('perfil'); }
+function fxStatusToggle(ev){
+  if(ev) ev.stopPropagation();
+  const w=$('fx-st-wrap'); if(!w) return;
+  const abrir=!w.classList.contains('open');
+  w.classList.toggle('open', abrir);
+  const b=$('fx-st-btn'); if(b) b.setAttribute('aria-expanded', abrir);
+}
+function fxStatusClose(){
+  const w=$('fx-st-wrap'); if(w) w.classList.remove('open');
+  const b=$('fx-st-btn'); if(b) b.setAttribute('aria-expanded','false');
+}
+document.addEventListener('click', e=>{ const w=$('fx-st-wrap'); if(w && w.classList.contains('open') && !w.contains(e.target)) fxStatusClose(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') fxStatusClose(); });
+
+async function fxSetStatus(k){
+  fxStatusClose();
+  const s=getActive(); if(!s) return;
+  await alunoSetSituacao(s, k);
+}
+// Troca a situação do aluno (Lead, Ativo, Inativo, Bloqueado). Bloqueado trava o acesso ao portal no servidor; qualquer outra libera.
+async function alunoSetSituacao(s, k){
+  if(!s || !_FX_STATUS[k]) return false;
+  if(typeof alunoTravado==='function' && alunoTravado(s)){ alert('Cadastro em transferência: só visualização.'); return false; }
+  if(situacaoDe(s)===k) return true;
+  if(k==='inativo' && !confirm('Marcar este aluno como inativo? Ele sai das tarefas e dos alertas do Painel. Você pode reativar quando quiser.')) return false;
+  if(k==='bloqueado' && !confirm('Bloquear este aluno? Ele continua entrando no portal, mas vê uma tela de acesso bloqueado até você mudar a situação.')) return false;
+  if(typeof alunoAplicarBloqueioPortal==='function' && !(await alunoAplicarBloqueioPortal(s, k==='bloqueado'))) return false;
+  const crm=ensureCrm(s);
+  crm.status=k; crm.statusSince=todayStr(); crm.sit2=1;
+  addHistory(s.id,'status','Status: '+_FX_STATUS[k].lbl,'');
+  try{ localStorage.setItem(lsKey('acm-students'), JSON.stringify(students)); }catch(e){}
+  crmSave();
+  const ativo=getActive(); if(ativo && ativo.id===s.id) updateHeader(s);
+  renderStudentList();
+  if(typeof updateBadges==='function') updateBadges();
+  if(typeof crmToast==='function') crmToast('Status: '+_FX_STATUS[k].lbl);
+  return true;
+}
+function fxArquivar(){
+  const s=getActive(); if(!s) return;
+  fxStatusClose();
+  confirmarDeletarAluno(s.id);
+}
+
+
+// ── Foto do aluno ──
+// Guardada em s.perfil.foto como JPEG quadrado pequeno (data URL, 256 px, sem EXIF/GPS), dentro do cadastro do aluno
+// (app_data, com RLS): só o personal enxerga; o portal do aluno não recebe esse campo.
+const FX_FOTO_LADO = 256, FX_FOTO_ARQ_MAX = 12 * 1024 * 1024, FX_FOTO_CHARS_MAX = 120000;
+function fxFotoOk(v){
+  return typeof v === 'string' && v.length <= FX_FOTO_CHARS_MAX && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(v);
+}
+function _fxAvatarPinta(el, s){
+  const p = (s && s.perfil) || {};
+  el.textContent = '';
+  if(fxFotoOk(p.foto)){ const i = document.createElement('img'); i.src = p.foto; i.alt = ''; el.appendChild(i); }
+  else el.textContent = _alIni(p.nome || '?');
+}
+function _alAvatarInner(s, nome){
+  const f = (s.perfil || {}).foto;
+  return fxFotoOk(f) ? '<img src="' + f + '" alt="">' : escHTML(_alIni(nome));
+}
+function fxFotoBotoes(s){
+  const tem = !!(s && fxFotoOk((s.perfil || {}).foto));
+  const b = $('fx-cad-foto-btn'), r = $('fx-cad-foto-rm');
+  if(b){ const t = b.querySelector('span'); if(t) t.textContent = tem ? 'Trocar foto' : 'Adicionar foto'; }
+  if(r) r.classList.toggle('hidden', !tem);
+}
+function fxFotoEscolher(origem){
+  const s = getActive(); if(!s) return;
+  if(typeof alunoTravado === 'function' && alunoTravado(s)){ alert('Cadastro em transferência: só visualização.'); return; }
+  const inp = $('fx-foto-input'); if(!inp) return;
+  inp.dataset.origem = origem || 'ficha';
+  inp.click();
+}
+// imagem escolhida -> quadrado centralizado de 256 px em JPEG
+async function _fxFotoReduzir(arq){
+  let bmp = null;
+  try{ bmp = await createImageBitmap(arq, { imageOrientation: 'from-image' }); }catch(e){ bmp = null; }
+  if(!bmp){
+    bmp = await new Promise((ok, erro) => {
+      const u = URL.createObjectURL(arq), i = new Image();
+      i.onload = () => { URL.revokeObjectURL(u); ok(i); };
+      i.onerror = () => { URL.revokeObjectURL(u); erro(new Error('imagem')); };
+      i.src = u;
+    });
+  }
+  const w = bmp.width || bmp.naturalWidth, h = bmp.height || bmp.naturalHeight;
+  if(!w || !h) throw new Error('imagem');
+  const lado = Math.min(w, h);
+  const sx = (w - lado) / 2, sy = h > w ? (h - lado) * 0.25 : 0;   // retrato: corta mais embaixo, para manter o rosto
+  const c = document.createElement('canvas'); c.width = c.height = FX_FOTO_LADO;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, FX_FOTO_LADO, FX_FOTO_LADO);
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(bmp, sx, sy, lado, lado, 0, 0, FX_FOTO_LADO, FX_FOTO_LADO);
+  if(bmp.close) bmp.close();
+  let q = 0.82, url = c.toDataURL('image/jpeg', q);
+  while(url.length > FX_FOTO_CHARS_MAX && q > 0.4){ q -= 0.1; url = c.toDataURL('image/jpeg', q); }
+  if(!fxFotoOk(url)) throw new Error('imagem');
+  return url;
+}
+async function fxFotoArquivo(inp){
+  const arq = inp.files && inp.files[0], origem = inp.dataset.origem || 'ficha';
+  inp.value = '';
+  if(!arq) return;
+  const s = getActive(); if(!s) return;
+  if(!/^image\/(jpeg|png|webp)$/.test(arq.type)){ crmToast('Use uma imagem JPG, PNG ou WebP.', 'err'); return; }
+  if(arq.size > FX_FOTO_ARQ_MAX){ crmToast('Imagem grande demais (máximo 12 MB).', 'err'); return; }
+  let url;
+  try{ url = await _fxFotoReduzir(arq); }
+  catch(e){ crmToast('Não foi possível ler essa imagem. Tente outra.', 'err'); return; }
+  s.perfil = s.perfil || {};
+  s.perfil.foto = url;
+  updateHeader(s);
+  renderStudentList();
+  if(origem === 'cad'){ _markDirty(); }          // dentro do Cadastro: grava no Salvar, junto com o resto
+  else { saveStudent(); crmToast('Foto atualizada'); }
+}
+function fxFotoRemover(){
+  const s = getActive(); if(!s || !(s.perfil || {}).foto) return;
+  if(typeof alunoTravado === 'function' && alunoTravado(s)){ alert('Cadastro em transferência: só visualização.'); return; }
+  delete s.perfil.foto;
+  updateHeader(s);
+  renderStudentList();
+  _markDirty();
+}
+
+// ── Página de Cadastro ──
+function fxMascaraCep(el){
+  const d=String(el.value||'').replace(/\D/g,'').slice(0,8);
+  el.value = d.length>5 ? d.slice(0,5)+'-'+d.slice(5) : d;
+}
+// CEP: busca rua, bairro, cidade e UF no ViaCEP (mesmo serviço de Configurações). Só o CEP sai do navegador;
+// se a busca falhar, os campos continuam livres para digitar.
+async function fxCepDigitou(el){
+  fxMascaraCep(el);
+  onPerfilChange();
+  const cep=el.value.replace(/\D/g,'');
+  if(cep.length!==8) return;
+  let d=null;
+  try{
+    d=await Carregando.durante('Buscando o CEP...', async()=>{
+      const r=await fetch('https://viacep.com.br/ws/'+cep+'/json/');
+      if(!r.ok) throw new Error('http '+r.status);
+      return r.json();
+    });
+  }catch(e){ d=null; }
+  if($('p-cep').value!==el.value) return;   // o CEP mudou durante a busca
+  if(!d || d.erro){ if(typeof crmToast==='function') crmToast('CEP não encontrado. Preencha o endereço à mão.','err'); return; }
+  const por=(id,v,max)=>{ const f=$(id); if(f) f.value=(typeof v==='string' ? v.trim() : '').slice(0,max); };
+  por('p-rua',d.logradouro,120); por('p-bairro',d.bairro,60); por('p-cidade',d.localidade,60); por('p-uf',d.uf,2);
+  onPerfilChange();
+  const n=$('p-numero'); if(n) n.focus();
+}
+function fxSalvarCadastro(){
+  salvarPerfil();
+  if(_novoSemNome()) return;          // sem nome: avisa e continua no formulário
+  const s=getActive(); if(!s) return;
+  updateHeader(s);
+  switchTabForcado('info');
+}
+function fxCancelarCadastro(){
+  if(_novoSemSalvarId!==null && _novoSemSalvarId===activeId){ navGo('alunos'); return; }
+  _formDirty=false;
+  _revertStudent();
+  const s=getActive(); if(s) loadStudentData(s);
+  switchTabForcado('info');
 }
 
 // ─── CAMPOS AUSENTES DA TELA ─────────────────────────────────────────────────
@@ -1183,6 +1511,7 @@ function normalizarAlunoPortal(s){
   });
   const nivel = calcularNivelTreino(a.tempo, a.consistencia);
   if(nivel) a.nivel = nivel;
+  if(typeof anamMigrar==='function') anamMigrar(s);   // anamnese em histórico (s.anamneses)
   (s.avaliacoesAntro||[]).forEach(r=>{
     if(r.responsavel!=='Portal do aluno') return;
     const peso = parseFloat(r.peso);
@@ -1196,7 +1525,18 @@ function normalizarAlunoPortal(s){
     if(!r.imc && peso && alt) r.imc = (peso/Math.pow(alt/100,2)).toFixed(1);
   });
 }
-function normalizarAlunosPortal(lista){ (lista||[]).forEach(normalizarAlunoPortal); }
+// Situação v2 (16/10/2026): pausado vira inativo; acesso bloqueado vira situação Bloqueado; "lead" que veio do cadastro automático
+// (aluno com conta no portal, avaliação ou treino) vira Ativo. Roda uma vez por aluno (marca crm.sit2).
+function _migrarSituacao(s){
+  const c = s && s.crm; if(!c || c.sit2) return;
+  const p = s.perfil || {}; let st = c.status || 'lead';
+  if(p.portalStatus === 'bloqueado'){ st = 'bloqueado'; p.bloqueioAplicado = true; }
+  else if(st === 'pausado') st = 'inativo';
+  else if(st === 'lead' && (p.alunoUserId || _alAval(s) || _alTreino(s))) st = 'ativo';
+  if(st !== c.status){ c.status = st; c.statusSince = c.statusSince || todayStr(); }
+  c.sit2 = 1;
+}
+function normalizarAlunosPortal(lista){ (lista||[]).forEach(s=>{ normalizarAlunoPortal(s); try{ _migrarSituacao(s); }catch(e){} }); }
 
 // Última avaliação antropométrica com peso+altura (histórico, inclui as
 // enviadas pelo aluno). Usada pela Meta como "última avaliação".
@@ -1218,9 +1558,10 @@ function onPerfilChange(){
     nome:_v('p-nome'), nascimento:_v('p-nascimento'), sexo:_v('p-sexo'),
     atividade:_v('p-atividade'), profissao:_v('p-profissao'),
     tempo_sentado:_v('p-tempo-sentado'),
-    whatsapp:_v('p-whatsapp'), modalidade:_v('p-modalidade'),
-    codAlunoLegado:_v('p-cod-aluno-legado'),
+    whatsapp:($('p-whatsapp') ? foneLer('p-whatsapp') : _AUSENTE), modalidade:_v('p-modalidade'),
     email:_v('p-email'),
+    cep:_v('p-cep'), rua:_v('p-rua'), numero:_v('p-numero'), complemento:_v('p-complemento'),
+    bairro:_v('p-bairro'), cidade:_v('p-cidade'), uf:_v('p-uf'),
     cpf: (()=>{ const c=_v('p-cpf'); return c===_AUSENTE ? c : String(c).replace(/\D/g,'').slice(0,11); })(),
     liberacao:_v('p-liberacao'), condicoes:_v('p-condicoes'),
     medicamentos:_v('p-medicamentos'),
@@ -1244,8 +1585,12 @@ function onPerfilChange(){
     if(k in _antesP) _novoP[k] = _antesP[k]; else delete _novoP[k];
   });
   s.perfil = { ..._antesP, ..._novoP };
+  // o apelido mora no CRM do aluno (s.crm.apelido, o mesmo do cadastro de cliente) e é o nome das mensagens
+  const _ap = _v('p-apelido');
+  if(_ap !== _AUSENTE){ const crm = ensureCrm(s); crm.apelido = String(_ap).trim().replace(/\s+/g,' ').slice(0,40); }
 
-  $('student-header-name').textContent = s.perfil.nome||'Aluno';
+  updateHeader(s);
+  if(typeof renderPortalStatusBadge==='function') renderPortalStatusBadge(s);   // liga o Redefinir senha quando há e-mail
   calcFCMax();
   renderStudentList();
   if(!_loadingData){ _markDirty(); _saveDraft(); }
@@ -2708,6 +3053,10 @@ function onAnamneseChange(){
     quadril_rot_d:_v('a-quadril-rot-d'), quadril_rot_e:_v('a-quadril-rot-e'),
     obs_flex:_v('a-obs-flex'),
   };
+  // Fora do formulário de avaliação os campos de medidas ficam vazios na tela: um blur ou cálculo não pode apagar o espelho da última avaliação
+  if(typeof _fxFormModo==='undefined' || _fxFormModo!=='antro'){
+    ANTRO_SNAPSHOT_IDS.forEach(id=>{ const k=antroChaveDoId(id); if(k in _antes) _novo[k]=_antes[k]; else delete _novo[k]; });
+  }
   // Campo sem input na tela (cortado em 2026-10-04 ou legado FMS/força/flex):
   // mantém o que já estava salvo, e não cria chave nova vazia.
   Object.keys(_novo).forEach(k=>{
@@ -2853,24 +3202,29 @@ function antroMostrarLista(){
   const lv=$('antro-lista-view'), fv=$('antro-form-view');
   if(lv) lv.style.display='block';
   if(fv) fv.style.display='none';
+  if(typeof fxFormFechar==='function') fxFormFechar('antro');
   renderAntroLista();
 }
 
-function antroMostrarForm(){
+function antroMostrarForm(titulo){
   const lv=$('antro-lista-view'), fv=$('antro-form-view');
   if(lv) lv.style.display='none';
   if(fv) fv.style.display='block';
+  const rec=(getActive()?.avaliacoesAntro||[]).find(x=>x.id===_antroEditId);
+  setVal('a-origem-antro-ro', rec && rec.responsavel==='Portal do aluno' ? 'Aluno (portal)' : 'Personal');
+  fxFormAbrir('antro', titulo || 'Nova avaliação');
 }
+
+// Executa fn sem marcar o formulário como alterado (cálculos automáticos ao abrir uma tela)
+function _semDirty(fn){ const d=_formDirty, l=_loadingData; _loadingData=true; try{ fn(); } finally{ _loadingData=l; _formDirty=d; } }
 
 function antroNovaAvaliacao(){
   const s=getActive(); if(!s) return;
   _antroEditId = null;
   antroLimparForm();
   setVal('a-data-avaliacao', _isoLocal(new Date()));   // data local (UTC virava o dia às 21h)
-  calcIMC(); calcRCQ(); calcComp();
-  Object.keys(PARES_ASSIM).forEach(par=>calcAssimetria(par));
-  const titulo=$('antro-form-titulo'); if(titulo) titulo.textContent='Nova avaliação';
-  antroMostrarForm();
+  _semDirty(()=>{ calcIMC(); calcRCQ(); calcComp(); Object.keys(PARES_ASSIM).forEach(par=>calcAssimetria(par)); });   // abrir o formulário não é alteração do usuário
+  antroMostrarForm('Nova avaliação');
 }
 
 function antroEditarAvaliacao(id){
@@ -2879,14 +3233,22 @@ function antroEditarAvaliacao(id){
   if(!rec) return;
   _antroEditId = id;
   antroCarregarSnapshot(rec);
-  calcIMC(); calcRCQ(); calcComp();
-  Object.keys(PARES_ASSIM).forEach(par=>calcAssimetria(par));
-  const titulo=$('antro-form-titulo'); if(titulo) titulo.textContent='Editando avaliação de '+formatarDataBR(rec.data_avaliacao);
-  antroMostrarForm();
+  _semDirty(()=>{ calcIMC(); calcRCQ(); calcComp(); Object.keys(PARES_ASSIM).forEach(par=>calcAssimetria(par)); });   // abrir o formulário não é alteração do usuário
+  antroMostrarForm('Avaliação de '+formatarDataBR(rec.data_avaliacao));
 }
 
 function antroVoltarLista(){
   _antroEditId = null;
+  antroMostrarLista();
+}
+
+// Cancelar: descarta o que foi digitado e volta para a lista (igual ao Cancelar do Cadastro)
+function antroCancelar(){
+  _formDirty = false;
+  _revertStudent();
+  _antroEditId = null;
+  const s=getActive(); if(s) loadStudentData(s);
+  antroLimparForm();
   antroMostrarLista();
 }
 
@@ -2909,6 +3271,7 @@ function antroSalvarAvaliacao(){
   s.avaliacoesAntro.sort((a,b)=>(b.data_avaliacao||'').localeCompare(a.data_avaliacao||''));
   _antroEditId = null;
   onAnamneseChange(); // sincroniza s.anamnese com os campos atuais (mantém os motores de cálculo funcionando)
+  antroAplicarAtual(s); // s.anamnese espelha a avaliação mais recente, não a que acabou de ser editada
   saveStudent(); _clearDirty();
   antroLimparForm();
   setTimeout(()=>_clearDirty(), 500);
@@ -2945,37 +3308,55 @@ function antroExcluirAvaliacao(id){
   renderAntroLista();
 }
 
+// Lista em linhas: uma por avaliação, a mais recente marcada. Peso, gordura e músculo mostram a mudança desde a avaliação anterior
+// (seta verde quando a mudança favorece o objetivo do aluno; sem objetivo definido a seta fica neutra).
+function _antroRumo(s, campo){ // +1: subir é bom, -1: descer é bom, 0: neutro
+  if(campo==='gordura') return -1;
+  if(campo==='mmuscular_pct') return 1;
+  const o=(s.anamnese||{}).objetivo_ef||'';
+  if(o==='Emagr'||o==='Comp') return -1;
+  if(o==='Hip'||o==='Forca') return 1;
+  return 0;
+}
+function _antroDelta(s, campo, atual, anterior, unidade){
+  const x=hxNum(atual), y=hxNum(anterior);
+  if(x==null||y==null) return null;
+  const d=Math.round((x-y)*10)/10;
+  if(d===0) return '<div class="hx-d neutro">sem variação</div>';
+  const rumo=_antroRumo(s,campo), cls=rumo===0?'neutro':(d*rumo>0?'bom':'ruim');
+  return '<div class="hx-d '+cls+'"><i class=ph-'+(d>0?'arrow-up':'arrow-down')+'></i>'+hxSinal(d)+' '+unidade+'</div>';
+}
 function renderAntroLista(){
   const s=getActive();
   const cont=$('antro-lista-tabela'); if(!cont) return;
-  const lista = (s?.avaliacoesAntro||[]).slice().sort((a,b)=>(b.data_avaliacao||'').localeCompare(a.data_avaliacao||''));
+  if(!s){ cont.innerHTML=''; return; }
+  if(typeof hxContagens==='function') hxContagens(s);
+  const lista = (s.avaliacoesAntro||[]).slice().sort((a,b)=>(b.data_avaliacao||'').localeCompare(a.data_avaliacao||'') || (b.id||0)-(a.id||0));
   if(!lista.length){
-    cont.innerHTML = `<div class="empty"><i class=ph-ruler></i><div class="empty-title">Nenhuma avaliação salva ainda</div><div class="empty-text">Use Adicionar avaliação para registrar a primeira.</div></div>`;
+    cont.innerHTML = hxVazio('ph-ruler', 'Nenhuma avaliação salva ainda', 'Use Nova avaliação para registrar a primeira.');
     return;
   }
-  let html = `<div style="overflow-x:auto"><table class="tbl">
-    <thead><tr>
-      <th>Data</th><th>Responsável</th><th>Altura</th><th>Peso</th><th>Gordura</th><th>Músculo</th><th>IMC</th><th style="text-align:right">Ações</th>
-    </tr></thead><tbody>`;
-  lista.forEach(rec=>{
-    const gordTxt = rec.mgorda ? `${rec.mgorda} kg${rec.gordura?` / ${rec.gordura}%`:''}` : '—';
-    const muscTxt = rec.mmuscular ? `${rec.mmuscular} kg${rec.mmuscular_pct?` / ${rec.mmuscular_pct}%`:''}` : '—';
-    html += `<tr>
-      <td>${formatarDataBR(rec.data_avaliacao)}</td>
-      <td class="al-data">${escHTML(rec.responsavel||'—')}</td>
-      <td>${escHTML(rec.altura||'—')}</td>
-      <td>${escHTML(rec.peso||'—')}</td>
-      <td>${escHTML(gordTxt)}</td>
-      <td>${escHTML(muscTxt)}</td>
-      <td>${escHTML(rec.imc||'—')}</td>
-      <td class="al-acoes">
-        <button type="button" class="btn btn-ghost btn-xs" onclick="antroEditarAvaliacao(${rec.id})">Editar</button>
-        <button type="button" class="icon-btn" onclick="antroExcluirAvaliacao(${rec.id})" title="Excluir avaliação" aria-label="Excluir avaliação"><i class=ph-trash></i></button>
-      </td>
-    </tr>`;
-  });
-  html += '</tbody></table></div>';
-  cont.innerHTML = html;
+  cont.innerHTML = lista.map((r,i)=>{
+    const ant=lista[i+1]||null;
+    const peso=hxNum(r.peso), g=hxNum(r.gordura), m=hxNum(r.mmuscular_pct);
+    const dPeso = ant ? _antroDelta(s,'peso',r.peso,ant.peso,'kg') : null;
+    const dGord = ant ? _antroDelta(s,'gordura',r.gordura,ant.gordura,'p.p.') : null;
+    const dMusc = ant ? _antroDelta(s,'mmuscular_pct',r.mmuscular_pct,ant.mmuscular_pct,'p.p.') : null;
+    const kg=(v)=>hxNum(v)==null ? '' : '<div class="hx-d neutro">'+hxFmt(hxNum(v))+' kg</div>';
+    const doAluno = r.responsavel==='Portal do aluno';
+    return '<div class="hx-tr'+(i===0?' atual':'')+'" onclick="antroEditarAvaliacao('+r.id+')">'
+      + hxDataCel(_alDia(r.data_avaliacao), i===0)
+      + '<div class="hx-r2">'
+      +   '<div class="hx-c" data-l="Peso"><div class="hx-v">'+(peso==null?'—':hxFmt(peso)+' kg')+'</div>'+(dPeso || (ant ? '' : '<div class="hx-d neutro">primeira avaliação</div>'))+'</div>'
+      +   '<div class="hx-c" data-l="Gordura"><div class="hx-v">'+(g==null?'—':hxFmt(g)+'%')+'</div>'+(dGord || kg(r.mgorda))+'</div>'
+      +   '<div class="hx-c" data-l="Músculo"><div class="hx-v">'+(m==null?'—':hxFmt(m)+'%')+'</div>'+(dMusc || kg(r.mmuscular))+'</div>'
+      +   '<div class="hx-c hx-lo" data-l="IMC"><div class="hx-v">'+(hxNum(r.imc)==null?'—':hxFmt(hxNum(r.imc)))+'</div></div>'
+      +   '<div class="hx-c hx-lo" data-l="Origem">'+hxOrigem(doAluno?'aluno':'personal')+'</div>'
+      + '</div>'
+      + '<div class="hx-acoes"><button type="button" class="btn btn-ghost btn-xs" onclick="event.stopPropagation();antroEditarAvaliacao('+r.id+')">Abrir</button>'
+      +   '<button type="button" class="icon-btn" onclick="event.stopPropagation();antroExcluirAvaliacao('+r.id+')" title="Excluir avaliação" aria-label="Excluir avaliação"><i class=ph-trash></i></button></div>'
+      + '</div>';
+  }).join('');
 }
 
 
@@ -3717,11 +4098,32 @@ function switchTab(name){
   _guardNav(() => switchTabForcado(name));
 }
 
+// Abas da ficha: info, anamnese, prescricao, evolucao (cartão de abas) + perfil (página de Cadastro, aberta por "Editar perfil")
+const _FX_ABAS = ['info','anamnese','prescricao','evolucao','perfil'];
+const _FX_TITULOS = {
+  info:['Informações pessoais','Resumo do cadastro'],
+  anamnese:['Avaliação','Anamnese, medidas e meta'],
+  prescricao:['Prescrição','Treinos'],
+  evolucao:['Evolução','Resultados'],
+};
 function switchTabForcado(name){
-  ['perfil','anamnese','prescricao','evolucao'].forEach(t=>{
+  if(typeof fxFormFechar==='function') fxFormFechar();   // se um formulário (anamnese, avaliação, treino) estava aberto, volta para a ficha
+  _FX_ABAS.forEach(t=>{
     toggle('panel-'+t, t===name);
-    $('tab-'+t).classList.toggle('active', t===name);
+    const b=$('tab-'+t);
+    if(b){ b.classList.toggle('active', t===name); b.classList.toggle('on', t===name); b.setAttribute('aria-selected', t===name); }
   });
+  const cad = name==='perfil';
+  toggle('fx-ficha', !cad);
+  toggle('fx-cadastro', cad);
+  toggle('fx-form', false);
+  if(typeof fxStatusClose==='function') fxStatusClose();
+  const novo = _novoSemSalvarId!==null && _novoSemSalvarId===activeId;   // aluno novo: o voltar da página Cadastro vai para a lista
+  toggle('fx-cad-back-list', novo); toggle('fx-cad-back-info', !novo);
+  const tt=_FX_TITULOS[name];
+  if(tt){ const a=$('fx-panel-t'), b=$('fx-panel-s'); if(a) a.textContent=tt[0]; if(b) b.textContent=tt[1]; }
+  const body=$('tab-content'); if(body) body.scrollTop=0;
+  const cs=$('fx-cad-scroll'); if(cs) cs.scrollTop=0;
   if(name==='prescricao'){
     checkPrescWarning();
     renderizarTriagem();
@@ -3933,8 +4335,13 @@ function onNivelOuFrequenciaChange(){
 
 // ─── STEPS ────────────────────────────────────────────────────────────────────
 
+const _PR_PASSOS = ['Configurações','Distribuição','Exercícios','Aprovação'];
 function goStep(n, silent){
   currentStep=n;
+  const pn=$('pr-passo-n'), pm=$('pr-passo-nome');
+  if(pn) pn.textContent='Passo '+n+' de 4'; if(pm) pm.textContent=_PR_PASSOS[n-1];
+  document.querySelectorAll('#pr-passos .pr-barra>div').forEach((d,i)=>{ d.className = i<n-1 ? 'on' : i===n-1 ? 'on at' : ''; d.dataset.ok = i<n-1 ? '1' : ''; });
+  const fv=$('fx-form'); if(fv) fv.scrollTop=0;
   for(let i=1;i<=4;i++){
     toggle('presc-step'+i, i===n);
     const el=$('step-'+i);

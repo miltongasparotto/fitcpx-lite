@@ -73,19 +73,19 @@ async function boot(page) {
     chk(L('triângulo só em lesão, gestação e cardiopatia (3)'), (await page.$$('#alunos-grid .al-warn')).length === 3 + (await page.evaluate(() => students.filter(s => (s.id < 8000) && (((s.perfil.lesoes || '') !== '' && s.perfil.lesoes !== 'Nenhuma' && s.perfil.lesoes.length > 2) || /Gestação|Cardiopatia/.test(s.perfil.condicoes || ''))).length)));
     chk(L('sem ícones antigos de gestação/cardio'), (await page.$$('#alunos-grid .al-flag')).length === 0);
     chk(L('triângulo vem antes do nome'), await page.evaluate(() => { const w = document.querySelector('#alunos-grid .al-warn'); return !!w && w.nextElementSibling && w.nextElementSibling.classList.contains('al-n'); }));
-    for (const [cls, n] of [['al-st-novo', 1], ['al-st-bloq', 1], ['al-st-pendente', 1]]) {
+    for (const [cls, n] of [['al-st-bloq', 1], ['al-st-ativo', 1], ['al-aviso-novo', 1], ['al-aviso-pendente', 1]]) {
       chk(L(`círculo ${cls} (≥${n})`), (await page.$$('#alunos-grid .' + cls)).length >= n);
     }
     chk(L('sem coluna de status; o círculo fica na célula do nome'), await page.evaluate(() => !document.querySelector('#alunos-thr th.al-c-st') && [...document.querySelectorAll('#alunos-grid tr')].filter(t => t.querySelector('.al-n')).every(t => t.children[0].querySelector('.al-av') && t.children[0].querySelector('.al-av').textContent.trim().length <= 2)));
     chk(L('treino vencido em âmbar'), await page.evaluate(() => [...document.querySelectorAll('#alunos-grid tr')].find(t => t.textContent.includes('Bruno Vencido')).querySelector('.badge-amber .ph-clock-countdown') !== null));
     // nome e tags nunca quebram de linha para caber (só no celular, que não tem largura)
     chk(L(nome === 'celular' ? 'celular: nome pode quebrar' : 'nome numa linha só'), await page.evaluate(() => [...document.querySelectorAll('#alunos-grid .al-n')].every(e => e.getBoundingClientRect().height < 24)) === (nome !== 'celular') || nome === 'celular');
-    chk(L('tags numa linha cada (sem texto quebrado)'), await page.evaluate(() => [...document.querySelectorAll('#alunos-grid .al-tags .badge')].every(e => e.getBoundingClientRect().height <= 24)));
+    chk(L('tags numa linha cada (sem texto quebrado)'), await page.evaluate(() => [...document.querySelectorAll('#alunos-grid .al-tags .badge, #alunos-grid .al-tags .al-aviso')].every(e => e.getBoundingClientRect().height <= 24)));
     chk(L('conteúdo das colunas centralizado'), await page.evaluate(() => [...document.querySelectorAll('#alunos-grid td.al-ct')].filter(t => t.offsetParent !== null).every(t => getComputedStyle(t).textAlign === 'center')));
     // padrão do Painel: título, abas de status com contagem, avatar com 2 iniciais, datas com "há N dias"
-    chk(L('cartão com título e abas de status (Todos + 5)'), await page.evaluate(() => !!document.querySelector('.al-ph h3') && document.querySelectorAll('#alunos-tabs .dp-seg-b').length === 6));
+    chk(L('cartão com título e abas de status (Todos + 4 situações + 3 alertas)'), await page.evaluate(() => !!document.querySelector('.al-ph h3') && document.querySelectorAll('#alunos-tabs .dp-seg-b').length === 8));
     chk(L('aba Todos mostra o total'), (await page.textContent('#alunos-tabs .dp-seg-b >> nth=0')).replace(/[^0-9]/g, '') === String(total));
-    chk(L('contagens das abas somam o total'), await page.evaluate(() => { const n = [...document.querySelectorAll('#alunos-tabs .dp-seg-b')].map(b => +b.querySelector('span').textContent); return n.slice(1).reduce((a, b) => a + b, 0) === n[0]; }));
+    chk(L('contagens das abas de situação somam o total'), await page.evaluate(() => { const n = [...document.querySelectorAll('#alunos-tabs > .dp-seg .dp-seg-b')].map(b => +b.querySelector('span').textContent); return n.length === 5 && n.slice(1).reduce((a, b) => a + b, 0) === n[0]; }));
     chk(L('avatar com iniciais como no Painel'), await page.evaluate(() => { const r = [...document.querySelectorAll('#alunos-grid tr')].find(t => t.textContent.includes('Bruno Vencido')); return r.querySelector('.al-av').textContent === 'BV'; }));
     if (modo === 'completo') chk(L('datas com "há N dias"'), await page.evaluate(() => [...document.querySelectorAll('#alunos-grid tr')].find(t => t.textContent.includes('Ana Em Dia')).textContent.includes('há 10 dias')));
     await page.click('#alunos-tabs .dp-seg-b >> text=Bloqueado'); await page.waitForTimeout(80);
@@ -93,7 +93,22 @@ async function boot(page) {
     chk(L('aba ativa fica marcada'), await page.evaluate(() => document.querySelector('#alunos-tabs .dp-seg-b.on').textContent.includes('Bloqueado')));
     await page.click('#alunos-tabs .dp-seg-b >> nth=0'); await page.waitForTimeout(80);
     chk(L('aba Todos limpa o status'), (await linhas()).length === total);
-    chk(L('tag Sem CPF e Dados pendentes'), await page.evaluate(() => { const t = document.getElementById('alunos-grid').textContent; return t.includes('Sem CPF') && t.includes('Dados pendentes'); }));
+    chk(L('tag Sem CPF e avisos Novo e Pendente'), await page.evaluate(() => { const t = document.getElementById('alunos-grid').textContent; return t.includes('Sem CPF') && !!document.querySelector('#alunos-grid .al-aviso-novo') && !!document.querySelector('#alunos-grid .al-aviso-pendente'); }));
+    chk(L('situação só tem 4 cores diferentes (lead, ativo, inativo, bloqueado) e o aviso não usa anel'), await page.evaluate(() => { const c = k => { const e = document.createElement('i'); e.className = 'al-dot al-st-' + k; document.body.appendChild(e); const v = getComputedStyle(e).borderTopColor; e.remove(); return v; }; const cores = ['lead', 'ativo', 'inativo', 'bloq'].map(c); return new Set(cores).size === 4 && !document.querySelector('#alunos-grid .al-av.al-st-novo, #alunos-grid .al-av.al-st-pendente, #alunos-grid .al-av.al-st-transf'); }));
+    // filtro por alerta do sistema (Novo, Pendente, Transferência), separado da situação
+    chk(L('filtro Alertas com Novo, Pendente e Transferência e contagem'), await page.evaluate(() => { const b = [...document.querySelectorAll('#alunos-tabs .al-alertas .dp-seg-b')]; return b.length === 3 && b[0].textContent.includes('Novo') && b[1].textContent.includes('Pendente') && b[2].textContent.includes('Transferência') && +b[0].querySelector('span').textContent === 1 && +b[1].querySelector('span').textContent === 1; }));
+    await page.click('#alunos-tabs .al-ab-novo'); await page.waitForTimeout(80);
+    chk(L('alerta Novo filtra'), (await linhas()).join() === 'Zélia Novata', (await linhas()).join());
+    chk(L('alerta ativo fica marcado (aria-pressed)'), await page.evaluate(() => document.querySelector('#alunos-tabs .al-ab-novo').getAttribute('aria-pressed') === 'true'));
+    await page.click('#alunos-tabs .al-ab-novo'); await page.waitForTimeout(80);
+    chk(L('clicar de novo no alerta tira o filtro'), (await linhas()).length === total);
+    await page.click('#alunos-tabs .al-ab-pendente'); await page.waitForTimeout(80);
+    chk(L('alerta Pendente filtra'), (await linhas()).join() === 'Gabi Pendente', (await linhas()).join());
+    await page.click('#alunos-tabs > .dp-seg .dp-seg-b >> text=Bloqueado'); await page.waitForTimeout(80);
+    chk(L('alerta e situação combinam (Pendente + Bloqueado = ninguém)'), (await linhas()).length === 0);
+    await page.click('#alunos-tabs .al-ab-pendente'); await page.waitForTimeout(80);
+    await page.click('#alunos-tabs > .dp-seg .dp-seg-b >> nth=0'); await page.waitForTimeout(80);
+    chk(L('limpar volta ao total'), (await linhas()).length === total);
     chk(L('só o botão olho nos novos'), (await page.$$('#alunos-grid [aria-label="Marcar como visto"]')).length === 1);
 
     if (modo === 'completo') {
@@ -143,8 +158,8 @@ async function boot(page) {
       }
       await page.keyboard.press('Escape');
       // filtros em lista
-      await page.click('#alunos-tabs .dp-seg-b >> text=Novo'); chk(L('filtro status Novo (aba)'), (await linhas()).join() === 'Zélia Novata');
-      await page.click('#alunos-tabs .dp-seg-b >> nth=0');
+      await page.click('#alunos-tabs .al-ab-novo'); chk(L('filtro alerta Novo'), (await linhas()).join() === 'Zélia Novata');
+      await page.click('#alunos-tabs .al-ab-novo');
       await page.selectOption('#alunos-filtro-sexo', 'M'); chk(L('filtro sexo Masculino'), (await linhas()).every(n => /Bruno|Fabio|Hugo/.test(n) || true) && (await linhas()).length >= 3);
       await page.selectOption('#alunos-filtro-nivel', 'Avançado'); chk(L('nível guardado abreviado (Avan) filtra e mostra por extenso'), (await linhas()).includes('Bruno Vencido'), (await linhas()).join());
       await page.click('button[title="Limpar filtros"]');
@@ -200,6 +215,17 @@ async function boot(page) {
       chk(L('Esc fecha o painel'), (await page.$$('.al-painel')).length === 0);
       await page.evaluate(() => limparFiltrosAlunos());
     }
+    // dois caminhos de cadastro no cabeçalho: manual e via link (só copia o link)
+    chk(L('cabeçalho: Cadastro via link e Cadastro manual'), await page.evaluate(() => { const l = document.getElementById('alunos-btn-link'), m = document.getElementById('alunos-btn-manual'); return !!l && !!m && l.textContent.trim() === 'Cadastro via link' && m.textContent.trim() === 'Cadastro manual' && l.getBoundingClientRect().right <= innerWidth && m.getBoundingClientRect().right <= innerWidth; }));
+    chk(L('Cadastro manual é o botão principal'), await page.evaluate(() => document.getElementById('alunos-btn-manual').classList.contains('btn-primary')));
+    if (nome === 'celular') chk(L('botões de cadastro com alvo ≥ 44px'), await page.evaluate(() => ['alunos-btn-link', 'alunos-btn-manual'].every(i => document.getElementById(i).getBoundingClientRect().height >= 44)));
+    await page.evaluate(() => { window.__copiado = null; _portalLinkCodigo = 'TESTE1'; Object.defineProperty(navigator, 'clipboard', { value: { writeText: async t => { window.__copiado = t; } }, configurable: true }); });
+    const antes = await page.evaluate(() => students.length);
+    await page.click('#alunos-btn-link'); await page.waitForTimeout(400);
+    chk(L('via link: copia o link de cadastro com o código'), await page.evaluate(() => /[?]c=TESTE1$/.test(window.__copiado || '')), await page.evaluate(() => String(window.__copiado)));
+    chk(L('via link: não cria aluno nem abre a ficha'), await page.evaluate(n => students.length === n, antes));
+    await page.click('#alunos-btn-manual'); await page.waitForTimeout(400);
+    chk(L('manual: cria o aluno e abre a ficha'), await page.evaluate(n => students.length === n + 1 && !document.getElementById('student-view')?.classList.contains('hidden'), antes));
     if (OUT) await page.screenshot({ path: `${OUT}/${nome}-lista.png` });
     chk(L('sem erro de JS'), errs.length === 0, errs.join(' | '));
     await ctx.close();

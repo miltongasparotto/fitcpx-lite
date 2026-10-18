@@ -49,12 +49,28 @@ const CAT_PALETTE = ['#8b5cf6','#3b82f6','#00b37e','#f97316','#f59e0b','#ef4444'
 // para não depender de ordem entre os demais.
 function ensureCrm(s){
   if(!s) return null;
-  if(!s.crm) s.crm = { status:'lead', statusSince:todayStr(), cor:'#3b82f6', fluxos:[] };
+  if(!s.crm) s.crm = { status:'ativo', statusSince:todayStr(), cor:'#3b82f6', fluxos:[], sit2:1 };
   if(!s.crm.fluxos) s.crm.fluxos = [];
-  if(!s.crm.status) s.crm.status = 'lead';
+  if(!s.crm.status) s.crm.status = 'ativo';
   return s.crm;
 }
+// Situação do aluno, a que o personal escolhe: lead | ativo | inativo | bloqueado (s.crm.status).
+// 'pausado' (versão antiga) conta como inativo. Bloqueado também vale se o acesso ao portal já estava bloqueado.
+// Novo, Pendente e Transferência NÃO são situação: são avisos que o sistema calcula (ver _alAlertas em js/avaliacao.js).
+function situacaoDe(s){
+  const st = (s && s.crm && s.crm.status) || 'ativo';
+  if(st === 'bloqueado' || (s && s.perfil && s.perfil.portalStatus === 'bloqueado')) return 'bloqueado';
+  if(st === 'inativo' || st === 'pausado') return 'inativo';
+  if(st === 'lead') return 'lead';
+  return 'ativo';
+}
 function alunoNome(s){ return s?.perfil?.nome || '(sem nome)'; }
+// Nome que as mensagens usam: o apelido (Cadastro > Dados pessoais); sem apelido, o primeiro nome.
+function alunoNomeMsg(s){
+  const ap = String(s?.crm?.apelido || '').trim();
+  if(ap) return ap;
+  return String(s?.perfil?.nome || '').trim().split(/\s+/)[0] || '';
+}
 function alunoTel(s){ return s?.perfil?.whatsapp || ''; }
 function findAluno(id){ return students.find(s=>s.id===id); }
 

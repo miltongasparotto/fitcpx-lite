@@ -1,5 +1,5 @@
-// Os 4 layouts do painel (regra do projeto, ver documentos/LAYOUTS.md):
-//   notebook 1440x900 · ultrawide 2560x1200 · tablet 834x1112 · celular 390x844
+// Os 5 layouts do painel (regra do projeto, ver documentos/LAYOUTS.md):
+//   notebook 1440x900 · MacBook 1280x800 (menu em ícones) · ultrawide 2560x1200 · tablet 834x1112 · celular 390x844
 // Percorre todas as telas e abas e confere, em cada layout: sem erro de JS, sem rolagem horizontal,
 // nada fora da tela, o menu certo para cada tamanho e a largura máxima do conteúdo no ultrawide.
 // Rodar: servidor em 5178 e, em C:/Users/junio/.claude/skills/playwright-skill:  node run.js <este arquivo>
@@ -7,7 +7,7 @@
 const { chromium } = require('playwright');
 const BASE = 'http://localhost:5178';
 const OUT = process.env.SHOTS_DIR || '';
-const LAYOUTS = [['notebook', 1440, 900], ['ultrawide', 2560, 1200], ['tablet', 834, 1112], ['celular', 390, 844]];
+const LAYOUTS = [['notebook', 1440, 900], ['macbook', 1280, 800], ['ultrawide', 2560, 1200], ['tablet', 834, 1112], ['celular', 390, 844]];
 const ok = [], bad = [];
 const chk = (n, c, extra) => (c ? ok : bad).push(n + (c ? '' : ' :: ' + (extra || '')));
 
@@ -38,8 +38,12 @@ const PASSOS = [
   ['fluxos-modalidades', "navGo('fluxos');crmFluxosTab='modalidades';renderFluxosCRM()"],
   ['portal-aluno', "navGo('portal-aluno')"],
   ['config-perfil', "navGo('config');_cfgAba('perfil')"], ['config-marca', "navGo('config');_cfgAba('marca')"], ['config-regras', "navGo('config');_cfgAba('regras')"],
-  ['ficha-perfil', "selectStudent(students[0].id);switchTab('perfil')"], ['ficha-anamnese', "switchTab('anamnese')"],
+  ['ficha-info', "selectStudent(students[0].id);switchTab('info')"], ['ficha-cadastro', "switchTab('perfil')"], ['ficha-anamnese', "switchTab('anamnese')"],
   ['ficha-prescricao', "switchTab('prescricao')"], ['ficha-evolucao', "switchTab('evolucao')"],
+  // formulários em página própria (anamnese, avaliação, treino): sem o cartão do aluno, só a linha de identificação
+  ['ficha-form-anamnese', "switchTab('anamnese');switchSubtab('anamnese-hist');anamNova()"], ['ficha-form-avaliacao', "switchTab('anamnese');switchSubtab('anamnese-antro');antroNovaAvaliacao()"],
+  ['ficha-form-treino', "switchTab('prescricao');treinosAdicionar()"], ['ficha-treino-distribuicao', 'goStep(2)'],
+  ['ficha-treino-exercicios', 'montarFichaModelo()'], ['ficha-treino-aprovacao', 'aprovarTreinoMotor()'],
 ];
 
 // Elementos visíveis que passam do limite direito da janela (fora de contêiner rolável de propósito).
@@ -79,7 +83,7 @@ const FORA = () => {
     });
     if (nome === 'notebook') chk(L('menu completo de 248px'), m.visivel && m.w === 248 && !m.barra, JSON.stringify(m));
     if (nome === 'ultrawide') chk(L('menu completo de 272px'), m.visivel && m.w === 272 && !m.barra, JSON.stringify(m));
-    if (nome === 'tablet') chk(L('menu em ícones de 76px, sem barra superior'), m.visivel && m.w === 76 && !m.barra, JSON.stringify(m));
+    if (nome === 'tablet' || nome === 'macbook') chk(L('menu em ícones de 76px, sem barra superior'), m.visivel && m.w === 76 && !m.barra, JSON.stringify(m));
     if (nome === 'celular') chk(L('menu escondido e barra superior visível'), !m.visivel && m.barra, JSON.stringify(m));
 
     for (const [passo, codigo] of PASSOS) {
@@ -95,6 +99,14 @@ const FORA = () => {
       if (nome === 'ultrawide') {
         const lw = await page.evaluate(() => { const e = document.querySelector('.main-scroll:not(.hidden) .screen-pad, .main-scroll:not(.hidden) .dp'); return e ? Math.round(e.getBoundingClientRect().width) : 0; });
         chk(L(`${passo}: conteúdo limitado a 2480px`), lw <= 2480, String(lw));
+        if (passo === 'alunos' || passo.startsWith('ficha-')) {
+          const aw = await page.evaluate(() => { const e = [...document.querySelectorAll('.fx, .fx-cad, #screen-alunos .main-scroll>.content')].find(x => x.offsetParent !== null); return e ? Math.round(e.getBoundingClientRect().width) : 0; });
+          chk(L(`${passo}: tela do aluno limitada a 1680px (não ocupa a tela toda)`), aw > 800 && aw <= 1680, String(aw));
+        }
+      }
+      if (nome === 'macbook' && (passo === 'alunos' || passo.startsWith('ficha-'))) {
+        const mw = await page.evaluate(() => { const e = [...document.querySelectorAll('.fx, .fx-cad, #screen-alunos .main-scroll>.content')].find(x => x.offsetParent !== null); return e ? Math.round(e.getBoundingClientRect().width) : 0; });
+        chk(L(`${passo}: com o menu recolhido a tela do aluno passa de 1100px`), mw >= 1100, String(mw));
       }
       if (OUT) await page.screenshot({ path: `${OUT}/${nome}-${passo}.png` });
     }
@@ -127,7 +139,7 @@ const FORA = () => {
     });
     chk(L('abas do painel (Todos/Avaliar/...) sem barra de rolagem'), pn.segOk, JSON.stringify(pn));
     chk(L('botões de ação das linhas dentro do painel'), pn.vaza === 0, JSON.stringify(pn));
-    if (nome === 'notebook' || nome === 'ultrawide') {
+    if (nome === 'notebook' || nome === 'macbook' || nome === 'ultrawide') {
       chk(L('painel principal tem a largura dos 3 cartões de cima'), Math.abs(pn.span3 - pn.pw) <= 2, JSON.stringify(pn));
       chk(L('coluna lateral tem a largura do cartão Hoje'), Math.abs(pn.hojeW - pn.sw) <= 2, JSON.stringify(pn));
       chk(L('painel e coluna lateral terminam na mesma altura'), Math.abs(pn.pb - pn.sb) <= 2, JSON.stringify(pn));

@@ -105,16 +105,27 @@ function waDdiPadrao(){
   return String((typeof DB !== 'undefined' && DB.config && DB.config.waCountryCode) || '55').replace(/\D/g, '') || '55';
 }
 
+// Telefone do aluno pronto para o wa.me (só dígitos, com código do país), ou '' se não tem.
+// Número guardado com "+código" (aluno de outro país) vale como está; sem "+", entra o código escolhido ou o padrão do studio.
+function waFoneInternacional(bruto, ddiEscolhido){
+  bruto = String(bruto || '').trim();
+  if(!bruto) return '';
+  if(bruto.charAt(0) === '+') return bruto.replace(/[^0-9]/g, '');
+  const ddi = ddiEscolhido || waDdiPadrao();
+  let p = bruto.replace(/[^0-9]/g, '');
+  if(!p) return '';
+  if(ddi === '55' && p.startsWith('55') && p.length > 11) p = p.slice(2);   // mesma regra do envio da tela WhatsApp
+  return ddi + p;
+}
+
 // URL do WhatsApp para um texto já pronto, ou null se o aluno não tem telefone.
 // `aluno` pode ser null (ex.: link do portal: o contato é escolhido no WhatsApp).
 function waLinkPara(aluno, texto){
   const t = encodeURIComponent(texto || '');
   if(!aluno) return 'https://wa.me/?text=' + t;
-  const ddi = waDdiPadrao();
-  let p = String((typeof alunoTel === 'function' ? alunoTel(aluno) : aluno.perfil?.whatsapp) || '').replace(/[^0-9]/g, '');
-  if(!p) return null;
-  if(ddi === '55' && p.startsWith('55') && p.length > 11) p = p.slice(2);   // mesma regra do envio da tela WhatsApp
-  return 'https://wa.me/' + ddi + p + '?text=' + t;
+  const fone = waFoneInternacional(typeof alunoTel === 'function' ? alunoTel(aluno) : aluno.perfil?.whatsapp);
+  if(!fone) return null;
+  return 'https://wa.me/' + fone + '?text=' + t;
 }
 
 function buildWhatsAppLink(tipo, aluno, extra){

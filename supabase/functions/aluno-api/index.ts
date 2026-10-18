@@ -477,6 +477,11 @@ const CAMPOS_SAUDE_PERFIL = [
   'liberacao', 'condicoes', 'medicamentos', 'lesoes',
   'medicamentos_detalhe', 'obs_clinicas',      // Observações clínicas
 ];
+// Campos de s.anamnese que cada registro do histórico guarda (mesma lista de ANAM_CHAVES em js/historico.js)
+const CHAVES_REGISTRO_ANAMNESE = [
+  'tempo', 'consistencia', 'nivel', 'objetivo_ef', 'objetivo_sec', 'frequencia', 'duracao', 'horario', 'local', 'local_info',
+  'gosta', 'preferencias', 'gosta_ex', 'evitar_ex', 'sintomas', 'gestacao', 'trimestre', 'lesoes_passadas', 'cirurgias', 'gosta_texto', 'evitar_texto',
+];
 const CAMPOS_TEXTO_LONGO = new Set(['lesoes_passadas', 'cirurgias', 'gosta_texto', 'evitar_texto', 'medicamentos_detalhe', 'obs_clinicas']);
 
 async function gravarAnamnese(admin: any, caller: any, anamnese: any) {
@@ -504,6 +509,18 @@ async function gravarAnamnese(admin: any, caller: any, anamnese: any) {
       };
     }
   }
+  // Histórico: cada envio do aluno é um registro da anamnese (s.anamneses); no mesmo dia o registro do aluno é atualizado.
+  // s.anamnese continua espelhando o mais recente, que é de onde o painel e a prescrição leem.
+  if (!Array.isArray(s.anamneses)) s.anamneses = [];
+  const hoje = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);   // dia em Brasília
+  const snap: Record<string, unknown> = {};
+  for (const k of CHAVES_REGISTRO_ANAMNESE) if (s.anamnese[k] !== undefined && s.anamnese[k] !== null && s.anamnese[k] !== '') snap[k] = s.anamnese[k];
+  const saude: Record<string, unknown> = {};
+  for (const k of CAMPOS_SAUDE_PERFIL) if (s.perfil[k]) saude[k] = s.perfil[k];
+  snap.saude = saude;
+  const doDia = s.anamneses.find((r: any) => r.origem === 'aluno' && r.data === hoje);
+  if (doDia) { for (const k of CHAVES_REGISTRO_ANAMNESE) delete doDia[k]; Object.assign(doDia, snap); }
+  else s.anamneses.push({ id: novoId(todosIds), data: hoje, origem: 'aluno', responsavel: 'Portal do aluno', ...snap });
   await saveStudents(admin, trainerId, students);
   await registrarRastro(admin, trainerId, caller.id, 'anamnese', { anamnese: limpoTudo });
   return { status: 'ok' };

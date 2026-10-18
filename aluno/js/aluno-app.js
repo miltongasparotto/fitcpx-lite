@@ -624,7 +624,7 @@ function abrirDados(){
   hide('dp-erro');
   setVal('dp-nascimento', dataISOparaBR(_dadosPessoais.nascimento));
   setVal('dp-sexo', _dadosPessoais.sexo || '');
-  setVal('dp-whatsapp', _dadosPessoais.whatsapp || '');
+  foneCarregar('dp-whatsapp', _dadosPessoais.whatsapp || '');
   setVal('dp-profissao', _dadosPessoais.profissao || '');
   irPara('tela-dados');
 }
@@ -636,8 +636,8 @@ async function salvarDadosPessoais(){
   if(!nascimento) return _erro('dp-erro', 'Data de nascimento inválida. Escreva no formato dd/mm/aaaa.');
   const sexo = val('dp-sexo');
   if(!sexo) return _erro('dp-erro', 'Selecione o sexo.');
-  const whatsapp = val('dp-whatsapp').trim();
-  if(whatsapp.replace(/\D/g,'').length < 10) return _erro('dp-erro', 'Informe o WhatsApp com DDD.');
+  const whatsapp = foneLer('dp-whatsapp');   // guardado com o código do país: +55 (11) 98765-4321
+  if(!foneCompleto(whatsapp)) return _erro('dp-erro', 'Informe o WhatsApp com DDD.');
   const btn = $('dp-btn'); btn.disabled = true;
   let r;
   try{ r = await chamarApi({ acao: 'dados-pessoais', dados: { nascimento, sexo, whatsapp, profissao: val('dp-profissao').trim() } }); }

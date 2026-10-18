@@ -444,7 +444,7 @@ async function dashCopiarLinkCadastro(){
   if(!url){ crmToast('Não foi possível gerar o link agora', 'err'); return; }
   const ok = await _dashCopiar(url);
   _dashMarcarPortal();
-  crmToast(ok ? 'Link de cadastro copiado' : 'Copie o link: ' + url);
+  crmToast(ok ? 'Link de cadastro copiado. Cole no WhatsApp do aluno' : 'Copie o link: ' + url);
 }
 function dashPortalAbrir(){ _dashMarcarPortal(); abrirAppAluno('acesso'); crmToast('Portal aberto em nova aba'); }
 async function dashPortalCopiar(){

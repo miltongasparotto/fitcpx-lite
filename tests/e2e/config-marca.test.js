@@ -136,7 +136,7 @@ const montarCenario = () => {
       document.getElementById('cfg-pf-cep').value='01310-100'; document.getElementById('cfg-pf-numero').value='1000'; document.getElementById('cfg-pf-complemento').value='Sala 5';
       cfgSalvarPerfil()`);
     await page.waitForTimeout(300);
-    chk(P('perfil: campos gravados em DB.config'), await call(page, `(c=>c.nomeCompleto==='Marina Souza Costa'&&c.cref==='012345-G/SP'&&c.emailPessoal==='marina.pessoal@exemplo.com'&&c.telefonePessoal==='(21) 97777-6666'&&c.enderecoPessoal.cep==='01310-100'&&c.enderecoPessoal.rua==='Avenida Paulista'&&c.enderecoPessoal.numero==='1000'&&c.enderecoPessoal.complemento==='Sala 5'&&c.enderecoPessoal.cidade==='São Paulo'&&c.enderecoPessoal.uf==='SP')(DB.config)`));
+    chk(P('perfil: campos gravados em DB.config'), await call(page, `(c=>c.nomeCompleto==='Marina Souza Costa'&&c.cref==='012345-G/SP'&&c.emailPessoal==='marina.pessoal@exemplo.com'&&c.telefonePessoal==='+55 (21) 97777-6666'&&c.enderecoPessoal.cep==='01310-100'&&c.enderecoPessoal.rua==='Avenida Paulista'&&c.enderecoPessoal.numero==='1000'&&c.enderecoPessoal.complemento==='Sala 5'&&c.enderecoPessoal.cidade==='São Paulo'&&c.enderecoPessoal.uf==='SP')(DB.config)`));
     chk(P('perfil: sem aviso de erro'), await call(page, `!document.querySelector('.toast.err')`));
     chk(P('perfil: persiste no armazenamento local'), await call(page, `JSON.parse(localStorage.getItem(lsKey('crm'))).config.enderecoPessoal.numero==='1000'`));
     chk(P('perfil: não mexe na marca (nome de exibição e studio continuam vazios)'), await call(page, `DB.config.personalName==='' && DB.config.studioName==='FitCPX Lite'`));
@@ -159,22 +159,22 @@ const montarCenario = () => {
     await call(page, `document.getElementById('cfg-wa').value=''; document.querySelectorAll('.toast').forEach(t=>t.remove()); cfgEnderecoCopiar()`);
     chk(P('marca: "Usar o endereço do Perfil" copia os campos'), await call(page, `document.getElementById('cfg-st-cep').value==='01310-100' && document.getElementById('cfg-st-numero').value==='1000' && document.getElementById('cfg-st-cidade').value==='São Paulo' && document.getElementById('cfg-st-uf').value==='SP'`));
     await call(page, `
-      document.getElementById('cfg-studio').value='Studio Vida'; document.getElementById('cfg-name').value='Marina Costa'; document.getElementById('cfg-ddi').value='351';
-      document.getElementById('cfg-wa').value='(21) 98888-7777'; document.getElementById('cfg-email').value='contato@studiovida.com'; document.getElementById('cfg-insta').value='@studiovida';
+      document.getElementById('cfg-studio').value='Studio Vida'; document.getElementById('cfg-name').value='Marina Costa'; foneEscolher('cfg-wa','351');
+      document.getElementById('cfg-wa').value='912 345 678'; document.getElementById('cfg-email').value='contato@studiovida.com'; document.getElementById('cfg-insta').value='@studiovida';
       document.getElementById('cfg-bio').value='Treino com ciência.'; document.getElementById('cfg-st-complemento').value='Loja 2'`);
     await call(page, `cfgMarcaCor('#3b82f6'); cfgMarcaIcone('ph-heartbeat'); cfgMarcaNome('Vida Fit')`); await page.waitForTimeout(150);
     chk(P('marca: rascunho não muda o sistema antes de salvar'), await call(page, `!document.getElementById('marca-vars')`));
     chk(P('marca: pré-visualização usa a cor escolhida'), await call(page, `getComputedStyle(document.querySelector('.mc-prev-mark')).backgroundColor===(h=>{const n=parseInt(h.slice(1),16);return 'rgb('+(n>>16)+', '+((n>>8)&255)+', '+(n&255)+')'})(marcaCalcular('#3b82f6').claro['--primary']) && document.querySelector('.mc-prev-nome, .mc-prev-topo b').textContent==='Vida Fit'`));
     await shot(page, `cfg-${W}-marca`);
     await call(page, `cfgSalvarMarca()`); await page.waitForTimeout(400);
-    chk(P('marca: identidade, contato e endereço gravados em DB.config'), await call(page, `(c=>c.studioName==='Studio Vida'&&c.personalName==='Marina Costa'&&c.waCountryCode==='351'&&c.whatsapp==='(21) 98888-7777'&&c.email==='contato@studiovida.com'&&c.instagram==='@studiovida'&&c.bio==='Treino com ciência.'&&c.enderecoStudio.rua==='Avenida Paulista'&&c.enderecoStudio.complemento==='Loja 2'&&c.enderecoStudio.uf==='SP')(DB.config)`));
+    chk(P('marca: identidade, contato e endereço gravados em DB.config'), await call(page, `(c=>c.studioName==='Studio Vida'&&c.personalName==='Marina Costa'&&c.waCountryCode==='351'&&c.waCountryName==='Portugal'&&c.whatsapp==='+351 912 345 678'&&c.email==='contato@studiovida.com'&&c.instagram==='@studiovida'&&c.bio==='Treino com ciência.'&&c.enderecoStudio.rua==='Avenida Paulista'&&c.enderecoStudio.complemento==='Loja 2'&&c.enderecoStudio.uf==='SP')(DB.config)`));
     chk(P('marca: sem aviso de erro (nuvem ausente)'), await call(page, `!document.querySelector('.toast.err')`));
     chk(P('marca: nome do studio na lateral'), await call(page, `[...document.querySelectorAll('.sb-role')].every(e=>e.textContent==='Studio Vida')`));
-    chk(P('marca: variáveis nas mensagens'), await call(page, `waTextoDeModelo('{studio}|{personal}|{cref}|{whatsappStudio}', null, {})==='Studio Vida|Marina Costa|012345-G/SP|(21) 98888-7777'`));
+    chk(P('marca: variáveis nas mensagens'), await call(page, `waTextoDeModelo('{studio}|{personal}|{cref}|{whatsappStudio}', null, {})==='Studio Vida|Marina Costa|012345-G/SP|+351 912 345 678'`));
     chk(P('marca: DDI do studio vira o padrão dos envios'), await call(page, `waLinkPara({perfil:{whatsapp:'(11) 91234-5678'}}, 'oi').startsWith('https://wa.me/351')`));
     chk(P('marca: o Perfil não foi alterado ao salvar a marca'), await call(page, `DB.config.nomeCompleto==='Marina Souza Costa' && DB.config.enderecoPessoal.numero==='1000'`));
     await call(page, `renderConfigCRM()`);
-    chk(P('marca: reabrir mostra o salvo'), await call(page, `document.getElementById('cfg-studio').value==='Studio Vida' && document.getElementById('cfg-ddi').value==='351' && document.getElementById('cfg-st-uf').value==='SP'`));
+    chk(P('marca: reabrir mostra o salvo'), await call(page, `document.getElementById('cfg-studio').value==='Studio Vida' && document.getElementById('cfg-wa-ddi').dataset.ddi==='351' && document.getElementById('cfg-wa').value==='912 345 678' && document.getElementById('cfg-st-uf').value==='SP'`));
     chk(P('marca: salvar aplica a cor ao sistema'), await call(page, `!!document.getElementById('marca-vars') && getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()===marcaCalcular('#3b82f6').claro['--primary']`));
     chk(P('marca: botão principal usa a cor'), await call(page, `(()=>{ const b=document.createElement('button'); b.className='btn btn-primary'; document.body.appendChild(b); const c=getComputedStyle(b).backgroundColor; b.remove(); return c===(h=>{const n=parseInt(h.slice(1),16);return 'rgb('+(n>>16)+', '+((n>>8)&255)+', '+(n&255)+')'})(marcaCalcular('#3b82f6').claro['--primary']); })()`));
     chk(P('marca: guardada em DB.config.marca'), await call(page, `(m=>m.nomeApp==='Vida Fit'&&m.cor==='#3b82f6'&&m.icone==='ph-heartbeat'&&m.usarLogo===false)(DB.config.marca)`));

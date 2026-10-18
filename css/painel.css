@@ -87,8 +87,8 @@
 .dp-acts{display:flex;align-items:center;gap:10px}
 .dp-head .ph-tools{margin-left:auto}
 .dp-act-s{display:none}
-/* notebook estreito (1200–1439px): rótulos curtos para o título não quebrar */
-@media (min-width:1200px) and (max-width:1439px){
+/* notebook estreito (1200–1259px): rótulos curtos para o título não quebrar (a partir de 1260 o menu em ícones já dá a folga) */
+@media (min-width:1200px) and (max-width:1259px){
   .dp-act:has(.dp-act-s) .dp-act-l{display:none}
   .dp-act .dp-act-s{display:inline}
   .dp-acts{gap:8px}
@@ -342,9 +342,9 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   LAYOUT 2 — TABLET (768 a 1199px): menu em ícones + gaveta
+   LAYOUT 2 — TABLET (768 a 1199px) e MACBOOK (1200 a 1439px): menu em ícones + gaveta (o MacBook usa o conteúdo do notebook, só com o menu recolhido)
    ══════════════════════════════════════════════════════════════════════════ */
-@media (min-width:768px) and (max-width:1199px){
+@media (min-width:768px) and (max-width:1439px){
   .app{grid-template-columns:76px minmax(0,1fr)}
   .main-area{grid-column:2}
   .sidebar{position:fixed;left:0;top:0;bottom:0;width:76px;z-index:900;transition:width var(--t-slow) var(--ease),box-shadow var(--t-slow) var(--ease)}
@@ -548,9 +548,12 @@
   .page-head,.page-header,.screen-pad{padding-left:40px;padding-right:40px}
   .dp{padding-left:40px;padding-right:40px}
   #student-view .content{max-width:1480px;margin-left:auto;margin-right:auto}
+  /* telas do aluno: lista de Alunos com a mesma largura máxima da ficha e dos formulários (css/app.css, .fx) */
+  #screen-alunos>.page-header,#screen-alunos .main-scroll>.content{max-width:1680px;margin-left:auto;margin-right:auto;width:100%}
   .cfg-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
   .cfg-marca{grid-template-columns:minmax(0,1fr) 460px}
 }
 @media (min-width:2800px){
   .page-head,.page-header,.screen-pad,.dp{max-width:2480px}
+  #screen-alunos>.page-header,#screen-alunos .main-scroll>.content{max-width:1800px}
 }

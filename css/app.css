@@ -244,7 +244,8 @@ select,input[type=text],input[type=search],input[type=date],input[type=email],in
 
 .al-nome{display:flex;align-items:center;gap:4px 10px}
 .al-av{--st:var(--primary);width:38px;height:38px;border-radius:50%;border:2px solid var(--st);box-shadow:inset 0 0 0 2px var(--surface);background:var(--primary-soft);background-clip:padding-box;color:var(--primary-ink);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
-.al-st-ativo{--st:var(--primary)}.al-st-novo{--st:var(--info-ink)}.al-st-pendente{--st:var(--warning)}.al-st-transf{--st:var(--text3)}.al-st-bloq{--st:var(--danger)}
+.al-st-ativo{--st:var(--primary)}.al-st-novo{--st:var(--info-ink)}.al-st-pendente{--st:var(--warning)}.al-st-transf{--st:var(--text3)}.al-st-bloq{--st:var(--danger)}.al-st-pausado{--st:var(--warning)}.al-st-inativo{--st:var(--text3)}
+.al-av.al-st-inativo,.al-dot.al-st-inativo{border-style:dashed}
 .al-nome-txt{display:flex;flex-direction:column;min-width:0}
 .al-n{font-size:13.5px;font-weight:500;color:var(--text);line-height:1.3;white-space:nowrap}
 .al-sub{font-size:12px;color:var(--text3);line-height:1.3}
@@ -643,3 +644,349 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:5px}
   .al-n{white-space:normal;min-width:0;overflow-wrap:break-word}
   .al-tags{flex-direction:row;flex-wrap:wrap;justify-content:flex-start;margin-left:0}
 }
+
+/* Tela de Alunos sem rolagem de página (notebook e tablet): o cartão ocupa a altura que sobra e, se os alunos da
+   página não couberem, só a lista rola (cabeçalho das colunas fixo; rodapé de paginação sempre visível). */
+.al-scroll{overflow-x:auto}
+.alunos-table td{padding-top:9px;padding-bottom:9px}
+.al-ph,.al-toolbar,.al-pag{flex-shrink:0}
+@media (min-width:768px){
+  #screen-alunos .main-scroll{overflow:hidden;display:flex;flex-direction:column}
+  #screen-alunos .content{flex:1;min-height:0;display:flex;flex-direction:column;padding-bottom:20px}
+  .al-card{flex:1;min-height:0;display:flex;flex-direction:column}
+  .al-body{flex:1;min-height:0;display:flex;flex-direction:column}
+  .al-scroll{flex:1;min-height:0;overflow:auto}
+  .alunos-table thead th{position:sticky;top:0;z-index:2;background:var(--surface);box-shadow:0 1px 0 var(--divider)}
+}
+
+/* ═══ Ficha do aluno (15/10/2026): cartão principal + cartão de abas padrão do Painel + página de Cadastro ═══ */
+.fx-view{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+.fx-top{align-items:center;padding-bottom:10px}
+.fx{container:ficha/inline-size;padding:4px 32px 28px;width:100%;flex:1;min-height:0;display:flex;flex-direction:column;gap:16px;overflow-y:auto}
+.fx-scroll{flex:1;min-height:0;overflow-y:auto}
+
+/* cartão principal */
+.fx-id{margin:0;padding:22px 24px 0;flex-shrink:0}
+.fx-id-main{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:22px;align-items:center}
+.fx-av{--st:var(--primary);width:96px;height:96px;border-radius:50%;border:3px solid var(--st);box-shadow:inset 0 0 0 3px var(--surface);background:var(--primary-soft);color:var(--primary-ink);font-size:30px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fx-av.fx-st-lead{--st:var(--info-ink)}
+.fx-av.fx-st-pausado{--st:var(--warning)}
+.fx-av.fx-st-inativo{--st:var(--text3);border-style:dashed}
+.fx-av.fx-st-bloq{--st:var(--danger)}
+.fx-av.fx-st-transf{--st:var(--text3)}
+.fx-id-txt{min-width:0}
+.fx-nome{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.fx-nome .page-title{overflow-wrap:anywhere}
+.fx-mail{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:13px;color:var(--text-2);min-width:0}
+.fx-mail:empty{display:none}
+.fx-mail i{font-size:16px;color:var(--text-muted);flex-shrink:0}
+.fx-mail span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fx-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.fx-chips:empty{display:none}
+.fx-acoes{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.fx-btn-warn{color:var(--danger-ink)}
+@media (hover:hover) and (pointer:fine){.fx-btn-warn:hover:not(:disabled){border-color:var(--danger);color:var(--danger-ink)}}
+.fx-menuwrap{position:relative}
+.fx-menuwrap .dp-menu{left:auto;right:0;width:262px;transform-origin:top right}
+.fx-menuwrap.open .dp-menu{opacity:1;transform:none;pointer-events:auto;visibility:visible;transition-delay:0s}
+.fx-menuwrap.open .dp-chev{transform:rotate(180deg)}
+.fx-mn-h{font-size:11.5px;color:var(--text-faint);padding:8px 10px 4px}
+.fx-mn-sep{height:1px;background:var(--divider);margin:6px 4px}
+.dp-menu-it.fx-mn-it{font-size:13px;font-weight:500;gap:10px}
+.fx-mn-it .fx-mn-t{flex:1;min-width:0}
+.fx-mn-it .fx-mn-t small{display:block;font-size:11.5px;font-weight:400;color:var(--text-muted)}
+.fx-mn-it .fx-mn-ck{font-size:16px;color:var(--primary-ink)}
+.fx-mn-it:disabled{opacity:.5;cursor:not-allowed}
+.fx-mn-it.is-danger{color:var(--danger-ink)}
+.fx-datas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:20px -24px 0;border-top:1px solid var(--divider)}
+.fx-data{padding:14px 24px 16px;display:flex;align-items:center;gap:14px;min-width:0}
+.fx-data+.fx-data{border-left:1px solid var(--divider)}
+.fx-data-ic{width:38px;height:38px;border-radius:11px;background:var(--primary-soft);color:var(--primary-ink);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fx-data-ic i{font-size:20px;vertical-align:0}
+.fx-data-l{font-size:12px;color:var(--text-faint)}
+.fx-data .dp-v,.fx-data .dp-s{display:block}
+.fx-data .dp-s{font-size:11.5px;color:var(--text-muted)}
+
+/* cartão inferior padrão (igual ao do Painel): título e descrição à esquerda, abas à direita; ocupa o resto da altura */
+.fx-panel{margin:0;padding:20px;flex:1 0 380px;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.fx-panel .dp-ph{margin-bottom:16px;flex-shrink:0;flex-wrap:wrap}
+.fx-panel h3{font-size:17px;font-weight:700}
+.fx-body{flex:1;min-height:0;overflow-y:auto}
+#student-view .fx-body .content{padding:0;max-width:none}
+.fx-body .card{box-shadow:none}
+.fx-blocks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.fx-blk{background:var(--surface-muted);border:1px solid var(--divider);border-radius:14px;padding:18px 18px 16px;display:flex;flex-direction:column;min-width:0}
+.fx-blk-h{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.fx-blk-ic{width:32px;height:32px;border-radius:9px;background:var(--primary-soft);color:var(--primary-ink);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fx-blk-ic i{font-size:17px;vertical-align:0}
+.fx-blk h4{font-size:14px;font-weight:700}
+.fx-blk-h p{font-size:12.5px;color:var(--text-muted)}
+.fx-r{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--divider);min-width:0}
+.fx-r:last-of-type{border-bottom:0}
+.fx-r>span:first-child{font-size:12.5px;color:var(--text-muted);flex-shrink:0}
+.fx-val{text-align:right;min-width:0}
+.fx-val .dp-v,.fx-val .dp-s{display:block}
+.fx-val .dp-v{overflow-wrap:anywhere}
+.fx-val .dp-s{font-size:11.5px;color:var(--text-muted)}
+.fx-val .dp-v.fx-nada{color:var(--text-faint);font-weight:400}
+.fx-foot{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:14px}
+
+/* página de Cadastro: cartões empilhados, um embaixo do outro */
+.fx-ph{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:6px 32px 14px;flex-shrink:0}
+.fx-ph .page-subtitle{margin-top:3px}
+.fx-cad{padding:0 32px 40px;display:flex;flex-direction:column;gap:16px}
+.fx-sec{margin:0}
+.fx-sec .dp-ph{margin-bottom:16px;align-items:flex-start;flex-wrap:wrap}
+.fx-sec h3{font-size:17px;font-weight:700}
+.fx-form{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px 16px}
+.fx-form .field{margin:0;min-width:0}
+.f2{grid-column:span 2}.f3{grid-column:span 3}.f4{grid-column:span 4}.f6{grid-column:span 6}.f8{grid-column:span 8}.f12{grid-column:span 12}
+.fx-lin{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.fx-lin-t{display:flex;align-items:center;gap:12px;min-width:0}
+.fx-lin-b{display:flex;gap:8px;flex-wrap:wrap}
+.fx-salvar{display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;z-index:5;margin:0 -32px;padding:12px 32px;background:var(--bg);border-top:1px solid var(--divider)}
+
+/* quebras pela largura da área (container query) */
+@container ficha (max-width:999px){
+  .fx-id-main{grid-template-columns:auto minmax(0,1fr);gap:16px 18px}
+  .fx-acoes{grid-column:1 / -1}
+  .fx-acoes>*{flex:1 1 0}
+  .fx-acoes .btn,.fx-menuwrap .btn{width:100%}
+}
+@container ficha (max-width:759px){
+  .fx-blocks{grid-template-columns:minmax(0,1fr)}
+  .fx-form{grid-template-columns:repeat(6,minmax(0,1fr))}
+}
+@container ficha (max-width:599px){
+  .fx-id{padding:16px 16px 0}
+  .fx-id-main{align-items:start}
+  .fx-av{width:68px;height:68px;font-size:22px}
+  .fx-acoes{flex-wrap:wrap}
+  .fx-acoes>*{flex:1 1 140px}
+  .fx-datas{margin:16px -16px 0}
+  .fx-data{padding:12px 16px 14px;gap:10px;align-items:flex-start}
+  .fx-data-ic{width:32px;height:32px;border-radius:9px}.fx-data-ic i{font-size:17px}
+  .fx-panel{padding:16px}
+}
+@media (min-width:1920px){
+  .fx-top,.fx,.fx-ph,.fx-cad{max-width:1680px;margin-left:auto;margin-right:auto;width:100%}   /* ultrawide: ficha, Cadastro e formulários não ocupam a tela toda */
+  .fx,.fx-ph,.fx-cad{padding-left:40px;padding-right:40px}
+}
+@media (min-width:2800px){.fx-top,.fx,.fx-ph,.fx-cad{max-width:1800px}}
+@media (max-width:1199px){
+  .fx-view{overflow-y:auto}
+  .fx{padding:2px 24px 40px;flex:none;overflow:visible}
+  .fx-panel{flex:none;overflow:visible}
+  .fx-body{overflow:visible}
+  .fx-scroll{overflow:visible;flex:none}
+  .fx-ph,.fx-cad{padding-left:24px;padding-right:24px}
+  .fx-nome .page-title{font-size:22px}
+}
+@media (max-width:767px){
+  .fx{padding:2px 16px 32px}
+  .fx-ph,.fx-cad{padding-left:16px;padding-right:16px}
+  .fx-ph{flex-wrap:wrap}
+  .fx-salvar .btn{flex:1}
+  .fx-nome .page-title{font-size:20px}
+  .fx-panel .dp-seg{display:flex;width:100%;overflow-x:auto;scrollbar-width:none}
+  .fx-panel .dp-seg::-webkit-scrollbar{display:none}
+  .fx-panel .dp-seg-b{flex:1 0 auto;justify-content:center}
+}
+@media (max-width:767px){
+  .fx-menuwrap{position:static}
+  .fx-menuwrap .dp-menu{left:0;right:0;width:auto;transform-origin:bottom center}
+}
+.fx-foot a.btn{text-decoration:none}
+
+/* foto do aluno */
+.fx-av-wrap{position:relative;flex-shrink:0}
+button.fx-av{padding:0;font-family:inherit;cursor:pointer;overflow:hidden;appearance:none;-webkit-appearance:none;transition:transform var(--t-fast) var(--ease-out)}
+button.fx-av:active{transform:scale(.97)}
+button.fx-av:focus-visible{outline:2px solid var(--primary);outline-offset:3px}
+.fx-av img,.al-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+.al-av{overflow:hidden}
+.fx-cam{position:absolute;right:-2px;bottom:-2px;width:30px;height:30px;border-radius:50%;border:2px solid var(--surface);background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;transition:transform var(--t-fast) var(--ease-out)}
+.fx-cam i{font-size:15px;vertical-align:0}
+.fx-cam:active{transform:scale(.92)}
+.fx-cam:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.fx-av-sm{width:64px;height:64px;font-size:20px}
+.fx-foto{display:flex;align-items:center;gap:12px}
+.fx-foto-b{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.fx-form{align-items:start}
+@container ficha (max-width:599px){.fx-cam{width:26px;height:26px}.fx-cam i{font-size:13px}}
+
+/* ═══ Ficha: ajustes de tablet e celular (15/10/2026) ═══ */
+.f9{grid-column:span 9}
+.e-cep,.e-num,.e-comp,.e-uf{grid-column:span 2}.e-rua,.e-cid{grid-column:span 6}.e-bai{grid-column:span 4}
+.fx-panel .t-short{display:none}
+.fx-lbl-l{display:inline}
+/* até 999 px de área (tablet e notebook pequeno): "Salvo" no canto do cartão e ações do bloco Contato em grade */
+@container ficha (max-width:999px){
+  .fx-id{position:relative}
+  #saved-indicator{position:absolute;top:12px;right:16px;margin:0}
+  .fx-foot{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .fx-foot>:first-child{grid-column:1 / -1}
+  .fx-foot .btn{width:100%}
+}
+/* tablet em pé (600 a 759 px): campos em 6 colunas, dois por linha; endereço em 3 linhas */
+@container ficha (max-width:759px){
+  .f3,.f4,.f6,.f8,.f9{grid-column:span 3}.f12{grid-column:span 6}
+  .e-cep{grid-column:span 2}.e-rua{grid-column:span 4}.e-num{grid-column:span 2}.e-comp{grid-column:span 4}
+  .e-bai{grid-column:span 2}.e-cid{grid-column:span 3}.e-uf{grid-column:span 1}
+  .fx-foot{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .fx-foot>:first-child{grid-column:auto}
+}
+/* celular (< 600 px) */
+@container ficha (max-width:599px){
+  .f3{grid-column:span 3}.f4,.f6,.f8,.f9,.m6{grid-column:span 6}
+  .e-cep,.e-rua,.e-bai{grid-column:span 6}.e-num,.e-comp{grid-column:span 3}.e-cid{grid-column:span 4}.e-uf{grid-column:span 2}
+  .fx-foot{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .fx-foot>:first-child{grid-column:1 / -1}
+  /* cartão: Editar perfil, Status e Arquivar (só o ícone) na mesma linha */
+  .fx-acoes{flex-wrap:nowrap}
+  .fx-acoes>*{flex:1 1 0;min-width:0}
+  .fx-acoes>.fx-btn-warn{flex:0 0 44px;width:44px;padding:0}
+  .fx-acoes .fx-lbl,.fx-acoes .fx-lbl-l{display:none}
+  .fx-acoes .btn{padding-left:10px;padding-right:10px}
+  /* cartão de abas: só as abas, em largura total; o título repete a aba ativa */
+  .fx-panel .dp-ph>div:first-child{display:none}
+  .fx-panel .dp-ph{margin-bottom:12px}
+  .fx-panel .dp-seg{display:flex;width:100%}
+  .fx-panel .dp-seg-b{flex:1 1 0;justify-content:center;padding-left:4px;padding-right:4px}
+  .fx-panel .t-full{display:none}.fx-panel .t-short{display:inline}
+}
+/* Cadastro: Cancelar e Salvar sempre à mão no fim da tela (a página é longa) */
+@media (min-width:1920px){.fx-salvar{margin:0 -40px;padding:12px 40px}}
+@media (max-width:1199px){
+  .fx-salvar{margin:0 -24px;padding:12px 24px calc(12px + env(safe-area-inset-bottom,0px))}
+}
+@media (max-width:767px){
+  .fx-salvar{margin:0 -16px;padding-left:16px;padding-right:16px}
+}
+
+.fx-cad{container:ficha/inline-size}
+.fx-lbl-s{display:none}
+@container ficha (max-width:599px){.fx-acoes .fx-lbl-l{display:none}.fx-acoes .fx-lbl-s{display:inline}}
+
+/* ═══ Cadastro sem legendas: Perfil com a foto ao lado dos campos, e-mail com botões (15/10/2026) ═══ */
+.fx-perfil{display:grid;grid-template-columns:auto repeat(2,minmax(0,1fr));grid-template-rows:auto 1fr;gap:14px 24px;align-items:start}
+.fx-perfil .field{margin:0;min-width:0}
+.fx-perfil .p-foto{grid-row:1 / span 2}
+.fx-perfil .p-prof{grid-column:2 / -1}
+.fx-foto-g{display:flex;align-items:center;gap:14px}
+.fx-foto-g .fx-av{width:141px;height:141px;font-size:44px;flex-shrink:0}
+.fx-foto-bt{display:flex;flex-direction:column;gap:8px}
+.fx-foto-bt .btn{justify-content:flex-start;white-space:nowrap}
+.fx-lbl-dica{font-weight:400;color:var(--text-muted)}
+.fx-mail-lin{display:flex;gap:8px;align-items:center}
+.fx-mail-lin input{flex:1;min-width:0}
+.fx-mail-lin .btn{flex-shrink:0}
+@container ficha (max-width:759px){
+  .fx-perfil{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;gap:14px 16px}
+  .fx-perfil .p-foto{grid-row:auto;grid-column:1 / -1}
+  .fx-perfil .p-prof{grid-column:1 / -1}
+  .fx-foto-g .fx-av{width:112px;height:112px;font-size:36px}
+  .t6{grid-column:span 6}
+}
+@container ficha (max-width:599px){
+  .fx-foto-g .fx-av{width:96px;height:96px;font-size:32px}
+  .fx-foto-bt{flex:1;min-width:0}.fx-foto-bt .btn{width:100%}
+  .fx-mail-lin{flex-wrap:wrap}.fx-mail-lin input{flex:1 1 100%}.fx-mail-lin .btn{flex:1 1 0}
+}
+
+.fx-cad{padding-bottom:0}
+
+/* ═══ Situação (cor) e avisos do sistema (selo com ícone) — 16/10/2026 ═══ */
+.al-st-lead{--st:var(--info-ink)}
+.al-aviso{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:var(--r-chip);font-family:inherit;font-size:11.5px;font-weight:500;line-height:1;white-space:nowrap;border:1px solid transparent}
+.al-aviso i{font-size:13px;vertical-align:0}
+.al-aviso-novo{color:var(--primary-ink);border-color:var(--primary-line);background:var(--primary-tint)}
+.al-aviso-pendente{color:var(--warning-ink);border-color:var(--warning);background:var(--warning-soft)}
+.al-aviso-transf{color:var(--text-2);border-color:var(--border-strong);background:var(--surface)}
+button.al-aviso{cursor:pointer}
+button.al-aviso:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+#alunos-tabs{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center}
+.al-alertas{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.al-alertas-l{font-size:12px;color:var(--text-faint)}
+.al-ab-novo i{color:var(--primary-ink)}.al-ab-pendente i{color:var(--warning-ink)}.al-ab-transf i{color:var(--text-muted)}
+.al-alertas .dp-seg-b i{font-size:14px;vertical-align:0}
+.fx-alertas{display:inline-flex;gap:6px;flex-wrap:wrap}
+.fx-alertas:empty{display:none}
+@media (max-width:767px){.al-alertas{width:100%}.al-alertas-l{width:100%}.al-alertas .dp-seg-b{flex-direction:column;gap:1px;padding:6px 2px}.al-alertas .dp-seg-b i{display:none}}
+
+/* ═══ Histórico da ficha (17/10/2026): listas em linhas (Anamnese, Antropométrica, Prescrição) e formulários em página própria ═══ */
+.hx-cab{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.hx-cab h4{font-size:14px;font-weight:700}
+.hx-cab p{font-size:12.5px;color:var(--text-muted);margin-top:2px}
+.subtab .sn{color:var(--text-faint);font-weight:400;margin-left:4px}
+.hx-th,.hx-tr{display:grid;gap:16px;align-items:center;padding:0 12px}
+.hx-th{font-size:12px;color:var(--text-faint);padding-bottom:8px}
+.hx-tr{padding-top:14px;padding-bottom:14px;border-top:1px solid var(--divider);cursor:pointer;position:relative}
+.hx-tr.atual{background:var(--primary-tint);border-radius:12px;border-top-color:transparent}
+.hx-tr.atual+.hx-tr{border-top-color:transparent}
+@media (hover:hover) and (pointer:fine){.hx-tr:hover:not(.atual){background:var(--surface-muted);border-radius:12px}}
+.hx-tr:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;border-radius:12px}
+.hx-r2{display:contents}
+.hx-c{min-width:0}
+.hx-main{font-size:14px;font-weight:700;line-height:1.25;overflow-wrap:anywhere}
+.hx-sub2{font-size:11.5px;color:var(--text-muted);margin-top:2px}
+.hx-atual{color:var(--primary-ink);font-weight:500}
+.hx-v{font-size:14px;font-weight:500;font-variant-numeric:tabular-nums}
+.hx-d{display:inline-flex;align-items:center;gap:2px;font-size:11.5px;font-weight:500;margin-top:2px;font-variant-numeric:tabular-nums}
+.hx-d i{font-size:12px;vertical-align:0}
+.hx-d.bom{color:var(--primary-ink)}.hx-d.ruim{color:var(--warning-ink)}.hx-d.neutro{color:var(--text-muted)}
+.hx-chips{display:flex;gap:6px;flex-wrap:wrap}
+.hx-acoes{display:flex;gap:4px;justify-content:flex-end;align-items:center}
+.hx-prog{height:5px;border-radius:var(--r-chip);background:var(--neutral-soft);overflow:hidden;margin-top:6px;max-width:150px}
+.hx-prog>i{display:block;height:100%;background:var(--primary);border-radius:inherit}
+.hx-vazio{padding:28px 12px}
+.hx-ana .hx-th,.hx-ana .hx-tr{grid-template-columns:150px minmax(0,1.1fr) 90px minmax(0,1fr) minmax(0,1.2fr) 100px 150px}
+.hx-ant .hx-th,.hx-ant .hx-tr{grid-template-columns:150px 130px 150px 150px 90px minmax(0,1fr) 150px}
+.hx-trn .hx-th,.hx-trn .hx-tr{grid-template-columns:minmax(0,1.3fr) 220px minmax(0,1fr) 110px 110px 150px}
+@container ficha (max-width:999px){
+  .hx-lo{display:none}
+  .hx-th,.hx-tr{gap:12px}
+  .hx-ana .hx-th,.hx-ana .hx-tr{grid-template-columns:118px minmax(116px,1.2fr) 70px minmax(100px,1fr) minmax(0,1.2fr) 36px}
+  .hx-ant .hx-th,.hx-ant .hx-tr{grid-template-columns:118px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 36px}
+  .hx-trn .hx-th,.hx-trn .hx-tr{grid-template-columns:minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,1fr) 100px 36px}
+  .hx-acoes .btn{display:none}
+}
+/* celular: cada registro vira um bloco (data e ações em cima, os valores embaixo com o nome de cada um) */
+@container ficha (max-width:599px){
+  .hx-th{display:none}
+  .hx-ana .hx-tr,.hx-ant .hx-tr,.hx-trn .hx-tr{grid-template-columns:minmax(0,1fr) auto;gap:10px 12px}
+  .hx-tr>.hx-c:first-child{grid-column:1;grid-row:1}
+  .hx-tr>.hx-acoes{grid-column:2;grid-row:1}
+  .hx-r2{display:flex;flex-wrap:wrap;gap:10px 22px;grid-column:1 / -1;grid-row:2}
+  .hx-r2>.hx-c{flex:0 1 auto}
+  .hx-r2>.hx-c[data-l]::before{content:attr(data-l);display:block;font-size:11.5px;color:var(--text-faint);margin-bottom:2px}
+  .hx-r2>.hx-c.hx-w{flex:1 1 100%}
+  .hx-acoes .btn{display:none}
+}
+
+/* formulário em página própria: faixa de identificação em uma linha (nome, idade e nível) no lugar do cartão do aluno */
+.fx-idlin{display:flex;align-items:center;gap:12px;margin:0 32px 12px;padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);box-shadow:var(--shadow-card);flex-shrink:0;min-width:0}
+.fx-idlin .fx-av{width:36px;height:36px;border-width:2px;font-size:12px;box-shadow:inset 0 0 0 2px var(--surface)}
+.fx-idlin b{font-size:14px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fx-idlin .sep{color:var(--text-faint)}
+.fx-idlin .t{font-size:13px;color:var(--text-2);white-space:nowrap}
+@media (min-width:1920px){.fx-idlin{max-width:1600px;margin-left:auto;margin-right:auto;width:calc(100% - 80px)}}
+@media (min-width:2800px){.fx-idlin{max-width:1720px}}
+@media (max-width:1199px){.fx-idlin{margin-left:24px;margin-right:24px}}
+@media (max-width:767px){.fx-idlin{margin-left:16px;margin-right:16px;padding:8px 12px}}
+.fx-salvar .btn-save{min-width:170px}
+.fx-idlin-i{display:contents}
+.fx-cad #antro-form-view>.fx-sec+.fx-sec{margin-top:16px}
+/* avaliação: blocos de medidas em grade que se desfaz nas larguras menores */
+.ant-g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.ant-g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ant-g2c{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+@container ficha (max-width:759px){.ant-g3,.ant-g2c{grid-template-columns:minmax(0,1fr)}}
+@container ficha (max-width:599px){.ant-g2{grid-template-columns:minmax(0,1fr)}
+  /* passos do treino: só o número dos que não estão ativos */
+  .steps .step:not(.active){font-size:0;gap:0}
+  .steps .step-line{margin:0 6px}
+}
+/* distintivo da câmera na foto: alvo de toque de 34 px no tablet e no celular (a foto inteira também abre a escolha) */
+@media (max-width:1199px){.fx-cam{width:34px;height:34px}.fx-cam i{font-size:17px}}
+@container ficha (max-width:599px){.fx-cam{width:34px;height:34px}.fx-cam i{font-size:17px}}

@@ -35,7 +35,7 @@ async function boot(page){
       steps.push(['fluxos modalidades', "crmFluxosTab='modalidades';renderFluxosCRM()"]);
       for (const i of [0, 1, 4]) {
         steps.push(['aluno ' + i, `selectStudent(students[${i}].id)`]);
-        for (const tab of ['perfil', 'anamnese', 'prescricao', 'evolucao']) steps.push([`aluno ${i} ${tab}`, `switchTab('${tab}')`]);
+        for (const tab of ['info', 'perfil', 'anamnese', 'prescricao', 'evolucao']) steps.push([`aluno ${i} ${tab}`, `switchTab('${tab}')`]);
         for (const st of ['anamnese-hist', 'anamnese-antro', 'anamnese-meta']) steps.push([`aluno ${i} sub ${st}`, `switchTab('anamnese');switchSubtab('${st}')`]);
       }
       steps.push(['wizard prescricao', "selectStudent(students[0].id);switchTab('prescricao');treinosAdicionar()"]);

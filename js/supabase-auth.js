@@ -152,6 +152,15 @@ async function supaCarregarDados(){
   // Corrige dados que versões antigas da aluno-api gravaram fora do lugar
   // (saúde em anamnese, gordura % como kg) e calcula o nível. js/avaliacao.js
   if(typeof normalizarAlunosPortal==='function') normalizarAlunosPortal(students);
+  if(typeof reconciliarBloqueiosPortal==='function') setTimeout(()=>{ reconciliarBloqueiosPortal().catch(()=>{}); }, 2000);
+
+  // Cadastros totalmente vazios (aluno novo aberto e abandonado, de versões anteriores) saem da lista.
+  let _vaziosRemovidos = 0;
+  if(typeof _alunoVazio==='function'){
+    const n0 = students.length;
+    students = students.filter(s => !_alunoVazio(s));
+    _vaziosRemovidos = n0 - students.length;
+  }
 
   // Contador de ids parte do maior id já existente — nunca reaproveita número.
   semearIds(coletarIdsProfundo(students), coletarIdsProfundo(ARQUIVO), LOG);
@@ -183,6 +192,7 @@ async function supaCarregarDados(){
 
   activeId = null;
   lsSet('acm-students', students);
+  if(_vaziosRemovidos && typeof supaAutoSave==='function') supaAutoSave();
   renderObjGrid();
   renderStudentList();
   if(typeof renderArquivadas==='function') renderArquivadas();
