@@ -41,6 +41,14 @@ test('unirAlunos: não duplica itens de mesmo id', () => {
   assert.equal(base.avaliacoesAntro.length, 1); assert.deepEqual(base.treinos.map((t: any) => t.id), [1, 2]);
 });
 
+test('unirAlunos: cópia do mesmo registro com id diferente não duplica; registro diferente entra', () => {
+  const av = (id: number, peso: string, data = '2026-10-18') => ({ id, data_avaliacao: data, peso, altura: '180', gordura: '15' });
+  const base = al(1, { cpf: CPF }, { avaliacoesAntro: [av(10, '80')], anamneses: [{ id: 1, data: '2026-10-15', objetivo_ef: 'Hip' }] });
+  unirAlunos(base, al(2, { cpf: CPF }, { avaliacoesAntro: [av(99, '80'), av(98, '82')], anamneses: [{ id: 7, data: '2026-10-15', objetivo_ef: 'Hip' }, { id: 8, data: '2026-10-08', objetivo_ef: 'Hip' }] }));
+  assert.deepEqual(base.avaliacoesAntro.map((a: any) => a.peso).sort(), ['80', '82'], 'mesma avaliação (só o id muda) não repete');
+  assert.equal(base.anamneses.length, 2);
+});
+
 test('consolidarAluno: remove o duplicado da lista, respeita ids excluídos e outra pessoa', () => {
   const s = al(1, { nome: 'Carla Souza', cpf: CPF, alunoUserId: 'u1' });
   const dup = al(2, { nome: 'Carla Souza', cpf: CPF, nascimento: '1990-05-20' });

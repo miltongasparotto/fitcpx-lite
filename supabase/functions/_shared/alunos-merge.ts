@@ -33,13 +33,25 @@ export function acharDuplicados(students: any[], s: any, excluirIds: number[] = 
 // Campos do perfil que nunca vêm do registro duplicado: dizem respeito a quem FICA.
 const PERFIL_NAO_COPIA = new Set(['alunoUserId', 'identidadeId', 'portalStatus', 'novoCadastro', 'transferidoDe', 'onboardingConcluido', 'arquivoAntigo']);
 
+// Conteúdo do item sem o número interno: a cópia de um mesmo registro (avaliação, anamnese, treino) pode ter id diferente.
+function conteudo(x: any): string {
+  if (!x || typeof x !== 'object') return JSON.stringify(x);
+  const { id: _id, ...resto } = x;
+  const chaves = Object.keys(resto).filter((k) => !k.startsWith('_')).sort();
+  return chaves.length ? JSON.stringify(chaves.map((k) => [k, resto[k]])) : '';   // item só com id não se compara pelo conteúdo
+}
+
+// Junta as listas sem repetir: mesmo id, ou mesmo conteúdo (só o id muda).
 function juntarLista(base: any[] | undefined, extra: any[] | undefined): any[] {
   const out = Array.isArray(base) ? base.slice() : [];
   const ids = new Set(out.map((x) => String(x?.id)));
+  const conteudos = new Set(out.map(conteudo));
   for (const x of Array.isArray(extra) ? extra : []) {
     if (x && x.id != null && ids.has(String(x.id))) continue;
+    if (conteudo(x) && conteudos.has(conteudo(x))) continue;
     out.push(x);
     if (x && x.id != null) ids.add(String(x.id));
+    conteudos.add(conteudo(x));
   }
   return out;
 }

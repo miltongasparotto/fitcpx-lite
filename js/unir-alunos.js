@@ -61,13 +61,23 @@ function uaArquivoAntigo(s){ return (s && uaIndice().antigo.get(s.id)) || null; 
 // ── Junção (preenche só o vazio do cadastro principal) ───────────────────────
 const _UA_PERFIL_NAO_COPIA = ['alunoUserId', 'identidadeId', 'portalStatus', 'novoCadastro', 'transferidoDe', 'onboardingConcluido', 'arquivoAntigo', 'bloqueioAplicado', 'vinculoSync'];
 const _uaVazio = v => v === undefined || v === null || v === '';
+// Conteúdo do item sem o número interno: a cópia de um mesmo registro (avaliação, anamnese, treino) pode ter id diferente.
+function _uaConteudo(x){
+  if(!x || typeof x !== 'object') return JSON.stringify(x);
+  const chaves = Object.keys(x).filter(k => k !== 'id' && k.charAt(0) !== '_').sort();
+  return chaves.length ? JSON.stringify(chaves.map(k => [k, x[k]])) : '';   // item só com id não se compara pelo conteúdo
+}
+// Junta as listas sem repetir: mesmo id, ou mesmo conteúdo (só o id muda).
 function _uaJuntarLista(base, extra){
   const out = Array.isArray(base) ? base.slice() : [];
   const ids = new Set(out.map(x => String(x && x.id)));
+  const conteudos = new Set(out.map(_uaConteudo));
   (Array.isArray(extra) ? extra : []).forEach(x => {
     if(x && x.id != null && ids.has(String(x.id))) return;
+    if(_uaConteudo(x) && conteudos.has(_uaConteudo(x))) return;
     out.push(x);
     if(x && x.id != null) ids.add(String(x.id));
+    conteudos.add(_uaConteudo(x));
   });
   return out;
 }
