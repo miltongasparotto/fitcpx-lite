@@ -838,3 +838,41 @@ test('registrar-aluno: CPF de aluno que o próprio personal arquivou devolve arq
   const r = await personal('a@x.com', { acao: 'registrar-aluno', studentId: 20, nome: 'Carla Souza', cpf: CPF, email: 'carla@x.com' });
   assert.equal(r.status, 'arquivado-antigo'); assert.equal(r.arqId, 'arq9');
 });
+
+// ── Auditoria de segurança 23/10/2026 ───────────────────────────────────────
+
+test('segurança: identidadeId forjado no blob não deixa o personal alterar a identidade de outro', async () => {
+  resetar();
+  const B = semeiaPersonal('b@x.com', 'Bruno', [novoAluno(1, { nome: 'Carla Souza', email: 'carla@x.com' })]);
+  assert.equal((await personal('b@x.com', { acao: 'registrar-aluno', studentId: 1, nome: 'Carla Souza', cpf: CPF, email: 'carla@x.com' })).status, 'ok');
+  const alvo = tabela('alunos_identidade')[0];
+  const hashAntes = alvo.cpf_hash;
+  // Ana aponta o próprio aluno para a identidade do Bruno e tenta "corrigir o CPF" dela.
+  const A = semeiaPersonal('a@x.com', 'Ana', [novoAluno(7, { nome: 'Outra Pessoa', email: 'o@x.com', identidadeId: alvo.id })]);
+  const r = await personal('a@x.com', { acao: 'registrar-aluno', studentId: 7, nome: 'Outra Pessoa', cpf: '11144477735', email: 'o@x.com' });
+  assert.equal(r.status, 'ok');
+  assert.equal(tabela('alunos_identidade').find((i) => i.id === alvo.id)!.cpf_hash, hashAntes, 'identidade do outro personal intacta');
+  assert.equal(tabela('alunos_identidade').find((i) => i.id === alvo.id)!.trainer_user_id, B);
+  assert.equal(tabela('alunos_identidade').filter((i) => i.trainer_user_id === A).length, 1, 'Ana ganhou a identidade DELA');
+});
+
+test('segurança: definir-senha não assume conta de personal novo (só com link) nem conta ligada a outro personal', async () => {
+  resetar();
+  semeiaPersonal('a@x.com', 'Ana', [novoAluno(1, { nome: 'Novo Personal', email: 'np@x.com' }), novoAluno(2, { nome: 'Dani', email: 'dani@x.com' })]);
+  const np = usuario('np@x.com');                                       // personal que ainda não salvou nada no painel
+  tabela('personal_links').push({ trainer_user_id: np, codigo: 'NPCODEXXXXXX' });
+  assert.equal((await personal('a@x.com', { acao: 'definir-senha', email: 'np@x.com', novaSenha: '123456' })).http, 400);
+  assert.equal(users[np].password, undefined);
+  const dani = usuario('dani@x.com');                                    // aluna sem vínculo, mas já no índice de outro personal
+  tabela('alunos_identidade').push({ id: randomUUID(), cpf_hash: 'h', nome_norm: 'dani', trainer_user_id: 'outro-trainer', aluno_user_id: dani, student_id: 9 });
+  assert.equal((await personal('a@x.com', { acao: 'definir-senha', email: 'dani@x.com', novaSenha: '123456' })).http, 400);
+  assert.equal(users[dani].password, undefined);
+});
+
+test('segurança: cancelar-cadastro não apaga conta de personal', async () => {
+  resetar();
+  const A = semeiaPersonal('a@x.com', 'Ana', []);
+  const r = await aluno('a@x.com', { acao: 'cancelar-cadastro' });
+  assert.equal(r.http, 400);
+  assert.ok(users[A], 'conta do personal continua existindo');
+});

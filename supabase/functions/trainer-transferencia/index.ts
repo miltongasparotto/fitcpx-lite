@@ -148,7 +148,8 @@ async function registrarAluno(admin: any, caller: any, b: any) {
     case 'novo': {
       // Erro de digitação do CPF antes de existir conta: troca o CPF da identidade que já era deste registro.
       const antiga = s.perfil?.identidadeId ? (await admin.from('alunos_identidade').select('*').eq('id', s.perfil.identidadeId).maybeSingle()).data as Identidade | null : null;
-      if (antiga && !antiga.aluno_user_id) {
+      // identidadeId vem do blob do próprio personal (editável por ele): só vale se a identidade for dele.
+      if (antiga && !antiga.aluno_user_id && antiga.trainer_user_id === caller.id) {
         const { error } = await admin.from('alunos_identidade').update({
           cpf_hash: d.hash, nome_norm: normalizaNome(e.nome), email_norm: e.email || null, atualizado_em: new Date().toISOString(),
         }).eq('id', antiga.id);
@@ -339,7 +340,22 @@ async function alterarEmailAluno(admin: any, caller: any, studentIdBruto: unknow
 async function ehContaDePersonal(admin: any, userId: string): Promise<boolean> {
   const { data, error } = await admin.from('app_data').select('key').eq('user_id', userId).limit(1);
   if (error) throw error;
-  return !!(data && data.length);
+  if (data && data.length) return true;
+  // Personal novo que ainda não salvou nada no painel já tem o link de cadastro.
+  const { data: link, error: eLink } = await admin.from('personal_links').select('trainer_user_id').eq('trainer_user_id', userId).maybeSingle();
+  if (eLink) throw eLink;
+  return !!link;
+}
+
+// Conta sem vínculo de aluno que já consta no índice central de OUTRO personal (ex.: aluno com pedido de acesso
+// ou transferência em andamento): este personal não pode assumir a conta redefinindo a senha.
+async function contaLigadaAOutroPersonal(admin: any, userId: string, trainerId: string): Promise<boolean> {
+  const { data: ident, error } = await admin.from('alunos_identidade').select('trainer_user_id').eq('aluno_user_id', userId).maybeSingle();
+  if (error) throw error;
+  if (ident && ident.trainer_user_id !== trainerId) return true;
+  const { data: pend, error: ePend } = await admin.from('vinculos_pendentes').select('trainer_user_id').eq('aluno_user_id', userId).eq('status', 'pendente').maybeSingle();
+  if (ePend) throw ePend;
+  return !!(pend && pend.trainer_user_id !== trainerId);
 }
 
 // Cria (se não existir) ou reseta a senha do usuário desse e-mail e garante que
@@ -367,6 +383,7 @@ async function definirSenha(admin: any, caller: any, email: string, novaSenhaBru
     const { data: acesso } = await admin.from('alunos_acesso').select('trainer_user_id').eq('aluno_user_id', alunoUserId).maybeSingle();
     if (acesso && acesso.trainer_user_id !== caller.id) throw new ErroUsuario('Esse e-mail já é de um aluno de outro personal.');
     if (!acesso && await ehContaDePersonal(admin, alunoUserId)) throw new ErroUsuario('Esse e-mail pertence a outra conta de personal.');
+    if (!acesso && await contaLigadaAOutroPersonal(admin, alunoUserId, caller.id)) throw new ErroUsuario('Esse e-mail já é de um aluno de outro personal.');
     // app_metadata.trocar_senha (só o servidor escreve; user_metadata o próprio aluno editaria): senha GERADA pelo sistema (pedido do aluno) => o portal obriga o aluno a criar a própria senha no primeiro login; senha ESCOLHIDA pelo personal (aluno presente) => sem troca obrigatória, e limpa uma marca antiga.
     const { error: eSenha } = await admin.auth.admin.updateUserById(alunoUserId, { password: novaSenha, app_metadata: { ...(existente.app_metadata || {}), trocar_senha: gerada } });
     if (eSenha) throw eSenha;
@@ -386,7 +403,7 @@ async function definirSenha(admin: any, caller: any, email: string, novaSenhaBru
   // Se o aluno já está no índice (CPF registrado), a conta passa a constar nele.
   if (aluno.perfil?.identidadeId) {
     await admin.from('alunos_identidade').update({ aluno_user_id: alunoUserId, email_norm: email, atualizado_em: new Date().toISOString() })
-      .eq('id', aluno.perfil.identidadeId).is('aluno_user_id', null);
+      .eq('id', aluno.perfil.identidadeId).eq('trainer_user_id', caller.id).is('aluno_user_id', null);
   }
   await atenderPedidosSenha(admin, alunoUserId, caller.id);
   return { status: 'ok', alunoUserId, ...(gerada ? { senhaGerada: novaSenha } : {}) };

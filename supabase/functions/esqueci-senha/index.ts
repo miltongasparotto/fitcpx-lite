@@ -36,7 +36,8 @@ Deno.serve(async (req: Request) => {
   const email = normalizaEmail(body?.email);
   if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return jsonResponse({ status: 'email-invalido' }, 200, corsHeaders);
 
-  const origem = (req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || 'sem-ip').split(',')[0].trim();
+  // cf-connecting-ip é gravado pela borda (o cliente não forja); no x-forwarded-for o primeiro item pode vir do cliente, então vale o último.
+  const origem = (req.headers.get('cf-connecting-ip') || (req.headers.get('x-forwarded-for') || '').split(',').pop()?.trim() || 'sem-ip').trim();
   if (passouDoLimite(origem)) return jsonResponse({ status: 'muitas-tentativas' }, 200, corsHeaders);
 
   try {

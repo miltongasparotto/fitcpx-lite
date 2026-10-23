@@ -548,6 +548,11 @@ async function cancelarCadastro(admin: any, caller: any) {
   if (await acessoDoAluno(admin, caller.id)) throw new ErroUsuario('Sua conta já está vinculada. Fale com seu personal.');
   const { data } = await admin.from('alunos_identidade').select('id').eq('aluno_user_id', caller.id).maybeSingle();
   if (data) throw new ErroUsuario('Sua conta já está vinculada. Fale com seu personal.');
+  // Conta de personal (tem link de cadastro ou dados no painel) nunca é apagada por aqui: o JWT de um
+  // personal também passa por esta função e ele não tem vínculo de aluno.
+  const { data: link } = await admin.from('personal_links').select('trainer_user_id').eq('trainer_user_id', caller.id).maybeSingle();
+  const { data: dados } = await admin.from('app_data').select('key').eq('user_id', caller.id).limit(1);
+  if (link || (dados && dados.length)) throw new ErroUsuario('Esta conta não pode ser cancelada por aqui.');
   const { error } = await admin.auth.admin.deleteUser(caller.id);
   if (error) throw error;
   return { status: 'ok' };

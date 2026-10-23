@@ -130,7 +130,7 @@ function doSendWA(){
   const ddi=$('wa-ddi').value||waDdiPadrao();
   const fone=waFoneInternacional(alunoTel(findAluno(curWA.alunoId)), ddi);   // número com "+código" ignora o código do seletor
   if(!fone){ crmToast('Número de telefone não cadastrado','err'); return; }
-  window.open(`https://wa.me/${fone}?text=${encodeURIComponent(msg)}`,'_blank');
+  window.open(`https://wa.me/${fone}?text=${encodeURIComponent(msg)}`,'_blank','noopener');
   crmCloseModal('m-crm-wa'); crmToast('WhatsApp aberto!');
 }
 
