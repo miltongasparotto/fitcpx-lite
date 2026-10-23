@@ -48,7 +48,7 @@ function uaIndice(){
     lista.forEach(s => {
       const dica = s.perfil.arquivoAntigo && s.perfil.arquivoAntigo.arqId;
       const env = (dica && arquivados.find(e => e.arqId === dica)) || arquivados.slice().sort((a, b) => String(b.excluidoEm || '').localeCompare(String(a.excluidoEm || ''))).find(e => uaMesmoAluno(e.dados, s));
-      if(env) antigo.set(s.id, env);
+      if(env && s.perfil.arquivoAntigoIgnorado !== env.arqId) antigo.set(s.id, env);   // "Ignorar" vale para aquele arquivado
     });
   }
   _uaCache = { n: students.length, dup, antigo };
@@ -59,7 +59,7 @@ function uaDuplicadosDe(s){ return (uaIndice().dup.get(s && s.id) || []).map(id 
 function uaArquivoAntigo(s){ return (s && uaIndice().antigo.get(s.id)) || null; }
 
 // ── Junção (preenche só o vazio do cadastro principal) ───────────────────────
-const _UA_PERFIL_NAO_COPIA = ['alunoUserId', 'identidadeId', 'portalStatus', 'novoCadastro', 'transferidoDe', 'onboardingConcluido', 'arquivoAntigo', 'bloqueioAplicado', 'vinculoSync'];
+const _UA_PERFIL_NAO_COPIA = ['alunoUserId', 'identidadeId', 'portalStatus', 'novoCadastro', 'transferidoDe', 'onboardingConcluido', 'arquivoAntigo', 'arquivoAntigoAvisado', 'arquivoAntigoIgnorado', 'bloqueioAplicado', 'vinculoSync'];
 const _uaVazio = v => v === undefined || v === null || v === '';
 // Conteúdo do item sem o número interno: a cópia de um mesmo registro (avaliação, anamnese, treino) pode ter id diferente.
 function _uaConteudo(x){
@@ -193,6 +193,19 @@ async function uaImportarAntigo(id, arqId){
   if(typeof Carregando !== 'undefined') await Carregando.durante('Importando os dados antigos...', rodar); else await rodar();
 }
 
+// Ignorar: o personal sabe que o arquivado não é este aluno (ou não quer os dados). O alerta some; outro arquivado avisa de novo.
+function uaIgnorarAntigo(id, arqId){
+  const s = students.find(x => x.id === id); if(!s) return;
+  const env = (arqId && typeof getArquivado === 'function' ? getArquivado(arqId) : null) || uaArquivoAntigo(s);
+  if(!env) return;
+  s.perfil = s.perfil || {};
+  s.perfil.arquivoAntigoIgnorado = env.arqId;
+  _uaCache = null;
+  _uaSalvar();
+  _uaAtualizarTela();
+  if(typeof crmToast === 'function') crmToast('Cadastro antigo ignorado');
+}
+
 // ── Aviso na ficha ───────────────────────────────────────────────────────────
 function uaRenderBanner(s){
   const el = document.getElementById('aluno-dup-banner'); if(!el) return;
@@ -210,7 +223,8 @@ function uaRenderBanner(s){
     const quando = _uaFmtData(ant.excluidoEm);
     html += '<div class="alert alert-amber" style="margin:0 0 8px"><i class=ph-clock-counter-clockwise></i><div style="flex:1"><b>Cadastro antigo encontrado.</b> Este aluno já esteve na sua lista'
       + (quando ? ' (arquivado em ' + quando + ')' : '') + ' com o mesmo CPF ou e-mail. Importe os dados antigos para não perder o histórico dele.'
-      + '<div style="margin-top:8px"><button class="btn btn-primary btn-xs" type="button" onclick="uaImportarAntigo(' + s.id + ',\'' + escHTML(String(ant.arqId)) + '\')">Importar dados antigos</button></div></div></div>';
+      + '<div style="margin-top:8px"><button class="btn btn-primary btn-xs" type="button" onclick="uaImportarAntigo(' + s.id + ',\'' + escHTML(String(ant.arqId)) + '\')">Importar dados antigos</button> '
+      + '<button class="btn btn-ghost btn-xs" type="button" onclick="uaIgnorarAntigo(' + s.id + ',\'' + escHTML(String(ant.arqId)) + '\')">Ignorar</button></div></div></div>';
   }
   el.innerHTML = html;
   el.classList.remove('hidden');

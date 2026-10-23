@@ -93,6 +93,20 @@ const ids = page => page.evaluate(() => students.map(s => s.id + ':' + s.perfil.
   chk('o arquivo marca como restaurado para o aluno', !!dora.env.restauradoEm && dora.env.restauradoComoId === 7003);
   chk('depois de importar, o aviso some e o alerta também', !(await vis(page, 'aluno-dup-banner')) && await page.evaluate(() => !_alAlertas(students.find(x => x.id === 7003)).includes('antigo')));
 
+  // ── Ignorar: o alerta some só para aquele arquivado ──
+  await page.evaluate(() => {
+    ARQUIVO.push({ arqId: 'arq-fabio', tipo: 'aluno', rotulo: 'Fabio Teste', dados: { id: 6003, perfil: { nome: 'Fabio Teste', cpf: '12345678909', email: 'fabio@x.com' }, anamnese: {}, avaliacoesAntro: [], treinos: [] }, excluidoEm: '2026-04-04T12:00:00.000Z', idOriginal: 6003, restauradoEm: null });
+    students.push({ id: 7010, perfil: { nome: 'Fabio Teste', cpf: '12345678909', email: 'fabio@x.com' }, anamnese: {}, avaliacoesAntro: [], treinos: [], crm: { status: 'ativo', sit2: 1, fluxos: [] } });
+    _uaCache = null; selectStudent(7010); switchTab('info');
+  });
+  await page.waitForTimeout(250);
+  chk('faixa Cadastro antigo tem o botão Ignorar', (await txt(page, '#aluno-dup-banner')).includes('Ignorar'));
+  await page.evaluate(() => document.querySelector('#aluno-dup-banner .btn-ghost').click());
+  await page.waitForTimeout(250);
+  chk('Ignorar tira a faixa e o alerta', !(await vis(page, 'aluno-dup-banner')) && await page.evaluate(() => !_alAlertas(students.find(x => x.id === 7010)).includes('antigo')));
+  chk('Ignorar guarda qual arquivado e o arquivo continua intacto', await page.evaluate(() => students.find(x => x.id === 7010).perfil.arquivoAntigoIgnorado === 'arq-fabio' && !ARQUIVO.find(e => e.arqId === 'arq-fabio').restauradoEm));
+  chk('outro arquivado do mesmo aluno avisa de novo', await page.evaluate(() => { ARQUIVO.push({ arqId: 'arq-fabio2', tipo: 'aluno', rotulo: 'Fabio Teste 2', dados: { id: 6004, perfil: { nome: 'Fabio Teste', cpf: '12345678909' }, anamnese: {}, avaliacoesAntro: [], treinos: [] }, excluidoEm: '2026-09-09T12:00:00.000Z', idOriginal: 6004, restauradoEm: null }); _uaCache = null; return _alAlertas(students.find(x => x.id === 7010)).includes('antigo'); }));
+
   // ── aviso ao salvar o Cadastro: aluno novo com CPF de um Arquivado ──
   await page.evaluate(() => {
     const velho = { id: 6002, perfil: { nome: 'Eva Prado', cpf: '39053344705', email: 'eva@x.com', nascimento: '1992-09-09' }, anamnese: {}, avaliacoesAntro: [], treinos: [] };
