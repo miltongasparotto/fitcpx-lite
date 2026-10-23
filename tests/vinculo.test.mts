@@ -261,3 +261,63 @@ test('rascunho que já tem treino NÃO é apagado', async () => {
   await executarTransferencia(b.deps, mk({ snapshot: { draftStudentId: 50 } }), true, 'antecipada');
   assert.ok(b.blobs[T2].some((s) => s.id === 50));
 });
+
+// ── Situação do aluno no personal atual (18/10/2026) ────────────────────────
+
+test('outro personal: aluno do link + situação livre = transferir-automatico; continua dele = conflito', async () => {
+  const w = mundo(); w.idents.push(await ident({ cpf: CPF_A }));
+  const base = { ator: 'aluno' as const, cpf: CPF_A, nome: 'Maria Souza', email: 'maria@x.com', trainerAlvo: T2, contaId: 'u9' };
+  for (const sit of ['inativo', 'arquivado', 'inexistente'] as const) {
+    const d = await decidirCadastro(base, { ...w.deps, situacaoDoAluno: async () => sit }, PEPPER);
+    assert.equal(d.tipo, 'transferir-automatico', sit); assert.equal((d as any).situacao, sit);
+  }
+  for (const sit of ['lead', 'ativo', 'pausado', 'bloqueado'] as const) {
+    const d = await decidirCadastro(base, { ...w.deps, situacaoDoAluno: async () => sit }, PEPPER);
+    assert.deepEqual({ t: d.tipo, livre: (d as any).livre }, { t: 'conflito', livre: undefined }, sit);
+  }
+  // sem a dependência, vale o caminho antigo (pedido com prazo)
+  assert.equal((await decidirCadastro(base, w.deps, PEPPER)).tipo, 'conflito');
+});
+
+test('personal cadastrando: situação livre continua conflito (o aluno confirma), mas marcado livre', async () => {
+  const w = mundo(); w.idents.push(await ident({ cpf: CPF_A }));
+  const base = { ator: 'personal' as const, cpf: CPF_A, nome: 'Maria Souza', email: 'maria@x.com', trainerAlvo: T2, studentIdAtual: 20 };
+  const d = await decidirCadastro(base, { ...w.deps, situacaoDoAluno: async () => 'inativo' }, PEPPER);
+  assert.deepEqual({ t: d.tipo, livre: (d as any).livre }, { t: 'conflito', livre: true });
+  const d2 = await decidirCadastro(base, { ...w.deps, situacaoDoAluno: async () => 'pausado' }, PEPPER);
+  assert.equal((d2 as any).livre, undefined);
+});
+
+test('transferência automática: sem treinos, marca automatica e normaliza a situação', async () => {
+  const b = bancoTransf();
+  b.blobs[T1][0].crm = { status: 'inativo', archived: true };
+  const r = await executarTransferencia(b.deps, mk(), false, 'antecipada', new Date('2026-10-18T12:00:00Z'), { automatica: { situacao: 'inativo' } });
+  const novo = b.blobs[T2].find((s) => s.id === r.novoStudentId);
+  assert.deepEqual(novo.treinos, []); assert.equal(novo.avaliacoesAntro.length, 1);
+  assert.deepEqual({ a: novo.perfil.transferidoDe.automatica, s: novo.perfil.transferidoDe.situacao }, { a: true, s: 'inativo' });
+  assert.equal(novo.crm.status, 'ativo'); assert.equal(novo.crm.archived, undefined); assert.equal(novo.crm.statusSince, '2026-10-18');
+  assert.equal(b.estado.transf.snapshot.automatica, true); assert.equal(b.estado.transf.snapshot.situacaoAnterior, 'inativo');
+});
+
+test('transferência: aluno ausente da lista do antigo vira registro novo só com criarSeAusente; origem não é regravada', async () => {
+  const b = bancoTransf();
+  b.blobs[T1].splice(0, 1);   // arquivado/excluído: já não está na lista
+  await assert.rejects(() => executarTransferencia(b.deps, mk(), false, 'antecipada'), /não encontrado/);
+  b.log.length = 0;
+  const r = await executarTransferencia(b.deps, mk(), false, 'antecipada', new Date(), {
+    automatica: { situacao: 'arquivado' }, criarSeAusente: () => ({ id: 0, perfil: {}, anamnese: {}, treinos: [], avaliacoesAntro: [] }),
+  });
+  assert.ok(b.blobs[T2].some((s) => s.id === r.novoStudentId));
+  assert.deepEqual(b.log.filter((l) => l.startsWith('salvou')), ['salvou ' + T2], 'origem não mudou, não grava');
+});
+
+test('transferência: cadastro manual do destino com o mesmo CPF é unido ao aluno que chega', async () => {
+  const b = bancoTransf();
+  b.blobs[T2].push({ id: 4, perfil: { nome: 'Maria Souza', cpf: '52998224725', nascimento: '1990-05-20', sexo: 'F' }, anamnese: { objetivo: 'Hip' }, treinos: [{ id: 99 }], avaliacoesAntro: [] });
+  const r = await executarTransferencia(b.deps, mk(), true, 'antecipada');
+  const lista = b.blobs[T2].filter((s) => s.perfil.cpf === '52998224725');
+  assert.equal(lista.length, 1, 'um registro só');
+  assert.equal(lista[0].id, r.novoStudentId);
+  assert.equal(lista[0].perfil.nascimento, '1990-05-20'); assert.equal(lista[0].anamnese.nivel, 'Inte'); assert.equal(lista[0].anamnese.objetivo, 'Hip');
+  assert.deepEqual(lista[0].treinos.map((t: any) => t.id).sort(), [1, 99]);
+});

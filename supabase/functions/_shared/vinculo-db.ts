@@ -2,9 +2,17 @@
 // isto (service_role). Tabelas: supabase/sql/vinculo-cpf.sql.
 import {
   type DepsDecisao, type DepsExec, type Identidade, type Transferencia,
-  decidirCadastro, mascaraCpf, normalizaNome, normalizaEmail, processarPrazos, soDigitos,
+  decidirCadastro, mascaraCpf, normalizaNome, normalizaEmail, processarPrazos, situacaoDoStudent, soDigitos,
 } from './vinculo.ts';
 import { loadStudents, saveStudents, novoId } from './students.ts';
+import { acharNoArquivo } from './alunos-merge.ts';
+
+// Arquivadas do personal (app_data.key='arquivo'): excluir e arquivar nunca apagam de verdade, o aluno fica ali.
+export async function carregarArquivo(admin: any, trainerId: string): Promise<any[]> {
+  const { data, error } = await admin.from('app_data').select('data').eq('user_id', trainerId).eq('key', 'arquivo').maybeSingle();
+  if (error) throw error;
+  return Array.isArray(data?.data) ? data.data : [];
+}
 
 export function pepperCpf(): string {
   const p = Deno.env.get('CPF_PEPPER');
@@ -44,6 +52,16 @@ export function depsDecisao(
         !soDigitos(s?.perfil?.cpf) && s?.perfil?.email && !recusados.includes(s?.id) &&
         normalizaNome(s.perfil.nome) === nomeNorm && normalizaEmail(s.perfil.email) === emailNorm);
       return achado ? achado.id : null;
+    },
+    // Situação do aluno no personal ATUAL: pela lista dele; se não está lá, pelas Arquivadas; senão inexistente.
+    situacaoDoAluno: async (ident) => {
+      const { students } = await loadStudents(admin, ident.trainer_user_id);
+      const s = students.find((x: any) =>
+        (ident.student_id != null && x?.id === ident.student_id) || (ident.aluno_user_id && x?.perfil?.alunoUserId === ident.aluno_user_id));
+      if (s) return situacaoDoStudent(s);
+      const arq = await carregarArquivo(admin, ident.trainer_user_id);
+      const ref = { email: ident.email_norm || '', nome: ident.nome_norm, studentId: ident.student_id };
+      return acharNoArquivo(arq, ref) ? 'arquivado' : 'inexistente';
     },
   };
 }

@@ -48,9 +48,9 @@ const txt = (page, sel) => page.evaluate(s => (document.querySelector(s) || {}).
   await page.click('#fx-st-btn');
   chk('menu de status abre', await page.evaluate(() => document.getElementById('fx-st-wrap').classList.contains('open')));
   const itens = await page.$$eval('#fx-st-menu .fx-mn-it', els => els.map(e => e.textContent.replace(/\s+/g, ' ').trim()));
-  chk('menu: Lead, Ativo, Inativo e Bloqueado (sem Pausado e sem grupo de acesso ao portal)', itens.length === 4 && ['Lead', 'Ativo', 'Inativo', 'Bloqueado'].every((n, i) => (itens[i] || '').startsWith(n)) && !(await txt(page, '#fx-st-menu')).includes('Acesso ao portal'), itens.join('|'));
+  chk('menu: Lead, Ativo, Pausado, Inativo e Bloqueado (sem grupo de acesso ao portal)', itens.length === 5 && ['Lead', 'Ativo', 'Pausado', 'Inativo', 'Bloqueado'].every((n, i) => (itens[i] || '').startsWith(n)) && !(await txt(page, '#fx-st-menu')).includes('Acesso ao portal'), itens.join('|'));
   chk('menu: nenhum item desligado', await page.evaluate(() => [...document.querySelectorAll('#fx-st-menu .fx-mn-it')].every(b => !b.disabled)));
-  chk('menu: cada situação com uma cor (azul, verde, cinza, vermelho)', await page.evaluate(() => [...document.querySelectorAll('#fx-st-menu .fx-mn-it > i:first-child')].map(i => i.className).join() === 'sd-blue,sd-green,sd-gray,sd-red'));
+  chk('menu: cada situação com uma cor (azul, verde, âmbar, cinza, vermelho)', await page.evaluate(() => [...document.querySelectorAll('#fx-st-menu .fx-mn-it > i:first-child')].map(i => i.className).join() === 'sd-blue,sd-green,sd-amber,sd-gray,sd-red'));
   await page.keyboard.press('Escape');
   chk('Esc fecha o menu', !(await page.evaluate(() => document.getElementById('fx-st-wrap').classList.contains('open'))));
 
@@ -111,7 +111,7 @@ const txt = (page, sel) => page.evaluate(s => (document.querySelector(s) || {}).
   chk('Sem aviso: nenhum selo ao lado da situação', await page.evaluate(() => document.getElementById('fx-alertas').children.length === 0));
   await page.evaluate(() => { const s = students[0]; s.perfil.novoCadastro = true; s.perfil.alunoUserId = 'u-1'; s.perfil.whatsapp = ''; updateHeader(s); });
   chk('Avisos Novo e Pendente aparecem com ícone e a situação continua Ativa', await page.evaluate(() => { const c = document.getElementById('fx-alertas'); return !!c.querySelector('.al-aviso-novo .ph-sparkle') && !!c.querySelector('.al-aviso-pendente .ph-warning-circle') && document.getElementById('fx-status-chip').textContent.trim() === 'Ativo'; }));
-  chk('Avisos são só leitura da situação: o menu continua com as 4 opções', await page.evaluate(() => document.querySelectorAll('#fx-st-menu .fx-mn-it').length === 4));
+  chk('Avisos são só leitura da situação: o menu continua com as 5 opções', await page.evaluate(() => document.querySelectorAll('#fx-st-menu .fx-mn-it').length === 5));
   await page.evaluate(() => { const t = window.alunoTravado; window.__tAnt = t; window.alunoTravado = () => true; updateHeader(students[0]); });
   chk('Aviso Transferência aparece junto e o selo da situação segue Ativo (não vira Transferência)', await page.evaluate(() => !!document.querySelector('#fx-alertas .al-aviso-transf') && document.getElementById('fx-status-chip').textContent.trim() === 'Ativo' && document.querySelector('#fx-alertas .al-aviso-transf').tagName === 'SPAN'));
   await page.evaluate(() => { window.alunoTravado = window.__tAnt; updateHeader(students[0]); });
@@ -123,16 +123,16 @@ const txt = (page, sel) => page.evaluate(s => (document.querySelector(s) || {}).
   await page.evaluate(() => { const s = students[0]; delete s.perfil.alunoUserId; s.perfil.whatsapp = '+55 (11) 98765-4321'; updateHeader(s); });
 
   // ── migração da situação e padrões ──
-  chk('Migração: pausado vira inativo; acesso bloqueado vira Bloqueado; lead com conta, avaliação ou treino vira Ativo; lead de verdade fica Lead; roda uma vez', await page.evaluate(() => {
+  chk('Migração: pausado continua Pausado; acesso bloqueado vira Bloqueado; lead com conta, avaliação ou treino vira Ativo; lead de verdade fica Lead; roda uma vez', await page.evaluate(() => {
     const mk = (crm, perfil, extra) => Object.assign({ id: 1, perfil: Object.assign({ nome: 'X' }, perfil || {}), crm }, extra || {});
     const a = mk({ status: 'pausado' }), b = mk({ status: 'ativo' }, { portalStatus: 'bloqueado' }), c = mk({ status: 'lead' }, { alunoUserId: 'u' }), d = mk({ status: 'lead' }), e = mk({ status: 'lead' }, {}, { avaliacoesAntro: [{ data_avaliacao: '2026-01-01' }] });
     [a, b, c, d, e].forEach(_migrarSituacao);
-    const ok = a.crm.status === 'inativo' && b.crm.status === 'bloqueado' && b.perfil.bloqueioAplicado === true && c.crm.status === 'ativo' && d.crm.status === 'lead' && e.crm.status === 'ativo' && [a, b, c, d, e].every(x => x.crm.sit2 === 1);
+    const ok = a.crm.status === 'pausado' && b.crm.status === 'bloqueado' && b.perfil.bloqueioAplicado === true && c.crm.status === 'ativo' && d.crm.status === 'lead' && e.crm.status === 'ativo' && [a, b, c, d, e].every(x => x.crm.sit2 === 1);
     d.crm.status = 'lead'; d.perfil.alunoUserId = 'u'; _migrarSituacao(d);   // já migrado: não mexe mais
     return ok && d.crm.status === 'lead';
   }));
-  chk('situacaoDe: pausado (antigo) conta como inativo; sem situação conta como ativo; aluno novo nasce Ativo', await page.evaluate(() => situacaoDe({ crm: { status: 'pausado' } }) === 'inativo' && situacaoDe({}) === 'ativo' && situacaoDe({ perfil: { portalStatus: 'bloqueado' } }) === 'bloqueado' && ensureCrm({}).status === 'ativo'));
-  chk('Tela do cliente no CRM usa as mesmas 4 situações (sem Pausado)', await page.evaluate(() => { navAlunoCrm(students[0].id); const t = [...document.querySelectorAll('#screen-aluno-crm select option, #screen-aluno-crm option')].map(o => o.textContent).join('|'); closeAlunoCrm(); return /Lead/.test(t) && /Bloqueado/.test(t) && !/Pausado/.test(t); }));
+  chk('situacaoDe: Pausado é situação própria; sem situação conta como ativo; aluno novo nasce Ativo', await page.evaluate(() => situacaoDe({ crm: { status: 'pausado' } }) === 'pausado' && situacaoDe({ crm: { status: 'inativo' } }) === 'inativo' && situacaoDe({}) === 'ativo' && situacaoDe({ perfil: { portalStatus: 'bloqueado' } }) === 'bloqueado' && ensureCrm({}).status === 'ativo'));
+  chk('Tela do cliente no CRM usa as mesmas 5 situações (com Pausado)', await page.evaluate(() => { navAlunoCrm(students[0].id); const t = [...document.querySelectorAll('#screen-aluno-crm select option, #screen-aluno-crm option')].map(o => o.textContent).join('|'); closeAlunoCrm(); return /Lead/.test(t) && /Pausado/.test(t) && /Bloqueado/.test(t); }));
 
   // ── Editar perfil abre a página de Cadastro, com todos os campos ──
   await page.click('#fx-editar');

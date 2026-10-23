@@ -234,7 +234,7 @@ async function carregarPortalTransferencias(){
   let erroMsg = '';
   try{
     const r = await chamarTrainerFn('listar');
-    _transf = { saindo: r.saindo||[], chegando: r.chegando||[], pendentes: r.pendentes||[] };
+    _transf = { saindo: r.saindo||[], chegando: r.chegando||[], pendentes: r.pendentes||[], automaticas: r.automaticas||[] };
     if(r.executadas>0 && typeof _formDirty!=='undefined' && _formDirty){
       alert('Uma transferência de aluno foi concluída. Salve o que está editando e recarregue a página para atualizar sua lista.');
     } else if(r.executadas>0 && typeof supaCarregarDados==='function' && !carregarPortalTransferencias._recarregando){
@@ -245,7 +245,7 @@ async function carregarPortalTransferencias(){
     }
   }catch(e){
     erroMsg = e.message || 'Não foi possível consultar as transferências.';
-    _transf = { saindo: [], chegando: [], pendentes: [] };
+    _transf = { saindo: [], chegando: [], pendentes: [], automaticas: [] };
   }
   const total = _transf.saindo.length + _transf.chegando.length + _transf.pendentes.length;
   [$('portal-transferencias-count'), $('nav-portal-aluno-count')].forEach(badge=>{
@@ -255,6 +255,7 @@ async function carregarPortalTransferencias(){
   });
   renderPortalTransferencias(wrap, erroMsg);
   renderFaixaChegando();
+  await avisarTransferenciasAutomaticas();
   if(typeof renderScreenAlunos==='function') renderScreenAlunos();
   aplicarEstadoTransferencia(typeof getActive==='function' ? getActive() : null);
   sincronizarPedidosSenha().catch(()=>{});   // pedidos de "esqueci minha senha" viram tarefa urgente
@@ -267,7 +268,8 @@ function _linhaDado(rotulo, valor){
 function renderPortalTransferencias(wrap, erroMsg){
   if(!wrap) return;
   if(erroMsg){ wrap.innerHTML = '<div class="alert alert-amber"><i class=ph-warning></i> '+escHTML(erroMsg)+'</div>'; return; }
-  if(!_transf.saindo.length && !_transf.chegando.length && !_transf.pendentes.length){
+  const automaticas = _transf.automaticas || [];
+  if(!_transf.saindo.length && !_transf.chegando.length && !_transf.pendentes.length && !automaticas.length){
     wrap.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px 0">Nenhuma transferência em andamento.</div>';
     return;
   }
@@ -329,7 +331,39 @@ function renderPortalTransferencias(wrap, erroMsg){
       </div>`;
     }).join('');
   }
+  if(automaticas.length){
+    html += '<div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 8px">Transferências automáticas (últimos 60 dias)</div>';
+    html += automaticas.map(a=>`<div class="card" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:600;font-size:14px;color:var(--text)">${escHTML(a.nomeAluno||'Aluno')}</span><span class="badge badge-gray">${a.sentido==='saiu'?'Saiu':'Chegou'}</span></div>
+        <div style="font-size:13px;color:var(--text2);margin:4px 0 0">${_textoAutomatica(a)}</div>
+      </div>`).join('');
+  }
   wrap.innerHTML = html;
+}
+
+const _SIT_ROTULO = { inativo:'inativo', arquivado:'arquivado', inexistente:'sem cadastro na sua lista' };
+function _textoAutomatica(a){
+  const sit = _SIT_ROTULO[a.situacaoAnterior] || 'inativo';
+  const quando = a.quando ? ' em ' + _fmtDataBR(a.quando) : '';
+  return a.sentido==='saiu'
+    ? `O aluno estava ${sit} com você e se cadastrou com <b>${escHTML(a.outroNome)}</b>${quando}. A transferência foi automática, sem treinos. O cadastro saiu da sua lista (se estava nas Arquivadas, continua lá).`
+    : `O aluno estava ${sit} com <b>${escHTML(a.outroNome)}</b> e se cadastrou com você${quando}. A transferência foi automática: vieram o cadastro e as avaliações, sem os treinos antigos.`;
+}
+
+// Avisa uma vez de cada transferência automática (o aluno deixou ou chegou na sua lista sem pedido a aprovar).
+function _autoVistas(){ try{ return JSON.parse(localStorage.getItem(lsKey('transf-auto-vistas'))||'[]'); }catch(e){ return []; } }
+async function avisarTransferenciasAutomaticas(){
+  const novas = (_transf.automaticas||[]).filter(a=>!_autoVistas().includes(a.id));
+  if(!novas.length) return;
+  try{ localStorage.setItem(lsKey('transf-auto-vistas'), JSON.stringify(_autoVistas().concat(novas.map(a=>a.id)).slice(-100))); }catch(e){}
+  const saiu = novas.filter(a=>a.sentido==='saiu');
+  if(saiu.length && typeof supaCarregarDados==='function' && !(typeof _formDirty!=='undefined' && _formDirty) && !carregarPortalTransferencias._recarregando){
+    // O cadastro saiu da lista no servidor: recarrega, senão o próximo salvamento deste painel traria o aluno de volta.
+    carregarPortalTransferencias._recarregando = true;
+    try{ await supaCarregarDados(); } finally { carregarPortalTransferencias._recarregando = false; }
+  }
+  if(typeof crmToast==='function') crmToast(novas.length===1 ? (novas[0].nomeAluno||'Aluno')+': transferência automática' : novas.length+' transferências automáticas');
+  else alert('Transferência automática: '+novas.map(a=>(a.nomeAluno||'Aluno')+' ('+(a.sentido==='saiu'?'saiu':'chegou')+')').join(', '));
 }
 
 // Faixa no topo da lista de Alunos: quem está chegando (ainda não está na lista).
@@ -389,6 +423,7 @@ async function cancelarPedidoTransferencia(id){
 // ─── Aluno em transferência: faixa + cadastro só pra visualização ──────────
 
 function aplicarEstadoTransferencia(s){
+  if(typeof uaRenderBanner==='function') uaRenderBanner(s);
   const banner = $('aluno-transf-banner');
   const painel = $('tab-content');
   const t = transfDoAluno(s);
@@ -443,6 +478,7 @@ async function registrarAlunoNuvem(s){
   if(!_supaUser || !s || !s.perfil) return;
   const p = s.perfil, cpf = cpfDigitos(p.cpf);
   _msgCpf('', false);
+  if(typeof uaAvisarArquivoAntigo==='function' && (cpf || p.email) && uaAvisarArquivoAntigo(s)) return;   // oferece importar o aluno arquivado antes de registrar
   if(!cpf) return;
   if(!cpfValidoLocal(cpf)){ _msgCpf('CPF inválido. Confira os números.', true); return; }
   if(!(p.nome||'').trim()){ _msgCpf('Preencha o nome pra registrar o CPF.', true); return; }
@@ -471,6 +507,7 @@ function _tratarRespostaVinculo(s, r, chave){
     case 'travado': _msgCpf('Cadastro em transferência: só visualização.', true); break;
     case 'cpf-invalido': _msgCpf('CPF inválido. Confira os números.', true); break;
     case 'cpf-nao-confere': _msgCpf('Este aluno já tem acesso ligado a outro CPF. O CPF não muda depois do vínculo.', true); break;
+    case 'arquivado-antigo': if(typeof uaModalArquivoAntigo==='function') uaModalArquivoAntigo(s, r.arqId, r.rotulo, r.excluidoEm); break;
     case 'duplicado': _msgCpf('Você já tem esse CPF cadastrado em "'+(r.nomeOutroAluno||'outro aluno')+'". Abra aquele cadastro.', true); break;
     case 'email-diferente':
       _msgCpf('Esse CPF já tem cadastro com o e-mail '+(r.emailMascarado||'')+'. Use o mesmo e-mail.', true); break;
@@ -494,6 +531,14 @@ function _dialogoConflito(s, r){
       `Este perfil já está vinculado ao personal <b>${nomePersonal}</b> e já existe um pedido de transferência em andamento. Não é possível abrir outro agora.`,
       [{ texto:'Voltar e editar', primario:true, acao:editar },
        { texto:'Desistir deste cadastro', perigo:true, acao:()=>desistirCadastroLocal(s.id) }]);
+    return;
+  }
+  if(r.livre){
+    _abrirVinculo('Perfil de outro personal, sem uso',
+      `Este perfil estava com o personal <b>${nomePersonal}</b>, mas o aluno está inativo, arquivado ou excluído lá. Peça a transferência: o aluno confirma pelo app dele e a troca acontece na hora, sem esperar os 30 dias e sem os treinos antigos. ${nomePersonal} recebe um aviso.`,
+      [{ texto:'Voltar e editar', acao:editar },
+       { texto:'Desistir deste cadastro', perigo:true, acao:()=>desistirCadastroLocal(s.id) },
+       { texto:'Solicitar transferência', primario:true, acao:()=>solicitarTransferenciaDe(s.id) }]);
     return;
   }
   _abrirVinculo('Perfil já vinculado',

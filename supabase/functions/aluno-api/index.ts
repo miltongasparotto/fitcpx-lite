@@ -21,13 +21,14 @@ import {
   calcularNivelTreino, limpaTexto, limpaNumero, limpaDataISO, UUID_RE,
 } from '../_shared/students.ts';
 import {
-  decidirCadastro, normalizaEmail, normalizaNome, novaTransferencia, soDigitos,
-  type Decisao, type Identidade, type Transferencia, hashCpf,
+  decidirCadastro, executarTransferencia, livreParaTransferir, normalizaEmail, normalizaNome, novaTransferencia, soDigitos,
+  type Decisao, type Identidade, type SituacaoVinculo, type Transferencia, hashCpf,
 } from '../_shared/vinculo.ts';
+import { acharNoArquivo, consolidarAluno } from '../_shared/alunos-merge.ts';
 import {
   pepperCpf, depsDecisao, nomeDoPersonal, transferenciaAbertaDoAluno,
   transferenciaAbertaDaIdentidade, processarPrazosVencidos, aplicarCadastro, snapshotCadastro,
-  pendenteAbertoDoAluno, legadosRecusadosDaConta, registrarPendente,
+  pendenteAbertoDoAluno, legadosRecusadosDaConta, registrarPendente, depsExec, carregarArquivo,
 } from '../_shared/vinculo-db.ts';
 
 Deno.serve(async (req: Request) => {
@@ -179,6 +180,32 @@ function infoTransferencia(t: Transferencia | null, nomeNovo: string, nomeAtual:
   };
 }
 
+// ── Registro do aluno na lista do personal ───────────────────────────────────
+
+const registroVazio = (id: number) => ({ id, perfil: {} as any, anamnese: {}, treinos: [], avaliacoesAntro: [], reavaliacao: null });
+
+// O registro que já é deste aluno: o da identidade, o da conta ou o cadastro manual sem conta com o mesmo CPF.
+// Só cria um registro vazio quando não há nenhum (antes isso criava um vazio ao lado do completo e o portal pedia os dados de novo).
+function registroDoAluno(students: any[], ident: Identidade | null, contaId: string, cpf: string) {
+  return students.find((x: any) => ident?.student_id != null && x?.id === ident.student_id)
+    || findStudentByAlunoUserId(students, contaId)
+    || (cpf ? students.find((x: any) => x && !x.perfil?.alunoUserId && soDigitos(x.perfil?.cpf) === cpf) : null)
+    || null;
+}
+
+// Une no registro `s` os duplicados do mesmo aluno (mesmo CPF, ou mesmo e-mail e nome). Devolve quantos saíram da lista.
+async function consolidar(admin: any, students: any[], s: any, contaId: string): Promise<number> {
+  const recusados = await legadosRecusadosDaConta(admin, contaId);
+  return consolidarAluno(students, s, recusados).length;
+}
+
+// Cadastro novo com um aluno de mesmo CPF/e-mail nas Arquivadas do personal: marca para o painel oferecer "Importar dados antigos".
+async function marcarArquivoAntigo(admin: any, trainerId: string, s: any, perfil: { cpf: string; nome: string }, email: string) {
+  const arq = await carregarArquivo(admin, trainerId);
+  const achado = acharNoArquivo(arq, { cpf: perfil.cpf, email, nome: perfil.nome });
+  if (achado) s.perfil.arquivoAntigo = { arqId: achado.arqId, em: new Date().toISOString() };
+}
+
 // ── Vínculo no login ─────────────────────────────────────────────────────────
 
 async function resolverVinculo(admin: any, caller: any, codigo: string | null) {
@@ -199,6 +226,8 @@ async function resolverVinculo(admin: any, caller: any, codigo: string | null) {
 
   const { students } = await loadStudents(admin, acesso.trainer_user_id);
   const s = findStudentByAlunoUserId(students, caller.id);
+  // Duplicado do mesmo aluno (cadastro manual + registro da conta): une e grava, para o portal ler o registro completo.
+  if (s && await consolidar(admin, students, s, caller.id)) await saveStudents(admin, acesso.trainer_user_id, students);
   // Cadastro (nome + CPF) é o que vincula; dados pessoais completos só liberam as abas do app.
   const completo = soDigitos(s?.perfil?.cpf).length === 11;
   const dp = dadosPessoaisDe(s);
@@ -251,13 +280,19 @@ async function aplicarDecisao(admin: any, caller: any, perfil: ReturnType<typeof
       };
     }
 
+    case 'transferir-automatico': return transferirAutomatico(admin, caller, perfil, trainerAlvo, d.identidade, d.situacao);
+
     case 'novo': {
       const ident = await criarIdentidade(admin, { hash: d.hash, nome: perfil.nome, email: caller.email, trainerId: trainerAlvo, alunoUserId: caller.id, studentId: null });
       const { students, todosIds } = await loadStudents(admin, trainerAlvo);
-      const s = { id: novoId(todosIds), perfil: {} as any, anamnese: {}, treinos: [], avaliacoesAntro: [], reavaliacao: null };
+      // Cadastro manual antigo do personal com este CPF e sem conta: a conta entra nele (não cria um registro vazio ao lado).
+      let s = registroDoAluno(students, null, caller.id, perfil.cpf);
+      const reaproveitou = !!s;
+      if (!s) { s = registroVazio(novoId(todosIds)); students.push(s); }
       aplicarCadastro(s, { ...perfil, email: caller.email, alunoUserId: caller.id, identidadeId: ident.id });
       s.perfil.novoCadastro = true;
-      students.push(s);
+      await consolidar(admin, students, s, caller.id);
+      if (!reaproveitou) await marcarArquivoAntigo(admin, trainerAlvo, s, perfil, caller.email);
       await saveStudents(admin, trainerAlvo, students);
       await admin.from('alunos_identidade').update({ student_id: s.id }).eq('id', ident.id);
       await inserirAcesso(admin, trainerAlvo, caller.id);
@@ -277,10 +312,13 @@ async function aplicarDecisao(admin: any, caller: any, perfil: ReturnType<typeof
       // Cadastro manual do personal, sem conta ainda: a conta passa a ser dele.
       const ident = d.identidade;
       const { students, todosIds } = await loadStudents(admin, trainerAlvo);
-      let s = students.find((x: any) => x.id === ident.student_id) || findStudentByAlunoUserId(students, caller.id);
-      if (!s) { s = { id: novoId(todosIds), perfil: {}, anamnese: {}, treinos: [], avaliacoesAntro: [], reavaliacao: null }; students.push(s); }
+      let s = registroDoAluno(students, ident, caller.id, perfil.cpf);
+      const criou = !s;
+      if (!s) { s = registroVazio(novoId(todosIds)); students.push(s); }
       aplicarCadastro(s, { ...perfil, email: caller.email, alunoUserId: caller.id, identidadeId: ident.id });
       s.perfil.novoCadastro = true;   // "acesso novo": o personal vê o aviso na lista
+      await consolidar(admin, students, s, caller.id);
+      if (criou) await marcarArquivoAntigo(admin, trainerAlvo, s, perfil, caller.email);
       await saveStudents(admin, trainerAlvo, students);
       await admin.from('alunos_identidade').update({ aluno_user_id: caller.id, email_norm: normalizaEmail(caller.email), student_id: s.id, atualizado_em: new Date().toISOString() }).eq('id', ident.id);
       await inserirAcesso(admin, trainerAlvo, caller.id);
@@ -291,9 +329,12 @@ async function aplicarDecisao(admin: any, caller: any, perfil: ReturnType<typeof
     case 'atualizar': {
       const ident = d.identidade;
       const { students, todosIds } = await loadStudents(admin, trainerAlvo);
-      let s = students.find((x: any) => x.id === ident.student_id) || findStudentByAlunoUserId(students, caller.id);
-      if (!s) { s = { id: novoId(todosIds), perfil: {}, anamnese: {}, treinos: [], avaliacoesAntro: [], reavaliacao: null }; students.push(s); }
+      let s = registroDoAluno(students, ident, caller.id, perfil.cpf);
+      const criou = !s;
+      if (!s) { s = registroVazio(novoId(todosIds)); students.push(s); }
       aplicarCadastro(s, { ...perfil, email: caller.email, alunoUserId: caller.id, identidadeId: ident.id });
+      await consolidar(admin, students, s, caller.id);
+      if (criou) await marcarArquivoAntigo(admin, trainerAlvo, s, perfil, caller.email);
       await saveStudents(admin, trainerAlvo, students);
       await admin.from('alunos_identidade').update({ nome_norm: normalizaNome(perfil.nome), student_id: s.id, atualizado_em: new Date().toISOString() }).eq('id', ident.id);
       await inserirAcesso(admin, trainerAlvo, caller.id);
@@ -328,9 +369,10 @@ async function solicitarTroca(admin: any, caller: any, perfilBruto: any, codigo:
   // Salva o cadastro NA HORA, no registro que ele já tem com o personal atual
   // (o personal atual fica só visualizando até acabar). O acesso continua normal.
   const { students, todosIds } = await loadStudents(admin, trainerAtual);
-  let s = students.find((x: any) => x.id === ident.student_id) || findStudentByAlunoUserId(students, caller.id);
-  if (!s) { s = { id: novoId(todosIds), perfil: {}, anamnese: {}, treinos: [], avaliacoesAntro: [], reavaliacao: null }; students.push(s); }
+  let s = registroDoAluno(students, ident, caller.id, perfil.cpf);
+  if (!s) { s = registroVazio(novoId(todosIds)); students.push(s); }
   aplicarCadastro(s, { ...perfil, email: caller.email, alunoUserId: caller.id, identidadeId: ident.id });
+  await consolidar(admin, students, s, caller.id);
   await saveStudents(admin, trainerAtual, students);
   await inserirAcesso(admin, trainerAtual, caller.id);
   await admin.from('alunos_identidade').update({ aluno_user_id: caller.id, email_norm: normalizaEmail(caller.email), student_id: s.id, atualizado_em: new Date().toISOString() }).eq('id', ident.id);
@@ -357,6 +399,44 @@ async function solicitarTroca(admin: any, caller: any, perfilBruto: any, codigo:
   };
 }
 
+// Aluno inativo, arquivado/excluído ou inexistente no personal atual "não é mais dele": a transferência acontece na hora,
+// sem os treinos e sem prazo (regra de 18/10/2026). O personal anterior recebe o aviso na lista de transferências.
+async function transferirAutomatico(admin: any, caller: any, perfil: ReturnType<typeof limparPerfil>, trainerAlvo: string, ident: Identidade, situacao: SituacaoVinculo) {
+  let t = await transferenciaAbertaDaIdentidade(admin, ident.id);
+  if (t && t.trainer_novo_id !== trainerAlvo) {
+    return { status: 'conflito', personalNome: await nomeDoPersonal(admin, ident.trainer_user_id), jaHaPedido: true, pedidoParaOutro: true };
+  }
+  if (!t) {
+    const nova = novaTransferencia({
+      identidade: ident, trainerNovo: trainerAlvo, iniciadoPor: 'aluno', alunoUserId: caller.id,
+      snapshot: snapshotCadastro({ ...perfil, email: caller.email }),
+    });
+    const { data, error } = await admin.from('transferencias_vinculo').insert(nova).select('*').single();
+    if (error) throw error;
+    t = data as Transferencia;
+  }
+  const { novoStudentId } = await executarTransferencia(
+    depsExec(admin), { ...t, aluno_user_id: caller.id }, false, 'antecipada', new Date(),
+    { automatica: { situacao }, criarSeAusente: () => registroVazio(0) },
+  );
+  await concluirNoDestino(admin, caller, perfil, trainerAlvo, ident.id, novoStudentId);
+  await registrarRastro(admin, trainerAlvo, caller.id, 'cadastro_inicial', { perfil: { ...perfil, cpf: undefined }, troca: t.id, automatica: true });
+  return { status: 'ok', tipo: 'transferido' };
+}
+
+// Depois que o registro chegou ao personal novo: aplica o cadastro do aluno, une duplicados e liga a conta.
+async function concluirNoDestino(admin: any, caller: any, perfil: ReturnType<typeof limparPerfil>, trainerNovo: string, identidadeId: string, studentId: number) {
+  const { students } = await loadStudents(admin, trainerNovo);
+  const s = students.find((x: any) => x?.id === studentId);
+  if (!s) throw new Error('Registro transferido não encontrado no destino.');
+  aplicarCadastro(s, { ...perfil, cpf: perfil.cpf || s.perfil?.cpf || '', email: caller.email, alunoUserId: caller.id, identidadeId });
+  await consolidar(admin, students, s, caller.id);
+  await saveStudents(admin, trainerNovo, students);
+  await admin.from('alunos_identidade').update({
+    aluno_user_id: caller.id, nome_norm: normalizaNome(perfil.nome), email_norm: normalizaEmail(caller.email), student_id: s.id, atualizado_em: new Date().toISOString(),
+  }).eq('id', identidadeId);
+}
+
 async function confirmarAberta(admin: any, t: Transferencia): Promise<Transferencia> {
   const agora = new Date();
   const prazo = new Date(agora.getTime() + 30 * 86400000).toISOString();
@@ -371,6 +451,21 @@ async function confirmarAberta(admin: any, t: Transferencia): Promise<Transferen
 async function confirmarTroca(admin: any, caller: any) {
   const t = await transferenciaAbertaDoAluno(admin, caller.id);
   if (!t || t.status !== 'aguardando_aluno') throw new ErroUsuario('Não há pedido esperando a sua confirmação.');
+  // O aluno do personal antigo já não é mais dele (inativo, arquivado ou excluído): confirmar executa na hora.
+  const { data: ident } = await admin.from('alunos_identidade').select('*').eq('id', t.identidade_id).maybeSingle();
+  if (ident) {
+    const sit = await depsDecisao(admin).situacaoDoAluno!(ident as Identidade);
+    if (livreParaTransferir(sit)) {
+      const { data: u } = await admin.from('transferencias_vinculo').select('snapshot').eq('id', t.id).maybeSingle();
+      const { novoStudentId } = await executarTransferencia(
+        depsExec(admin), { ...t, aluno_user_id: caller.id }, false, 'antecipada', new Date(),
+        { automatica: { situacao: sit }, criarSeAusente: () => registroVazio(0) },
+      );
+      const snap: any = u?.snapshot || t.snapshot || {};
+      await concluirNoDestino(admin, caller, limparPerfil({ nome: snap.nome, cpf: '', ...snap }), t.trainer_novo_id, t.identidade_id, novoStudentId);
+      return { status: 'ok', transferido: true };
+    }
+  }
   const ok = await confirmarAberta(admin, { ...t, aluno_user_id: caller.id });
   return { status: 'ok', prazoEm: ok.prazo_em };
 }

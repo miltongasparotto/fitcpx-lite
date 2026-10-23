@@ -29,8 +29,9 @@ import {
 } from '../_shared/vinculo.ts';
 import {
   pepperCpf, depsDecisao, depsExec, nomeDoPersonal, transferenciaAbertaDaIdentidade,
-  processarPrazosVencidos, snapshotCadastro, resolverPendente, type Pendente,
+  processarPrazosVencidos, snapshotCadastro, resolverPendente, carregarArquivo, type Pendente,
 } from '../_shared/vinculo-db.ts';
+import { acharNoArquivo } from '../_shared/alunos-merge.ts';
 
 class ErroUsuario extends Error {}
 
@@ -128,11 +129,21 @@ async function registrarAluno(admin: any, caller: any, b: any) {
     case 'email-diferente': return { status: 'email-diferente', emailMascarado: d.emailMascarado };
     case 'duplicado-no-personal': {
       const outro = await acharStudent(admin, caller.id, d.identidade.student_id);
+      if (!outro) {
+        // O CPF é de um aluno que o próprio personal arquivou ou excluiu: oferece importar os dados antigos em vez de duplicar.
+        const antigo = acharNoArquivo(await carregarArquivo(admin, caller.id), { cpf: e.cpf, email: e.email, nome: e.nome, studentId: d.identidade.student_id });
+        if (antigo) return { status: 'arquivado-antigo', arqId: antigo.arqId, rotulo: antigo.rotulo || antigo.dados?.perfil?.nome || '', excluidoEm: antigo.excluidoEm || '' };
+      }
       return { status: 'duplicado', nomeOutroAluno: outro?.perfil?.nome || 'outro aluno' };
     }
     case 'conflito': {
       const aberta = await transferenciaAbertaDaIdentidade(admin, d.identidade.id);
-      return { status: 'conflito', personalNome: await nomeDoPersonal(admin, d.identidade.trainer_user_id), jaHaPedido: !!aberta };
+      // livre: o aluno não é mais do personal atual (inativo, arquivado ou excluído); o pedido segue por confirmação do aluno e, ao confirmar, executa na hora.
+      return { status: 'conflito', personalNome: await nomeDoPersonal(admin, d.identidade.trainer_user_id), jaHaPedido: !!aberta, livre: !!d.livre };
+    }
+    case 'transferir-automatico': {
+      // Só acontece quando quem cadastra é o aluno; aqui nunca vem, mas o switch precisa fechar.
+      return { status: 'divergencia' };
     }
     case 'novo': {
       // Erro de digitação do CPF antes de existir conta: troca o CPF da identidade que já era deste registro.
@@ -262,7 +273,22 @@ async function listar(admin: any, caller: any) {
       nomeInformado: p.perfil?.nome || '', nomeCadastrado: s?.perfil?.nome || '', emailCadastrado: s?.perfil?.email || '',
     };
   });
-  return { status: 'ok', saindo, chegando, pendentes, executadas: executadas.length };
+  // Transferências automáticas recentes (aluno inativo, arquivado ou excluído que se cadastrou com outro personal).
+  const desde = new Date(Date.now() - 60 * 86400000).toISOString();
+  const { data: auto, error: eAuto } = await admin.from('transferencias_vinculo').select('*')
+    .or(`trainer_atual_id.eq.${caller.id},trainer_novo_id.eq.${caller.id}`)
+    .eq('status', 'concluida').gte('concluida_em', desde).order('concluida_em', { ascending: false }).limit(50);
+  if (eAuto) console.error('automaticas:', eAuto);
+  const automaticas: any[] = [];
+  for (const t of ((auto || []) as Transferencia[]).filter((x) => (x.snapshot as any)?.automatica)) {
+    const snap: any = t.snapshot || {};
+    const saiu = t.trainer_atual_id === caller.id;
+    automaticas.push({
+      id: t.id, quando: t.concluida_em, nomeAluno: snap.nome || '', situacaoAnterior: snap.situacaoAnterior || '',
+      sentido: saiu ? 'saiu' : 'chegou', outroNome: await nome(saiu ? t.trainer_novo_id : t.trainer_atual_id),
+    });
+  }
+  return { status: 'ok', saindo, chegando, pendentes, automaticas, executadas: executadas.length };
 }
 
 // Aprovar liga a conta ao registro antigo (CPF informado pelo aluno entra no cadastro); recusar

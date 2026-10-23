@@ -230,13 +230,15 @@ const _AL_PAG_LS = 'fitcpx-alunos-por-pagina';
 const _alPag = {n:(()=>{ try{ const v=parseInt(localStorage.getItem(_AL_PAG_LS),10); if(_AL_POR_PAG.includes(v)) return v; }catch(e){} return 10; })(), pg:1, sig:''};
 
 // Situação (o personal escolhe, na ficha): vira abas, anel do avatar e selo. Alertas (o sistema calcula): viram selos com ícone e um filtro à parte.
-const _AL_STATUS = {lead:'Lead',ativo:'Ativo',inativo:'Inativo',bloq:'Bloqueado'};
-const _AL_ALERTAS = {novo:'Novo',pendente:'Pendente',transf:'Transferência'};
-const _AL_ALERTA_IC = {novo:'ph-sparkle',pendente:'ph-warning-circle',transf:'ph-arrows-left-right'};
+const _AL_STATUS = {lead:'Lead',ativo:'Ativo',pausado:'Pausado',inativo:'Inativo',bloq:'Bloqueado'};
+const _AL_ALERTAS = {novo:'Novo',pendente:'Pendente',transf:'Transferência',duplicado:'Duplicado',antigo:'Cadastro antigo'};
+const _AL_ALERTA_IC = {novo:'ph-sparkle',pendente:'ph-warning-circle',transf:'ph-arrows-left-right',duplicado:'ph-copy',antigo:'ph-clock-counter-clockwise'};
 const _AL_ALERTA_DICA = {
   novo:'Cadastro novo: marque como visto.',
   pendente:'Faltam nascimento, sexo ou WhatsApp: o app do aluno fica com as abas bloqueadas até completar.',
-  transf:'Transferência de personal em andamento: cadastro só para visualização.'
+  transf:'Transferência de personal em andamento: cadastro só para visualização.',
+  duplicado:'Possível duplicado: outro cadastro com o mesmo CPF (ou e-mail e nome). Abra a ficha para unir.',
+  antigo:'Cadastro antigo encontrado nas Arquivadas (mesmo CPF ou e-mail). Abra a ficha para importar os dados.'
 };
 const _AL_SEL = {
   sexo:{lab:'Sexo',id:'alunos-filtro-sexo',opts:[['','Todos'],['F','Feminino'],['M','Masculino'],['__vazio','—']]},
@@ -292,12 +294,17 @@ function _alDadosPendentes(s){
 }
 // Situação do aluno para a lista (lead, ativo, inativo, bloq). Vem de s.crm.status (ver situacaoDe em js/crm-store.js).
 function _alStatus(s){ const k=situacaoDe(s); return k==='bloqueado' ? 'bloq' : k; }
-// Alertas do sistema (podem valer junto com qualquer situação): novo, pendente, transf
+// Alertas do sistema (podem valer junto com qualquer situação): novo, pendente, transf, duplicado, antigo
 function _alAlertas(s){
   const a=[], p=s.perfil||{};
   if(p.novoCadastro) a.push('novo');
   if(_alDadosPendentes(s)) a.push('pendente');
-  if(typeof alunoTravado==='function' && alunoTravado(s)) a.push('transf');
+  const travado = typeof alunoTravado==='function' && alunoTravado(s);
+  if(travado) a.push('transf');
+  else if(typeof uaIndice==='function'){
+    if(uaDuplicadosDe(s).length) a.push('duplicado');
+    if(uaArquivoAntigo(s)) a.push('antigo');
+  }
   return a;
 }
 function _alFlagHTML(k, tag){
@@ -1178,16 +1185,18 @@ function loadStudentData(s){
 }
 
 // ─── FICHA DO ALUNO: cartão principal, informações pessoais e status ─────────
-// Situação do aluno (o personal escolhe): Lead, Ativo, Inativo ou Bloqueado, em s.crm.status. Inativo sai das tarefas e do Painel;
+// Situação do aluno (o personal escolhe): Lead, Ativo, Pausado, Inativo ou Bloqueado, em s.crm.status. Pausado e Inativo saem das tarefas e do Painel
+// (Pausado continua sendo do personal; Inativo "não é mais dele": se o aluno se cadastrar com outro personal, a transferência é automática);
 // Bloqueado também trava o acesso ao Portal (servidor, alunos_acesso). Novo, Pendente e Transferência são avisos que o sistema calcula
 // (_alAlertas) e aparecem como selos com ícone ao lado da situação; ninguém escolhe esses.
 const _FX_STATUS = {
   lead:     {lbl:'Lead',      badge:'badge-blue',  dot:'sd-blue',  ic:'ph-star',         key:'lead'},
   ativo:    {lbl:'Ativo',     badge:'badge-green', dot:'sd-green', ic:'ph-check-circle', key:'ativo'},
+  pausado:  {lbl:'Pausado',   badge:'badge-amber', dot:'sd-amber', ic:'ph-pause-circle', key:'pausado'},
   inativo:  {lbl:'Inativo',   badge:'badge-gray',  dot:'sd-gray',  ic:'ph-minus-circle', key:'inativo'},
   bloqueado:{lbl:'Bloqueado', badge:'badge-red',   dot:'sd-red',   ic:'ph-lock-simple',  key:'bloq'},
 };
-const _FX_ORDEM = ['lead','ativo','inativo','bloqueado'];
+const _FX_ORDEM = ['lead','ativo','pausado','inativo','bloqueado'];
 const _FX_MODALIDADE = {presencial:'Presencial', online:'Online', hibrido:'Híbrido'};
 function _fxStatus(s){ const k = situacaoDe(s), c = _FX_STATUS[k]; return {key:c.key, k, lbl:c.lbl, badge:c.badge, ic:c.ic}; }
 function _fxIdade(nasc){
@@ -1291,6 +1300,8 @@ function fxAlertasHTML(s){
   return _alAlertas(s).map(k=>{
     if(k==='novo') return _alFlagHTML(k,'button').replace('<button ', '<button type="button" onclick="fxMarcarVisto()" ');
     if(k==='pendente') return _alFlagHTML(k,'button').replace('<button ', '<button type="button" onclick="fxEditarPerfil()" ');
+    if(k==='duplicado') return _alFlagHTML(k,'button').replace('<button ', '<button type="button" onclick="uaUnirCadastros('+s.id+')" ');
+    if(k==='antigo') return _alFlagHTML(k,'button').replace('<button ', '<button type="button" onclick="uaImportarAntigo('+s.id+')" ');
     return _alFlagHTML(k);
   }).join('');
 }
@@ -1315,12 +1326,12 @@ async function fxSetStatus(k){
   const s=getActive(); if(!s) return;
   await alunoSetSituacao(s, k);
 }
-// Troca a situação do aluno (Lead, Ativo, Inativo, Bloqueado). Bloqueado trava o acesso ao portal no servidor; qualquer outra libera.
+// Troca a situação do aluno (Lead, Ativo, Pausado, Inativo, Bloqueado). Bloqueado trava o acesso ao portal no servidor; qualquer outra libera.
 async function alunoSetSituacao(s, k){
   if(!s || !_FX_STATUS[k]) return false;
   if(typeof alunoTravado==='function' && alunoTravado(s)){ alert('Cadastro em transferência: só visualização.'); return false; }
   if(situacaoDe(s)===k) return true;
-  if(k==='inativo' && !confirm('Marcar este aluno como inativo? Ele sai das tarefas e dos alertas do Painel. Você pode reativar quando quiser.')) return false;
+  if(k==='inativo' && !confirm('Marcar este aluno como inativo? Ele sai das tarefas e dos alertas do Painel, e se ele se cadastrar com outro personal a transferência é automática. Você pode reativar quando quiser.')) return false;
   if(k==='bloqueado' && !confirm('Bloquear este aluno? Ele continua entrando no portal, mas vê uma tela de acesso bloqueado até você mudar a situação.')) return false;
   if(typeof alunoAplicarBloqueioPortal==='function' && !(await alunoAplicarBloqueioPortal(s, k==='bloqueado'))) return false;
   const crm=ensureCrm(s);
@@ -1525,13 +1536,12 @@ function normalizarAlunoPortal(s){
     if(!r.imc && peso && alt) r.imc = (peso/Math.pow(alt/100,2)).toFixed(1);
   });
 }
-// Situação v2 (16/10/2026): pausado vira inativo; acesso bloqueado vira situação Bloqueado; "lead" que veio do cadastro automático
+// Situação v2 (16/10/2026): acesso bloqueado vira situação Bloqueado (o Pausado voltou como situação própria em 18/10/2026); "lead" que veio do cadastro automático
 // (aluno com conta no portal, avaliação ou treino) vira Ativo. Roda uma vez por aluno (marca crm.sit2).
 function _migrarSituacao(s){
   const c = s && s.crm; if(!c || c.sit2) return;
   const p = s.perfil || {}; let st = c.status || 'lead';
   if(p.portalStatus === 'bloqueado'){ st = 'bloqueado'; p.bloqueioAplicado = true; }
-  else if(st === 'pausado') st = 'inativo';
   else if(st === 'lead' && (p.alunoUserId || _alAval(s) || _alTreino(s))) st = 'ativo';
   if(st !== c.status){ c.status = st; c.statusSince = c.statusSince || todayStr(); }
   c.sit2 = 1;

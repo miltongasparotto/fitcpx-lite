@@ -19,6 +19,12 @@
 //    O personal atual só pode antecipar (e escolhe manter ou não o treino).
 //  - Pedido iniciado pelo personal novo no cadastro manual: espera o aluno
 //    confirmar; os 30 dias só contam a partir da confirmação.
+//  - (18/10/2026) A situação do aluno no personal ATUAL decide o caminho: lead, ativo,
+//    pausado e bloqueado "continuam dele" (pedido com prazo de 30 dias); inativo,
+//    arquivado/excluído e registro inexistente "não são mais dele" e a transferência
+//    é automática, sem treinos, com aviso ao personal anterior.
+
+import { consolidarAluno } from './alunos-merge.ts';
 
 export const PRAZO_DIAS = 30;
 
@@ -81,6 +87,27 @@ export async function hashCpf(cpf: string, pepper: string): Promise<string> {
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// ── Situação do aluno no personal atual ──────────────────────────────────────
+
+export type SituacaoAluno = 'lead' | 'ativo' | 'pausado' | 'bloqueado' | 'inativo';
+export type SituacaoVinculo = SituacaoAluno | 'arquivado' | 'inexistente';
+
+// Mesma regra de situacaoDe() em js/crm-store.js. Arquivado: s.crm.archived (versão antiga) ou fora da lista (ver vinculo-db.ts).
+export function situacaoDoStudent(s: any): SituacaoVinculo {
+  if (s?.crm?.archived) return 'arquivado';
+  const st = s?.crm?.status;
+  if (st === 'bloqueado' || s?.perfil?.portalStatus === 'bloqueado') return 'bloqueado';
+  if (st === 'inativo') return 'inativo';
+  if (st === 'pausado') return 'pausado';
+  if (st === 'lead') return 'lead';
+  return 'ativo';
+}
+
+// "Não é mais dele": inativo, arquivado/excluído ou sem registro. Lead, ativo, pausado e bloqueado continuam do personal.
+export function livreParaTransferir(sit: SituacaoVinculo | null | undefined): boolean {
+  return sit === 'inativo' || sit === 'arquivado' || sit === 'inexistente';
+}
+
 // ── Decisão de cadastro ─────────────────────────────────────────────────────
 
 export interface Identidade {
@@ -99,6 +126,8 @@ export interface DepsDecisao {
   // Aluno antigo (sem CPF) do mesmo personal: casa por nome + e-mail. O e-mail não é confirmado,
   // então o casamento só gera um PEDIDO que o personal aprova (vinculos_pendentes), nunca liga sozinho.
   legadoNoPersonal(trainerId: string, nomeNorm: string, emailNorm: string): Promise<number | null>;
+  // Situação do aluno no personal ATUAL da identidade (sem a função, vale "ativo": sempre pedido com prazo).
+  situacaoDoAluno?(ident: Identidade): Promise<SituacaoVinculo>;
 }
 
 export interface EntradaCadastro {
@@ -119,7 +148,8 @@ export type Decisao =
   | { tipo: 'atualizar'; identidade: Identidade }
   | { tipo: 'vincular-conta'; identidade: Identidade }
   | { tipo: 'duplicado-no-personal'; identidade: Identidade }
-  | { tipo: 'conflito'; identidade: Identidade }
+  | { tipo: 'conflito'; identidade: Identidade; livre?: boolean }          // livre: o aluno não é mais do personal atual
+  | { tipo: 'transferir-automatico'; identidade: Identidade; situacao: SituacaoVinculo }
   | { tipo: 'divergencia' }                                      // CPF existe, nome (ou dados) não batem
   | { tipo: 'email-diferente'; emailMascarado: string };         // CPF+nome batem, e-mail não
 
@@ -167,7 +197,11 @@ export async function decidirCadastro(e: EntradaCadastro, d: DepsDecisao, pepper
   if (e.ator === 'aluno' && ident.aluno_user_id && ident.aluno_user_id !== e.contaId) {
     return { tipo: 'email-diferente', emailMascarado: mascaraEmail(ident.email_norm) };
   }
-  return { tipo: 'conflito', identidade: ident };
+  const sit = d.situacaoDoAluno ? await d.situacaoDoAluno(ident) : 'ativo';
+  const livre = livreParaTransferir(sit);
+  // O próprio aluno chegando por outro personal, e o cadastro antigo não é mais do personal atual: transfere sozinho.
+  if (e.ator === 'aluno' && livre) return { tipo: 'transferir-automatico', identidade: ident, situacao: sit };
+  return livre ? { tipo: 'conflito', identidade: ident, livre: true } : { tipo: 'conflito', identidade: ident };
 }
 
 // ── Transferência ───────────────────────────────────────────────────────────
@@ -242,20 +276,43 @@ function acharAluno(students: any[], t: Transferencia): number {
 
 // Move o aluno inteiro (perfil, anamnese, avaliações, histórico) do personal
 // atual pro novo. `manterTreinos=false` limpa treinos e prescrição.
+export interface OpcoesTransferencia {
+  // Transferência automática (aluno inativo, arquivado ou sem registro): sem os treinos e sem prazo.
+  automatica?: { situacao: SituacaoVinculo };
+  // Aluno que não está mais na lista do personal atual (arquivado/excluído): em vez de falhar, o destino ganha este registro novo.
+  criarSeAusente?: (t: Transferencia) => any;
+}
+
 export async function executarTransferencia(
-  d: DepsExec, t: Transferencia, manterTreinos: boolean, motivo: 'antecipada' | 'prazo', agora = new Date(),
+  d: DepsExec, t: Transferencia, manterTreinos: boolean, motivo: 'antecipada' | 'prazo', agora = new Date(), opcoes: OpcoesTransferencia = {},
 ): Promise<{ novoStudentId: number }> {
   if (!transferenciaAberta(t)) throw new Error('Transferência já resolvida.');
 
   const origem = await d.carregarStudents(t.trainer_atual_id);
   const idx = acharAluno(origem.students, t);
-  if (idx < 0) throw new Error('Aluno não encontrado na lista do personal atual.');
-  const [aluno] = origem.students.splice(idx, 1);
+  let aluno: any;
+  const saiuDaOrigem = idx >= 0;
+  if (saiuDaOrigem) {
+    [aluno] = origem.students.splice(idx, 1);
+  } else if (opcoes.criarSeAusente) {
+    aluno = opcoes.criarSeAusente(t);
+  } else {
+    throw new Error('Aluno não encontrado na lista do personal atual.');
+  }
 
   aluno.perfil = aluno.perfil || {};
   if (!manterTreinos) { aluno.treinos = []; aluno.prescricao = {}; }
-  aluno.perfil.transferidoDe = { trainerId: t.trainer_atual_id, em: agora.toISOString(), comTreinos: manterTreinos };
+  aluno.perfil.transferidoDe = {
+    trainerId: t.trainer_atual_id, em: agora.toISOString(), comTreinos: manterTreinos,
+    ...(opcoes.automatica ? { automatica: true, situacao: opcoes.automatica.situacao } : {}),
+  };
   aluno.perfil.novoCadastro = true;   // vira o aviso "aluno novo" na lista do personal novo
+  if (opcoes.automatica && aluno.crm) {
+    // Chega ao personal novo como aluno ativo, não inativo nem arquivado como estava no antigo.
+    delete aluno.crm.archived;
+    if (aluno.crm.status === 'inativo') aluno.crm.status = 'ativo';
+    aluno.crm.statusSince = agora.toISOString().slice(0, 10);
+  }
 
   const destino = await d.carregarStudents(t.trainer_novo_id);
   aluno.id = d.novoId(destino.todosIds);
@@ -267,16 +324,20 @@ export async function executarTransferencia(
     if (di >= 0 && !((destino.students[di].treinos || []).length)) destino.students.splice(di, 1);
   }
   destino.students.push(aluno);
+  // O personal novo pode já ter cadastrado esse aluno à mão (mesmo CPF, ou mesmo e-mail e nome): une num registro só,
+  // sem perder o que ele já tinha preenchido (o que veio com a conta manda; o cadastro manual completa o que faltar).
+  consolidarAluno(destino.students, aluno);
 
   // Primeiro entra no destino, depois sai da origem: se a segunda gravação
   // falhar o aluno existe nos dois (recuperável), nunca em nenhum.
   await d.salvarStudents(t.trainer_novo_id, destino.students);
-  await d.salvarStudents(t.trainer_atual_id, origem.students);
+  if (saiuDaOrigem) await d.salvarStudents(t.trainer_atual_id, origem.students);
 
   if (t.aluno_user_id) await d.moverAcesso(t.aluno_user_id, t.trainer_novo_id);
   await d.atualizarIdentidade(t.identidade_id, { trainer_user_id: t.trainer_novo_id, student_id: aluno.id, atualizado_em: agora.toISOString() });
   await d.atualizarTransferencia(t.id, {
     status: 'concluida', manter_treinos: manterTreinos, motivo_fim: motivo, concluida_em: agora.toISOString(),
+    ...(opcoes.automatica ? { snapshot: { ...(t.snapshot || {}), automatica: true, situacaoAnterior: opcoes.automatica.situacao } } : {}),
   });
   return { novoStudentId: aluno.id };
 }

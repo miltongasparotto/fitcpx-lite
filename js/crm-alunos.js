@@ -37,7 +37,7 @@ let alunoSearch='', alunoFilters={}, alunoSort={field:'nome',dir:'asc'};
 function clearAlunoFilters(){ alunoFilters={}; alunoSearch=''; renderPipelineCRM(); }
 function alunoSortVal(a,field){
   if(field==='modId'){ const m=DB.modalidades.find(x=>x.id===a.crm?.modId); return m?m.nome.toLowerCase():'zzzz'; }
-  if(field==='status') return ({lead:'0',ativo:'1',inativo:'2',bloqueado:'3'})[situacaoDe(a)]||'1';
+  if(field==='status') return ({lead:'0',ativo:'1',pausado:'2',inativo:'3',bloqueado:'4'})[situacaoDe(a)]||'1';
   if(field==='proximo'){ const nt=getAlunoTasks(a.id).filter(t=>!t.done).sort((x,y)=>liveDate(x).localeCompare(liveDate(y)))[0]; return nt?liveDate(nt):'99999999'; }
   return alunoNome(a).toLowerCase();
 }
@@ -60,7 +60,7 @@ function alunoRowHTML(al){
   const next=getAlunoTasks(al.id).filter(t=>!t.done).sort((a,b)=>liveDate(a).localeCompare(liveDate(b)))[0];
   const mod=DB.modalidades.find(m=>m.id===al.crm?.modId);
   const status=situacaoDe(al);
-  const stMap={lead:['var(--blue)','<i class=sd-blue></i> Lead'],ativo:['var(--accent)','<i class=sd-green></i> Ativo'],inativo:['var(--text3)','<i class=sd-gray></i> Inativo'],bloqueado:['var(--red)','<i class=sd-red></i> Bloqueado']};
+  const stMap={lead:['var(--blue)','<i class=sd-blue></i> Lead'],ativo:['var(--accent)','<i class=sd-green></i> Ativo'],pausado:['var(--yellow)','<i class=sd-amber></i> Pausado'],inativo:['var(--text3)','<i class=sd-gray></i> Inativo'],bloqueado:['var(--red)','<i class=sd-red></i> Bloqueado']};
   const st=stMap[status]||stMap.ativo;
   const reviewChip=needsReview(al)?` <span class="badge badge-amber"><i class=ph-alarm></i> revisar</span>`:'';
   let nextHtml='<span style="color:var(--text3)">—</span>';
@@ -83,8 +83,8 @@ function alunoRowHTML(al){
 }
 function alunoListAreaHTML(){
   const list=getFilteredAlunos();
-  const stLbls={lead:'Lead',ativo:'Ativo',inativo:'Inativo',bloqueado:'Bloqueado'};
-  const usedStatuses=['lead','ativo','inativo','bloqueado'].filter(s=>students.some(a=>!a.crm?.archived&&situacaoDe(a)===s));
+  const stLbls={lead:'Lead',ativo:'Ativo',pausado:'Pausado',inativo:'Inativo',bloqueado:'Bloqueado'};
+  const usedStatuses=['lead','ativo','pausado','inativo','bloqueado'].filter(s=>students.some(a=>!a.crm?.archived&&situacaoDe(a)===s));
   const reviewCount=students.filter(a=>needsReview(a)).length;
   const banner = reviewCount ? `<div class="badge badge-amber" style="margin-bottom:10px;cursor:pointer;padding:6px 10px" onclick="alunoFilters={review:1};renderPipelineCRM()"><i class=ph-alarm></i> ${reviewCount} cliente(s) pausado(s)/inativo(s) há +30 dias — revisar</div>` : '';
   const sortBtn=(field,label)=>{ const active=alunoSort.field===field; const nextDir=active&&alunoSort.dir==='asc'?'desc':'asc'; return `<span style="cursor:pointer;font-weight:700" onclick="alunoSort={field:'${field}',dir:'${nextDir}'};renderPipelineCRM()">${label}${active?(alunoSort.dir==='asc'?' ↑':' ↓'):''}</span>`; };
@@ -249,7 +249,7 @@ function renderAlunoPage(id){
   const done=allTasks.filter(t=>t.done);
   const urgentes=pending.filter(t=>diffDays(liveDate(t),today)<0).length;
 
-  const statusCfg={lead:{color:'var(--blue)',lbl:'Lead',icon:'sd-blue'},ativo:{color:'var(--accent)',lbl:'Ativo',icon:'sd-green'},inativo:{color:'var(--text3)',lbl:'Inativo',icon:'sd-gray'},bloqueado:{color:'var(--red)',lbl:'Bloqueado',icon:'sd-red'}};
+  const statusCfg={lead:{color:'var(--blue)',lbl:'Lead',icon:'sd-blue'},ativo:{color:'var(--accent)',lbl:'Ativo',icon:'sd-green'},pausado:{color:'var(--yellow)',lbl:'Pausado',icon:'sd-amber'},inativo:{color:'var(--text3)',lbl:'Inativo',icon:'sd-gray'},bloqueado:{color:'var(--red)',lbl:'Bloqueado',icon:'sd-red'}};
   const st=situacaoDe(al); const sc=statusCfg[st]||statusCfg.ativo;
   const statusOptions=Object.entries(statusCfg).map(([k,v])=>`<option value="${k}"${k===st?' selected':''}>${v.lbl}</option>`).join('');
 

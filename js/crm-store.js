@@ -55,12 +55,13 @@ function ensureCrm(s){
   return s.crm;
 }
 // Situação do aluno, a que o personal escolhe: lead | ativo | inativo | bloqueado (s.crm.status).
-// 'pausado' (versão antiga) conta como inativo. Bloqueado também vale se o acesso ao portal já estava bloqueado.
+// Pausado (18/10/2026) voltou como situação própria: o aluno está parado, mas continua sendo do personal. Bloqueado também vale se o acesso ao portal já estava bloqueado.
 // Novo, Pendente e Transferência NÃO são situação: são avisos que o sistema calcula (ver _alAlertas em js/avaliacao.js).
 function situacaoDe(s){
   const st = (s && s.crm && s.crm.status) || 'ativo';
   if(st === 'bloqueado' || (s && s.perfil && s.perfil.portalStatus === 'bloqueado')) return 'bloqueado';
-  if(st === 'inativo' || st === 'pausado') return 'inativo';
+  if(st === 'pausado') return 'pausado';
+  if(st === 'inativo') return 'inativo';
   if(st === 'lead') return 'lead';
   return 'ativo';
 }

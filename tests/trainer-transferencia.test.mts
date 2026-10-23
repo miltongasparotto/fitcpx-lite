@@ -28,6 +28,7 @@ class Q {
   in(c: string, vs: any[]) { this.filtros.push((r) => vs.includes(r[c])); return this; }
   is(c: string, v: any) { this.filtros.push((r) => (r[c] ?? null) === v); return this; }
   lte(c: string, v: any) { this.filtros.push((r) => r[c] != null && r[c] <= v); return this; }
+  gte(c: string, v: any) { this.filtros.push((r) => r[c] != null && r[c] >= v); return this; }
   or(s: string) {
     const ps = s.split(',').map((x) => x.split('.'));
     this.filtros.push((r) => ps.some(([c, , v]) => r[c] === v)); return this;
@@ -669,4 +670,171 @@ test('redefinir-senha-link: freio por origem contra chute de token', async () =>
   for (let i = 0; i < 25; i++) ultimo = (await link({ acao: 'verificar', token: 'B'.repeat(43) }, '7.7.7.7')).status;
   assert.equal(ultimo, 'muitas-tentativas');
   assert.equal((await link({ acao: 'verificar', token: 'B'.repeat(43) }, '6.6.6.6')).status, 'invalido', 'outra origem não é afetada');
+});
+
+// ── Situação do aluno decide o caminho; duplicado e cadastro antigo (18/10/2026) ──
+
+const PERFIL_CARLA = { nome: 'Carla Souza', cpf: CPF, nascimento: '1990-05-20', sexo: 'F', whatsapp: '(44) 99999-1111', profissao: 'Professora' };
+
+// Personal A tem a Carla (CPF registrado) na situação dada; ela se cadastra pelo link do personal B.
+async function carlaChegaPeloLinkDeB(situacao: 'inativo' | 'ativo' | 'pausado' | 'lead' | 'bloqueado' | 'arquivado' | 'inexistente') {
+  resetar();
+  const crm = situacao === 'arquivado' || situacao === 'inexistente' ? { status: 'ativo' } : { status: situacao };
+  const A = semeiaPersonal('a@x.com', 'Ana Costa', [novoAluno(10, { nome: 'Carla Souza', email: 'carla@x.com', nascimento: '1990-05-20' }, { crm, treinos: [{ id: 1 }], avaliacoesAntro: [{ id: 5, data_avaliacao: '2026-01-01' }] })]);
+  const B = semeiaPersonal('b@x.com', 'Bruno Lima');
+  assert.equal((await personal('a@x.com', { acao: 'registrar-aluno', studentId: 10, nome: 'Carla Souza', cpf: CPF, email: 'carla@x.com' })).status, 'ok');
+  if (situacao === 'arquivado' || situacao === 'inexistente') {
+    const lista = tabela('app_data').find((r) => r.user_id === A && r.key === 'students')!;
+    const [removido] = lista.data.splice(0, 1);
+    if (situacao === 'arquivado') tabela('app_data').push({ user_id: A, key: 'arquivo', data: [{ arqId: 'arq1', tipo: 'aluno', rotulo: 'Carla Souza', dados: removido, excluidoEm: '2026-09-01T10:00:00Z', idOriginal: 10 }] });
+  }
+  const conta = usuario('carla@x.com');
+  const codB = tabela('personal_links').find((r) => r.trainer_user_id === B)!.codigo;
+  const r = await aluno('carla@x.com', { acao: 'cadastro', codigo: codB, perfil: PERFIL_CARLA });
+  return { A, B, conta, r };
+}
+
+test('aluno chega por outro personal: inativo, arquivado/excluído e inexistente = transferência automática, sem treinos', async () => {
+  for (const situacao of ['inativo', 'arquivado', 'inexistente'] as const) {
+    const { A, B, conta, r } = await carlaChegaPeloLinkDeB(situacao);
+    assert.equal(r.status, 'ok', situacao); assert.equal(r.tipo, 'transferido', situacao);
+    const nb = blob(B);
+    assert.equal(nb.length, 1, situacao);
+    assert.equal(nb[0].perfil.alunoUserId, conta); assert.equal(nb[0].perfil.cpf, CPF); assert.equal(nb[0].perfil.novoCadastro, true);
+    assert.equal(nb[0].perfil.nascimento, '1990-05-20'); assert.equal(nb[0].perfil.profissao, 'Professora');
+    assert.deepEqual(nb[0].treinos, [], situacao + ': treino não vai');
+    assert.equal(nb[0].perfil.transferidoDe.automatica, true); assert.equal(nb[0].perfil.transferidoDe.situacao, situacao);
+    if (situacao === 'inativo') {
+      assert.equal(nb[0].avaliacoesAntro.length, 1, 'histórico de avaliações vai junto');
+      assert.equal(nb[0].crm.status, 'ativo', 'chega como ativo, não inativo');
+      assert.equal(blob(A).length, 0);
+    }
+    const t = tabela('transferencias_vinculo')[0];
+    assert.equal(t.status, 'concluida', situacao); assert.equal(t.motivo_fim, 'antecipada'); assert.equal(t.snapshot.automatica, true);
+    assert.equal(tabela('alunos_acesso').find((x) => x.aluno_user_id === conta)!.trainer_user_id, B);
+    const id = tabela('alunos_identidade')[0];
+    assert.equal(id.trainer_user_id, B); assert.equal(id.aluno_user_id, conta); assert.equal(id.student_id, nb[0].id);
+    // aviso ao personal anterior e ao novo
+    const la = await personal('a@x.com', { acao: 'listar' });
+    assert.equal(la.automaticas.length, 1); assert.equal(la.automaticas[0].sentido, 'saiu'); assert.equal(la.automaticas[0].outroNome, 'Bruno Lima');
+    assert.equal((await personal('b@x.com', { acao: 'listar' })).automaticas[0].sentido, 'chegou');
+    // o portal abre direto no personal novo
+    const rv = await aluno('carla@x.com', { acao: 'resolver-vinculo', codigo: null });
+    assert.equal(rv.status, 'ok'); assert.equal(rv.trainerId, B); assert.equal(rv.dadosCompletos, true);
+  }
+});
+
+test('arquivado: o arquivo do personal antigo continua lá; o novo recebe cadastro limpo', async () => {
+  const { A, B } = await carlaChegaPeloLinkDeB('arquivado');
+  const arq = tabela('app_data').find((r) => r.user_id === A && r.key === 'arquivo')!.data;
+  assert.equal(arq.length, 1); assert.equal(arq[0].restauradoEm, undefined);
+  assert.deepEqual(blob(B)[0].avaliacoesAntro, []); assert.equal(blob(B)[0].perfil.transferidoDe.situacao, 'arquivado');
+});
+
+test('aluno chega por outro personal: lead, ativo, pausado e bloqueado continuam do antigo (pedido com 30 dias)', async () => {
+  for (const situacao of ['lead', 'ativo', 'pausado', 'bloqueado'] as const) {
+    const { r } = await carlaChegaPeloLinkDeB(situacao);
+    assert.equal(r.status, 'conflito', situacao); assert.equal(r.personalNome, 'Ana Costa');
+    assert.equal(tabela('transferencias_vinculo').length, 0, situacao + ': nada transferido sozinho');
+  }
+});
+
+test('personal cadastra aluno que não é mais do outro: conflito marca livre; ao confirmar no portal a troca é imediata', async () => {
+  resetar();
+  const conta = usuario('carla@x.com');
+  const A = semeiaPersonal('a@x.com', 'Ana Costa', [novoAluno(10, { nome: 'Carla Souza', email: 'carla@x.com', cpf: CPF, alunoUserId: conta }, { crm: { status: 'inativo' }, treinos: [{ id: 1 }] })]);
+  const B = semeiaPersonal('b@x.com', 'Bruno Lima', [novoAluno(20, { nome: 'Carla Souza', email: 'carla@x.com', nascimento: '1990-05-20', sexo: 'F', whatsapp: '(44) 99999-1111' })]);
+  tabela('alunos_acesso').push({ trainer_user_id: A, aluno_user_id: conta, status: 'ativo' });
+  await personal('a@x.com', { acao: 'registrar-aluno', studentId: 10, nome: 'Carla Souza', cpf: CPF, email: 'carla@x.com' });
+
+  const c = await personal('b@x.com', { acao: 'registrar-aluno', studentId: 20, nome: 'Carla Souza', cpf: CPF, email: 'carla@x.com' });
+  assert.equal(c.status, 'conflito'); assert.equal(c.livre, true);
+  assert.equal((await personal('b@x.com', { acao: 'solicitar-troca', studentId: 20, nome: 'Carla Souza', cpf: CPF, email: 'carla@x.com' })).esperaAluno, true);
+  assert.equal(tabela('transferencias_vinculo')[0].status, 'aguardando_aluno', 'personal sozinho não transfere: o aluno confirma');
+
+  const ok = await aluno('carla@x.com', { acao: 'confirmar-troca' });
+  assert.equal(ok.status, 'ok'); assert.equal(ok.transferido, true);
+  assert.equal(tabela('transferencias_vinculo')[0].status, 'concluida');
+  assert.equal(blob(A).length, 0);
+  const nb = blob(B);
+  assert.equal(nb.length, 1, 'rascunho do novo some, fica o aluno de verdade');
+  assert.equal(nb[0].perfil.alunoUserId, conta); assert.equal(nb[0].perfil.cpf, CPF); assert.deepEqual(nb[0].treinos, []);
+  assert.equal(tabela('alunos_acesso').find((x) => x.aluno_user_id === conta)!.trainer_user_id, B);
+});
+
+test('personal cadastra aluno ATIVO do outro: confirmar no portal só começa os 30 dias', async () => {
+  resetar();
+  const conta = usuario('carla@x.com');
+  const A = semeiaPersonal('a@x.com', 'Ana Costa', [novoAluno(10, { nome: 'Carla Souza', email: 'carla@x.com', alunoUserId: conta }, { crm: { status: 'ativo' } })]);
+  semeiaPersonal('b@x.com', 'Bruno Lima', [novoAluno(20, { nome: 'Carla Souza', email: 'carla@x.com' })]);
+  tabela('alunos_acesso').push({ trainer_user_id: A, aluno_user_id: conta, status: 'ativo' });
+  await personal('a@x.com', { acao: 'registrar-aluno', studentId: 10, nome: 'Carla Souza', cpf: CPF, email: 'carla@x.com' });
+  assert.equal((await personal('b@x.com', { acao: 'registrar-aluno', studentId: 20, nome: 'Carla Souza', cpf: CPF, email: 'carla@x.com' })).livre, false);
+  await personal('b@x.com', { acao: 'solicitar-troca', studentId: 20, nome: 'Carla Souza', cpf: CPF, email: 'carla@x.com' });
+  const ok = await aluno('carla@x.com', { acao: 'confirmar-troca' });
+  assert.equal(ok.status, 'ok'); assert.ok(ok.prazoEm); assert.equal(ok.transferido, undefined);
+  assert.equal(tabela('transferencias_vinculo')[0].status, 'pendente'); assert.equal(blob(A).length, 1);
+});
+
+test('portal: cadastro manual completo + registro da conta vazio (duplicado) são unidos ao abrir o app', async () => {
+  resetar();
+  const conta = usuario('carla@x.com');
+  const A = semeiaPersonal('a@x.com', 'Ana Costa', [
+    novoAluno(10, { nome: 'Carla Souza', email: 'carla@x.com', cpf: CPF, nascimento: '1990-05-20', sexo: 'F', whatsapp: '(44) 99999-1111', profissao: 'Professora' },
+      { anamnese: { objetivo: 'Emagr' }, avaliacoesAntro: [{ id: 1, data_avaliacao: '2026-01-01' }] }),
+    novoAluno(11, { nome: 'Carla Souza', email: 'carla@x.com', cpf: CPF, alunoUserId: conta, portalStatus: 'ativo' }),
+  ]);
+  tabela('alunos_acesso').push({ trainer_user_id: A, aluno_user_id: conta, status: 'ativo' });
+  const rv = await aluno('carla@x.com', { acao: 'resolver-vinculo', codigo: null });
+  assert.equal(rv.status, 'ok'); assert.equal(rv.dadosCompletos, true, 'o portal não pede os dados de novo');
+  const lista = blob(A);
+  assert.equal(lista.length, 1); assert.equal(lista[0].id, 11); assert.equal(lista[0].perfil.alunoUserId, conta);
+  assert.equal(lista[0].anamnese.objetivo, 'Emagr'); assert.equal(lista[0].avaliacoesAntro.length, 1);
+});
+
+test('portal: duplicado que o personal recusou ligar à conta NÃO é unido', async () => {
+  resetar();
+  const conta = usuario('carla@x.com');
+  const A = semeiaPersonal('a@x.com', 'Ana Costa', [
+    novoAluno(10, { nome: 'Carla Souza', email: 'carla@x.com' }),
+    novoAluno(11, { nome: 'Carla Souza', email: 'carla@x.com', cpf: CPF, alunoUserId: conta }),
+  ]);
+  tabela('alunos_acesso').push({ trainer_user_id: A, aluno_user_id: conta, status: 'ativo' });
+  tabela('vinculos_pendentes').push({ id: randomUUID(), trainer_user_id: A, student_id: 10, aluno_user_id: conta, status: 'recusado' });
+  await aluno('carla@x.com', { acao: 'resolver-vinculo', codigo: null });
+  assert.equal(blob(A).length, 2);
+});
+
+test('portal: cadastro novo reaproveita o cadastro manual do personal com o mesmo CPF (sem criar registro vazio)', async () => {
+  resetar();
+  const A = semeiaPersonal('a@x.com', 'Ana Costa', [novoAluno(10, { nome: 'Carla Souza', email: 'carla@x.com', cpf: CPF, nascimento: '1990-05-20', sexo: 'F', whatsapp: '(44) 99999-1111' })]);
+  const conta = usuario('carla@x.com');
+  const cod = tabela('personal_links').find((r) => r.trainer_user_id === A)!.codigo;
+  const r = await aluno('carla@x.com', { acao: 'cadastro', codigo: cod, perfil: { nome: 'Carla Souza', cpf: CPF } });
+  assert.equal(r.status, 'ok');
+  const lista = blob(A);
+  assert.equal(lista.length, 1); assert.equal(lista[0].id, 10); assert.equal(lista[0].perfil.alunoUserId, conta);
+  assert.equal(lista[0].perfil.nascimento, '1990-05-20', 'cadastro mínimo (nome + CPF) não apaga o que o personal preencheu');
+  assert.equal((await aluno('carla@x.com', { acao: 'resolver-vinculo', codigo: null })).dadosCompletos, true);
+});
+
+test('cadastro antigo: aluno novo com CPF/e-mail de um aluno Arquivado ganha a marca arquivoAntigo', async () => {
+  resetar();
+  const A = semeiaPersonal('a@x.com', 'Ana Costa', []);
+  tabela('app_data').push({ user_id: A, key: 'arquivo', data: [{ arqId: 'arq1', tipo: 'aluno', rotulo: 'Carla Souza', dados: novoAluno(10, { nome: 'Carla Souza', cpf: CPF, email: 'carla@x.com' }), excluidoEm: '2026-09-01T10:00:00Z', idOriginal: 10 }] });
+  usuario('carla@x.com');
+  const cod = tabela('personal_links').find((r) => r.trainer_user_id === A)!.codigo;
+  assert.equal((await aluno('carla@x.com', { acao: 'cadastro', codigo: cod, perfil: PERFIL_CARLA })).status, 'ok');
+  assert.equal(blob(A).length, 1); assert.equal(blob(A)[0].perfil.arquivoAntigo.arqId, 'arq1');
+});
+
+test('registrar-aluno: CPF de aluno que o próprio personal arquivou devolve arquivado-antigo (importar em vez de duplicar)', async () => {
+  resetar();
+  const A = semeiaPersonal('a@x.com', 'Ana Costa', [novoAluno(10, { nome: 'Carla Souza', email: 'carla@x.com' }), novoAluno(20, { nome: 'Carla Souza', email: 'carla@x.com' })]);
+  assert.equal((await personal('a@x.com', { acao: 'registrar-aluno', studentId: 10, nome: 'Carla Souza', cpf: CPF, email: 'carla@x.com' })).status, 'ok');
+  const lista = tabela('app_data').find((r) => r.user_id === A && r.key === 'students')!;
+  const [arquivado] = lista.data.splice(0, 1);
+  tabela('app_data').push({ user_id: A, key: 'arquivo', data: [{ arqId: 'arq9', tipo: 'aluno', rotulo: 'Carla Souza', dados: arquivado, excluidoEm: '2026-09-01T10:00:00Z', idOriginal: 10 }] });
+  const r = await personal('a@x.com', { acao: 'registrar-aluno', studentId: 20, nome: 'Carla Souza', cpf: CPF, email: 'carla@x.com' });
+  assert.equal(r.status, 'arquivado-antigo'); assert.equal(r.arqId, 'arq9');
 });
